@@ -36,7 +36,10 @@ let package = Package(
             dependencies: ["SerafinCore"]
         ),
         // Tokens, components, mock fixtures and previews. Depends on nothing in the project.
-        .target(name: "SerafinDesign"),
+        .target(
+            name: "SerafinDesign",
+            resources: [.process("Resources")]
+        ),
         // Screens and screen models, one folder per feature.
         .target(
             name: "SerafinFeatures",
