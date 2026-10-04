@@ -81,6 +81,9 @@ public enum PlaybackState: Equatable, Sendable {
     private var playsWhenReady = false
     /// True while a new item seeks to its start, so the brief pause there doesn't show as paused.
     private var isStarting = false
+    /// How many seeks are under way. The player reports its old position until a seek lands, so the elapsed time
+    /// holds at the target meanwhile.
+    @ObservationIgnored private var seeksInFlight = 0
     /// Goes up with every load and stop, so a load that finishes after another has started, or after a stop, does
     /// nothing.
     @ObservationIgnored private var generation = 0
@@ -338,7 +341,9 @@ public enum PlaybackState: Equatable, Sendable {
     public func seek(to position: Duration) async {
         let target = min(max(position, .zero), duration > .zero ? duration : position)
         elapsed = target
+        seeksInFlight += 1
         await player.seek(to: CMTime(target), toleranceBefore: .zero, toleranceAfter: .zero)
+        seeksInFlight -= 1
         if state == .ended {
             state = player.timeControlStatus == .playing ? .playing : .paused
         }
@@ -554,7 +559,7 @@ public enum PlaybackState: Equatable, Sendable {
     }
 
     private func timeChanged(_ time: CMTime) {
-        guard state != .loading, time.isNumeric else { return }
+        guard state != .loading, seeksInFlight == 0, time.isNumeric else { return }
         elapsed = Duration(time)
     }
 

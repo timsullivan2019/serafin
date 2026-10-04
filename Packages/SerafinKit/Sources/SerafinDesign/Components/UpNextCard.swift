@@ -57,14 +57,18 @@ public struct UpNextCard: View {
                         )
                         .padding(.horizontal, Spacing.xSmall)
                         .frame(minHeight: 36)
+                        .foregroundStyle(.black)
                     }
+                    // A white pill, like the system player's play buttons, so it reads over any picture.
                     .buttonStyle(.glassProminent)
+                    .tint(.white)
                     Button(action: cancel) {
                         Text(String(localized: "Cancel", bundle: .module, comment: "Button that stops autoplay."))
                             .padding(.horizontal, Spacing.xSmall)
                             .frame(minHeight: 36)
                     }
                     .buttonStyle(.glass)
+                    .tint(.white)
                 }
             }
         }

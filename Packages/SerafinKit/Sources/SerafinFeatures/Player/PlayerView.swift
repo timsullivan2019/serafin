@@ -167,6 +167,8 @@ struct PlayerView: View {
                     selectSubtitle: { index in Task { await engine.selectSubtitle(index) } }
                 )
                 .presentationDetents([.medium, .large])
+                // The player is always dark, so its sheet is too.
+                .preferredColorScheme(.dark)
             }
         }
     }
