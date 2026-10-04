@@ -72,7 +72,7 @@ public struct ServerConnector: Sendable {
             throw error
         } catch let error as URLError {
             try Task.checkCancellation()
-            if Self.isCertificateFailure(error), let presented = pinning.rejectedCertificate(for: host) {
+            if error.isCertificateFailure, let presented = pinning.rejectedCertificate(for: host) {
                 throw SerafinError.untrustedCertificate(presented)
             }
             throw SerafinError.serverUnreachable
@@ -103,15 +103,5 @@ public struct ServerConnector: Sendable {
             guard body.count <= Self.maximumInfoSize else { throw SerafinError.notJellyfin }
         }
         return try JSONDecoder().decode(PublicSystemInfo.self, from: body)
-    }
-
-    private static func isCertificateFailure(_ error: URLError) -> Bool {
-        switch error.code {
-        case .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot,
-            .serverCertificateNotYetValid, .secureConnectionFailed, .cancelled:
-            true
-        default:
-            false
-        }
     }
 }

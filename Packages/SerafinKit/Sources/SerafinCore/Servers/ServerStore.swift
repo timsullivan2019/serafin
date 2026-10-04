@@ -7,7 +7,12 @@ import os
 /// locked. It never contains tokens or pins. Its format is versioned so later releases can migrate it:
 ///
 /// ```json
-/// { "version": 1, "servers": [ { "id": "…", "name": "…", "url": "https://…", "lastUserID": "…" } ] }
+/// {
+///   "version": 1,
+///   "servers": [
+///     { "id": "…", "name": "…", "url": "https://…", "lastUserID": "…", "users": [ { "id": "…", "name": "…" } ] }
+///   ]
+/// }
 /// ```
 public actor ServerStore {
     private struct File: Codable {
