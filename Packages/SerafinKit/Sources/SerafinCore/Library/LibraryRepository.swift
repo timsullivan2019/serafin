@@ -189,8 +189,8 @@ public actor LibraryRepository {
         return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
     }
 
-    /// Movies, shows and episodes whose names match `term`, grouped by kind. An empty term finds nothing without
-    /// asking the server.
+    /// Movies, shows and episodes whose names match `term`, grouped by kind, closest titles first. An empty term finds
+    /// nothing without asking the server.
     ///
     /// - Parameters:
     ///   - term: What the user typed.
@@ -244,12 +244,13 @@ public actor LibraryRepository {
         parameters.includeItemTypes = [kind]
         parameters.isRecursive = true
         parameters.limit = limit
-        parameters.fields = Self.cardFields
+        parameters.fields = Self.cardFields + [.sortName]
         parameters.enableUserData = true
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         let request = Paths.getItems(parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        let items = try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return SearchRanking.ranked(items, for: term)
     }
 
     /// Answers a read from the cache, or sends it and caches the answer.
