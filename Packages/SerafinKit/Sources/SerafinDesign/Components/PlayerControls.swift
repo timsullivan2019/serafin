@@ -329,7 +329,8 @@ private struct SpeedMenu: View {
 
     var body: some View {
         Menu {
-            Picker(selection: Binding(get: { rate }, set: setRate)) {
+            // A closure rather than the action itself: Xcode 26's compiler crashes converting the function value.
+            Picker(selection: Binding(get: { rate }, set: { setRate($0) })) {
                 ForEach(PlaybackSpeed.choices, id: \.self) { choice in
                     Text(PlaybackSpeed.label(choice)).tag(choice)
                 }
