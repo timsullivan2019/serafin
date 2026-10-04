@@ -13,21 +13,21 @@ public struct RootView: View {
     public var body: some View {
         TabView(selection: $selection) {
             Tab(
-                String(localized: "Home", bundle: .module, comment: "Tab title."),
+                String(localized: "Home", bundle: .module, comment: "Title of the home tab."),
                 systemImage: "house",
                 value: AppTab.home
             ) {
                 TabStack { HomeView() }
             }
             Tab(
-                String(localized: "Library", bundle: .module, comment: "Tab title."),
+                String(localized: "Library", bundle: .module, comment: "Title of the library tab."),
                 systemImage: "square.grid.2x2",
                 value: AppTab.library
             ) {
                 TabStack { LibrariesView() }
             }
             Tab(
-                String(localized: "Settings", bundle: .module, comment: "Tab title."),
+                String(localized: "Settings", bundle: .module, comment: "Title of the settings tab."),
                 systemImage: "gearshape",
                 value: AppTab.settings
             ) {
