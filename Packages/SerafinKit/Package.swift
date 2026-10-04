@@ -52,7 +52,11 @@ let package = Package(
             ],
             resources: [.process("Resources")]
         ),
-        .testTarget(name: "SerafinCoreTests", dependencies: ["SerafinCore"]),
+        .testTarget(
+            name: "SerafinCoreTests",
+            dependencies: ["SerafinCore"],
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(name: "SerafinPlaybackTests", dependencies: ["SerafinPlayback"]),
         .testTarget(name: "SerafinDesignTests", dependencies: ["SerafinDesign"]),
     ],

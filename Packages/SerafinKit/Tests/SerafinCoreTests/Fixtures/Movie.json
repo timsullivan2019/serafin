@@ -1,0 +1,30 @@
+{
+  "Name": "The General", "OriginalTitle": "The General", "ServerId": "c0ffee", "Id": "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e",
+  "Etag": "3e0b0d2f8c1a9e7d", "DateCreated": "2026-02-02T10:00:00.0000000Z", "CanDelete": false, "CanDownload": true,
+  "HasSubtitles": true, "Container": "mkv", "SortName": "general", "PremiereDate": "1926-12-31T00:00:00.0000000Z",
+  "OfficialRating": "NR", "CommunityRating": 8.1, "RunTimeTicks": 47400000000, "ProductionYear": 1926,
+  "Overview": "A locomotive engineer chases the train that was stolen from him.",
+  "Taglines": ["The locomotive chase that never stops."], "Genres": ["Comedy", "Action"],
+  "People": [
+    { "Name": "Buster Keaton", "Id": "d3c2e1f0a9b8c7d6e5f4a3b2c1d0e9f8", "Role": "Johnnie Gray", "Type": "Actor", "PrimaryImageTag": "cc22dd33ee44ff5500aa11bb22cc33dd" },
+    { "Name": "Clyde Bruckman", "Id": "e4d3f2a1b0c9d8e7f6a5b4c3d2e1f0a9", "Role": "Director", "Type": "Director" }
+  ],
+  "MediaSources": [
+    {
+      "Protocol": "File", "Id": "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e", "Type": "Default", "Container": "mkv", "Size": 1789000000,
+      "Name": "The General", "IsRemote": false, "RunTimeTicks": 47400000000, "SupportsTranscoding": true,
+      "SupportsDirectStream": true, "SupportsDirectPlay": true,
+      "MediaStreams": [
+        { "Codec": "h264", "Type": "Video", "Index": 0, "Width": 1920, "Height": 1080, "IsDefault": true },
+        { "Codec": "aac", "Language": "eng", "Type": "Audio", "Index": 1, "Channels": 2, "IsDefault": true },
+        { "Codec": "subrip", "Language": "eng", "Type": "Subtitle", "Index": 2, "IsExternal": false }
+      ]
+    }
+  ],
+  "IsFolder": false, "Type": "Movie",
+  "UserData": { "PlaybackPositionTicks": 0, "PlayCount": 0, "IsFavorite": false, "Played": false, "Key": "5b4c", "ItemId": "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e" },
+  "PrimaryImageAspectRatio": 0.6666666666666666,
+  "ImageTags": { "Primary": "dd33ee44ff5500aa11bb22cc33dd44ee", "Logo": "ee44ff5500aa11bb22cc33dd44ee55ff" },
+  "BackdropImageTags": ["ff5500aa11bb22cc33dd44ee55ff66aa"],
+  "MediaType": "Video", "Width": 1920, "Height": 1080
+}

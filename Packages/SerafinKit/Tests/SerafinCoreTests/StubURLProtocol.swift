@@ -1,8 +1,9 @@
 import Foundation
 import Synchronization
 
-/// Answers requests from canned responses keyed by host and port, and optionally by path, so connection and
-/// sign-in code can be tested offline. Each test uses its own hosts, so tests can run in parallel.
+/// Answers requests from canned responses keyed by host and port, and optionally by path and query items, so
+/// connection, sign-in and library code can be tested offline. Each test uses its own hosts, so tests can run in
+/// parallel.
 final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     enum Reply: Sendable {
         case json(Int, String)
@@ -18,21 +19,54 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
 
         /// The `Authorization` header.
         var authorization: String? { request.value(forHTTPHeaderField: "Authorization") }
+
+        /// The value of the query item `name`, if the request has one.
+        func query(_ name: String) -> String? {
+            queryValues(name).first
+        }
+
+        /// Every value of the query item `name`, in order. The SDK repeats a name for each value of a list.
+        func queryValues(_ name: String) -> [String] {
+            let items = request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems
+            return (items ?? []).filter { $0.name == name }.compactMap(\.value)
+        }
     }
 
-    private static let replies = Mutex<[String: [Reply]]>([:])
+    private struct Stub {
+        let hostAndPort: String
+        let path: String?
+        let query: [String: String]
+        var replies: [Reply]
+
+        func matches(hostAndPort: String, path: String, query items: [URLQueryItem]) -> Bool {
+            hostAndPort == self.hostAndPort && (self.path == nil || self.path == path)
+                && query.allSatisfy { name, value in items.contains { $0.name == name && $0.value == value } }
+        }
+
+        /// How specific the stub is, so a stub for a path wins over one for the whole host.
+        var specificity: Int { (path == nil ? 0 : 1) + query.count }
+    }
+
+    private static let stubs = Mutex<[Stub]>([])
     private static let received = Mutex<[String: [Received]]>([:])
 
-    /// Sets what requests to `host:port`, or to one `path` on it, get back. The replies are used in order and the
-    /// last one repeats. A stub for a path wins over one for the whole host.
-    static func stub(_ hostAndPort: String, path: String? = nil, _ replies: Reply...) {
-        stubSequence(hostAndPort, path: path, replies)
+    /// Sets what requests to `host:port`, or to one `path` on it with the given query items, get back. The replies
+    /// are used in order and the last one repeats. The most specific matching stub answers.
+    static func stub(_ hostAndPort: String, path: String? = nil, query: [String: String] = [:], _ replies: Reply...) {
+        stubSequence(hostAndPort, path: path, query: query, replies)
     }
 
-    /// ``stub(_:path:_:)`` with the replies in an array.
-    static func stubSequence(_ hostAndPort: String, path: String? = nil, _ replies: [Reply]) {
-        let key = path.map { hostAndPort + $0 } ?? hostAndPort
-        self.replies.withLock { $0[key] = replies }
+    /// ``stub(_:path:query:_:)`` with the replies in an array.
+    static func stubSequence(
+        _ hostAndPort: String,
+        path: String? = nil,
+        query: [String: String] = [:],
+        _ replies: [Reply]
+    ) {
+        stubs.withLock { stubs in
+            stubs.removeAll { $0.hostAndPort == hostAndPort && $0.path == path && $0.query == query }
+            stubs.append(Stub(hostAndPort: hostAndPort, path: path, query: query, replies: replies))
+        }
     }
 
     /// Every request sent to `path` on `host:port`, oldest first.
@@ -60,18 +94,22 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
             return
         }
         let hostAndPort = "\(host):\(url.port ?? (url.scheme == "https" ? 443 : 80))"
-        let pathKey = hostAndPort + url.path()
+        let path = url.path()
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let received = Received(request: request, body: Self.body(of: request))
         Self.received.withLock {
             $0[hostAndPort, default: []].append(received)
-            $0[pathKey, default: []].append(received)
+            $0[hostAndPort + path, default: []].append(received)
         }
-        let reply = Self.replies.withLock { replies in
-            let key = replies[pathKey] != nil ? pathKey : hostAndPort
-            guard var queue = replies[key], let first = queue.first else { return Reply?.none }
-            if queue.count > 1 {
-                queue.removeFirst()
-                replies[key] = queue
+        let reply = Self.stubs.withLock { stubs -> Reply? in
+            let matching = stubs.indices.filter {
+                stubs[$0].matches(hostAndPort: hostAndPort, path: path, query: items)
+            }
+            guard let index = matching.max(by: { stubs[$0].specificity < stubs[$1].specificity }),
+                let first = stubs[index].replies.first
+            else { return nil }
+            if stubs[index].replies.count > 1 {
+                stubs[index].replies.removeFirst()
             }
             return first
         }

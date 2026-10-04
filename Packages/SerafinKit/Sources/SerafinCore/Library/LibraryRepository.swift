@@ -1,0 +1,273 @@
+import Foundation
+import JellyfinAPI
+
+/// One signed-in user's library on one server: everything Home, Library, Search and the detail screens show.
+///
+/// Each call is one request. Reads are answered from a short-lived cache when the same request was made recently,
+/// so going back to a screen is instant. Marking an item played or favourite empties the cache, since it changes
+/// what Home shows.
+///
+/// Lists ask only for the fields cards need. ``item(id:)`` returns everything a detail screen shows.
+public actor LibraryRepository {
+    /// How long a read is answered from the cache before the server is asked again.
+    public static let defaultCacheLifetime: Duration = .seconds(60)
+
+    /// The fields lists ask for beyond Jellyfin's defaults.
+    static let cardFields: [ItemFields] = [.primaryImageAspectRatio, .overview]
+    /// The image types lists ask for, one of each.
+    static let cardImages: [ImageType] = [.primary, .backdrop, .thumb, .logo]
+    /// The kinds of library Serafin shows. A library without a kind holds a mix of movies and shows.
+    static let supportedCollections: Set<CollectionType?> = [.movies, .tvshows, nil]
+
+    /// The user the library belongs to.
+    public nonisolated let userID: String
+
+    private let client: JellyfinClient
+    private let errors: ServerErrors
+    private var cache: ResponseCache
+
+    init(
+        client: JellyfinClient,
+        userID: String,
+        errors: ServerErrors,
+        cacheLifetime: Duration = LibraryRepository.defaultCacheLifetime
+    ) {
+        self.client = client
+        self.userID = userID
+        self.errors = errors
+        self.cache = ResponseCache(lifetime: cacheLifetime)
+    }
+
+    // MARK: - Home
+
+    /// The user's movie and TV libraries, in the server's order. Music, books, photos and other kinds of library are
+    /// left out.
+    public func userViews() async throws -> [BaseItemDto] {
+        let request = Paths.getUserViews(parameters: Paths.GetUserViewsParameters(userID: userID))
+        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        return (result.items ?? []).filter { Self.supportedCollections.contains($0.collectionType) }
+    }
+
+    /// Movies and episodes the user has started and not finished, most recent first.
+    public func resume(limit: Int = 20) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetResumeItemsParameters(userID: userID, limit: limit)
+        parameters.fields = Self.cardFields
+        parameters.mediaTypes = [.video]
+        parameters.enableUserData = true
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        let request = Paths.getResumeItems(parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+    }
+
+    /// The next episode to watch in each show the user is part way through. Episodes already started are in
+    /// ``resume(limit:)`` instead.
+    public func nextUp(limit: Int = 20) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetNextUpParameters(userID: userID, limit: limit)
+        parameters.fields = Self.cardFields
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableUserData = true
+        parameters.enableResumable = false
+        let request = Paths.getNextUp(parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+    }
+
+    /// The newest additions to a library, with new episodes grouped under their show.
+    ///
+    /// - Parameters:
+    ///   - viewID: The library, from ``userViews()``.
+    ///   - limit: The most items to return.
+    public func latest(in viewID: String, limit: Int = 16) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetLatestMediaParameters(userID: userID, parentID: viewID)
+        parameters.fields = Self.cardFields
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableUserData = true
+        parameters.limit = limit
+        parameters.isGroupItems = true
+        let request = Paths.getLatestMedia(parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }
+    }
+
+    // MARK: - Browsing
+
+    /// One page of a library grid.
+    ///
+    /// - Parameters:
+    ///   - query: What to list, in what order, with which filters.
+    ///   - start: The position of the first item to return.
+    ///   - limit: The most items to return.
+    public func items(_ query: LibraryQuery, start: Int = 0, limit: Int = 60) async throws -> ItemPage {
+        var parameters = Paths.GetItemsParameters(userID: userID)
+        parameters.parentID = query.parentID
+        parameters.includeItemTypes = query.types
+        parameters.isRecursive = true
+        parameters.sortBy = query.sort.fields
+        parameters.sortOrder = [query.ascending ? .ascending : .descending]
+        var filters: [ItemFilter] = []
+        if query.unplayedOnly { filters.append(.isUnplayed) }
+        if query.favouritesOnly { filters.append(.isFavorite) }
+        parameters.filters = filters.isEmpty ? nil : filters
+        parameters.genres = query.genres.isEmpty ? nil : query.genres
+        parameters.years = query.years.isEmpty ? nil : query.years
+        parameters.startIndex = start
+        parameters.limit = limit
+        parameters.fields = Self.cardFields
+        parameters.enableUserData = true
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableTotalRecordCount = true
+        let request = Paths.getItems(parameters: parameters)
+        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        let items = result.items ?? []
+        return ItemPage(items: items, start: result.startIndex ?? start, total: result.totalRecordCount ?? items.count)
+    }
+
+    /// Everything about one item, for its detail screen.
+    ///
+    /// - Throws: ``SerafinError/notFound`` when the item is no longer on the server.
+    public func item(id: String) async throws -> BaseItemDto {
+        let request = Paths.getItem(itemID: id, userID: userID)
+        return try await cached(request.url, request.query, statuses: [404: .notFound]) {
+            try await client.send(request).value
+        }
+    }
+
+    /// A show's seasons, in order.
+    public func seasons(series seriesID: String) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetSeasonsParameters(userID: userID)
+        parameters.fields = Self.cardFields
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableUserData = true
+        let request = Paths.getSeasons(seriesID: seriesID, parameters: parameters)
+        return try await cached(request.url, request.query, statuses: [404: .notFound]) {
+            try await client.send(request).value
+        }.items ?? []
+    }
+
+    /// The episodes of one season of a show, in order.
+    public func episodes(series seriesID: String, season seasonID: String) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetEpisodesParameters(userID: userID)
+        parameters.seasonID = seasonID
+        parameters.fields = Self.cardFields
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableUserData = true
+        let request = Paths.getEpisodes(seriesID: seriesID, parameters: parameters)
+        return try await cached(request.url, request.query, statuses: [404: .notFound]) {
+            try await client.send(request).value
+        }.items ?? []
+    }
+
+    /// Titles like the item, for the row at the bottom of its detail screen.
+    public func similar(to itemID: String, limit: Int = 12) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetSimilarItemsParameters(userID: userID, limit: limit)
+        parameters.fields = Self.cardFields
+        let request = Paths.getSimilarItems(itemID: itemID, parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+    }
+
+    /// Movies, shows and episodes whose names match `term`, grouped by kind. An empty term finds nothing without
+    /// asking the server.
+    ///
+    /// - Parameters:
+    ///   - term: What the user typed.
+    ///   - limit: The most results of each kind.
+    public func search(term: String, limit: Int = 24) async throws -> SearchResults {
+        let term = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return .none }
+        async let movies = search(term, kind: .movie, limit: limit)
+        async let series = search(term, kind: .series, limit: limit)
+        async let episodes = search(term, kind: .episode, limit: limit)
+        return try await SearchResults(movies: movies, series: series, episodes: episodes)
+    }
+
+    // MARK: - Played and favourites
+
+    /// Marks an item played, and returns the user's data for it as the server now has it.
+    @discardableResult
+    public func markPlayed(id: String) async throws -> UserItemDataDto {
+        let request = Paths.markPlayedItem(itemID: id, userID: userID)
+        return try await changing { try await client.send(request).value }
+    }
+
+    /// Marks an item not played, and returns the user's data for it as the server now has it.
+    @discardableResult
+    public func markUnplayed(id: String) async throws -> UserItemDataDto {
+        let request = Paths.markUnplayedItem(itemID: id, userID: userID)
+        return try await changing { try await client.send(request).value }
+    }
+
+    /// Adds an item to the user's favourites or takes it out, and returns the user's data for it as the server now
+    /// has it.
+    @discardableResult
+    public func setFavourite(id: String, on isFavourite: Bool) async throws -> UserItemDataDto {
+        let request =
+            isFavourite
+            ? Paths.markFavoriteItem(itemID: id, userID: userID)
+            : Paths.unmarkFavoriteItem(itemID: id, userID: userID)
+        return try await changing { try await client.send(request).value }
+    }
+
+    /// Forgets every cached answer, so the next reads ask the server. Pull to refresh calls this first.
+    public func clearCache() {
+        cache.removeAll()
+    }
+
+    // MARK: - Helpers
+
+    private func search(_ term: String, kind: BaseItemKind, limit: Int) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetItemsParameters(userID: userID)
+        parameters.searchTerm = term
+        parameters.includeItemTypes = [kind]
+        parameters.isRecursive = true
+        parameters.limit = limit
+        parameters.fields = Self.cardFields
+        parameters.enableUserData = true
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        let request = Paths.getItems(parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+    }
+
+    /// Answers a read from the cache, or sends it and caches the answer.
+    ///
+    /// - Parameters:
+    ///   - url: The request's path, part of its cache key.
+    ///   - query: The request's query, the rest of its cache key.
+    ///   - statuses: What particular HTTP statuses mean for this request, beyond a 401 meaning the user's sign-in
+    ///     is no longer accepted.
+    ///   - load: Sends the request.
+    private func cached<Value: Sendable>(
+        _ url: URL?,
+        _ query: [(String, String?)]?,
+        statuses: [Int: SerafinError] = [:],
+        _ load: () async throws -> Value
+    ) async throws -> Value {
+        let key = ResponseCache.key(url, query)
+        if let value: Value = cache.value(for: key) {
+            return value
+        }
+        let value = try await sending(statuses: statuses, load)
+        cache.store(value, for: key)
+        return value
+    }
+
+    /// Sends a change and empties the cache, since a change shows up in many lists.
+    private func changing<Value: Sendable>(_ send: () async throws -> Value) async throws -> Value {
+        let value = try await sending(statuses: [404: .notFound], send)
+        cache.removeAll()
+        return value
+    }
+
+    private func sending<Value>(statuses: [Int: SerafinError], _ send: () async throws -> Value) async throws -> Value {
+        do {
+            return try await send()
+        } catch {
+            let statuses = statuses.merging([401: .notSignedIn]) { mine, _ in mine }
+            throw errors.translate(error, from: client.configuration.url, statuses: statuses)
+        }
+    }
+}

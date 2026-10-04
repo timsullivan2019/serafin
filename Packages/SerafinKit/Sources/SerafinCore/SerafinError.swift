@@ -29,8 +29,11 @@ public enum SerafinError: Error, Equatable, Sendable {
     case quickConnectDisabled
     /// The Quick Connect code expired before anyone approved it.
     case quickConnectExpired
-    /// There is no saved sign-in for that user on that server, so they need to sign in again.
+    /// There is no saved sign-in for that user on that server, or the server no longer accepts it, so they need to
+    /// sign in again.
     case notSignedIn
+    /// The item is no longer on the server.
+    case notFound
     /// The server answered in a way Serafin does not expect, such as an error status or a reply without a token.
     /// Carries the HTTP status when there was one.
     case unexpectedResponse(status: Int?)
