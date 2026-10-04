@@ -28,6 +28,9 @@
     "Loading" : {
       "comment" : "Spoken while content loads."
     },
+    "Opens the player" : {
+      "comment" : "Hint on the mini player's title."
+    },
     "Pause" : {
       "comment" : "Button that pauses playback."
     },

@@ -2,8 +2,9 @@ import SwiftUI
 
 /// The compact now-playing bar for the tab bar's bottom accessory: thumbnail, title, play or pause, and close.
 ///
-/// Place it in `tabViewBottomAccessory`, which supplies the glass around it. When the tab bar minimizes and the
-/// accessory moves inline, the bar drops its subtitle and close button to fit.
+/// Place it in `tabViewBottomAccessory`, which supplies the glass around it. Tapping the thumbnail or title opens
+/// the full player. When the tab bar minimizes and the accessory moves inline, the bar drops its subtitle and
+/// close button to fit.
 public struct MiniPlayer: View {
     private let title: String
     private let subtitle: String?
@@ -11,6 +12,7 @@ public struct MiniPlayer: View {
     private let isPlaying: Bool
     private let playPause: () -> Void
     private let close: () -> Void
+    private let open: () -> Void
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     /// Creates the mini player.
@@ -22,13 +24,15 @@ public struct MiniPlayer: View {
     ///   - isPlaying: Whether playback is running.
     ///   - playPause: Called when the play or pause button is tapped.
     ///   - close: Called when the close button is tapped.
+    ///   - open: Called when the thumbnail or title is tapped, to bring back the full player.
     public init(
         title: String,
         subtitle: String? = nil,
         artwork: Image?,
         isPlaying: Bool,
         playPause: @escaping () -> Void,
-        close: @escaping () -> Void
+        close: @escaping () -> Void,
+        open: @escaping () -> Void = {}
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -36,26 +40,35 @@ public struct MiniPlayer: View {
         self.isPlaying = isPlaying
         self.playPause = playPause
         self.close = close
+        self.open = open
     }
 
     private var isInline: Bool { placement == .inline }
 
     public var body: some View {
         HStack(spacing: Spacing.small) {
-            thumbnail
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                if let subtitle, !isInline {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+            Button(action: open) {
+                HStack(spacing: Spacing.small) {
+                    thumbnail
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        if let subtitle, !isInline {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(.rect)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
+            .accessibilityHint(
+                String(localized: "Opens the player", bundle: .module, comment: "Hint on the mini player's title.")
+            )
             Button(action: playPause) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3)
