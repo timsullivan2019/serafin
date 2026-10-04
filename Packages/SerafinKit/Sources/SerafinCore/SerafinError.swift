@@ -19,6 +19,9 @@ public enum SerafinError: Error, Equatable, Sendable {
     case untrustedCertificate(CertificateFingerprint)
     /// Nothing answered at the address.
     case serverUnreachable
+    /// iOS refused plain HTTP to the address before Serafin could ask. It allows HTTP only to local addresses and
+    /// bare names, so a Tailscale 100.x address needs the server's Tailscale name, or HTTPS.
+    case plainHTTPBlocked
     /// Something answered, but it is not a Jellyfin server.
     case notJellyfin
     /// The server runs a Jellyfin version older than Serafin supports, which it carries.

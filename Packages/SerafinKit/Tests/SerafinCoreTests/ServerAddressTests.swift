@@ -60,7 +60,8 @@ import Testing
         arguments: [
             "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.10", "127.0.0.1", "169.254.10.20", "localhost",
             "media.localhost", "jellyfin.local", "JELLYFIN.LOCAL.", "nas", "::1", "[::1]", "fe80::1", "fe80::1%en0",
-            "fd12:3456::1", "::ffff:192.168.1.1",
+            "fd12:3456::1", "::ffff:192.168.1.1", "100.64.0.1", "100.101.102.103", "100.127.255.254",
+            "fd7a:115c:a1e0::1",
         ]
     )
     func privateHosts(_ host: String) {
@@ -69,8 +70,8 @@ import Testing
 
     @Test(
         arguments: [
-            "8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.0.1", "100.64.0.1", "jellyfin.example.com", "nas.lan",
-            "2001:db8::1", "::ffff:8.8.8.8", "",
+            "8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.0.1", "100.63.255.255", "100.128.0.1",
+            "jellyfin.example.com", "nas.lan", "nas.tailnet-1234.ts.net", "2001:db8::1", "::ffff:8.8.8.8", "",
         ]
     )
     func publicHosts(_ host: String) {

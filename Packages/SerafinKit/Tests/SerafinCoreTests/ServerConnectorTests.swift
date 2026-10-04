@@ -102,6 +102,13 @@ private func publicInfoJSON(id: String = "c0ffee", version: String = "10.10.7", 
         }
     }
 
+    @Test func explainsWhenIOSBlocksPlainHTTP() async throws {
+        StubURLProtocol.stub("100.101.102.104:8096", .failure(.appTransportSecurityRequiresSecureConnection))
+        await #expect(throws: SerafinError.plainHTTPBlocked) {
+            try await connector.connect(to: ServerAddress.parse("100.101.102.104"))
+        }
+    }
+
     @Test func allowsPlainHTTPOnAPrivateNetwork() async throws {
         StubURLProtocol.stub("192.168.77.20:8096", .json(200, publicInfoJSON(id: "home")))
         let connected = try await connector.connect(to: ServerAddress.parse("192.168.77.20"))
