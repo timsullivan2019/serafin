@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build, test and lint
+    # Xcode 26 on an iOS 26 simulator, so every change is checked on the oldest OS Serafin supports.
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.5
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -scheme Serafin -destination "$DESTINATION" build | tee build.log
+          # Zero warnings in Serafin's own code. Xcode already silences warnings from remote packages.
+          if grep -E "^/.+: warning: " build.log; then
+            echo "::error::The build has warnings."
+            exit 1
+          fi
+
+      - name: Test
+        run: xcodebuild -scheme Serafin -destination "$DESTINATION" test
+
+      - name: Lint formatting
+        run: xcrun swift format lint --recursive --strict App Packages
