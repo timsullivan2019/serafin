@@ -3,7 +3,7 @@
     {
       "Protocol": "File", "Id": "6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f", "Type": "Default", "Container": "mkv",
       "Name": "Nosferatu", "IsRemote": false, "ETag": "9d1e2f3a4b5c6d7e", "RunTimeTicks": 56400000000,
-      "SupportsTranscoding": true, "SupportsDirectStream": true, "SupportsDirectPlay": false,
+      "SupportsTranscoding": true, "SupportsDirectStream": false, "SupportsDirectPlay": false,
       "IsInfiniteStream": false, "UseMostCompatibleTranscodingProfile": false, "RequiresOpening": false,
       "RequiresClosing": false, "RequiresLooping": false, "SupportsProbing": true,
       "MediaStreams": [

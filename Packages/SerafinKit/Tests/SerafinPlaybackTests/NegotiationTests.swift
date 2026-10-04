@@ -68,6 +68,32 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(plan.playSessionID == "session-direct-stream")
     }
 
+    @Test(arguments: [
+        // The container alone: the server copies the video and audio into HLS.
+        ("ContainerNotSupported", "h264", "aac", true),
+        // HEVC without Apple's codec tag: the server rewrites the tag as it copies.
+        ("ContainerNotSupported,VideoCodecTagNotSupported", "hevc,h264", "aac", true),
+        // Dolby Vision the player can't show: the server has to change the video.
+        ("ContainerNotSupported,VideoRangeTypeNotSupported", "hevc,h264", "aac", false),
+        // Audio the stream doesn't carry: the server converts it.
+        ("ContainerNotSupported", "h264", "ac3,eac3", false),
+        // No reasons given: nothing to say it only repackages.
+        ("", "h264", "aac", false),
+    ])
+    func repackagingIsToldApartFromConverting(reasons: String, videoCodecs: String, audioCodecs: String, copies: Bool)
+        throws
+    {
+        let response = try JSONDecoder().decode(
+            PlaybackInfoResponse.self,
+            from: Data(try Fixture.json("PlaybackInfoDirectStream").utf8)
+        )
+        let source = try #require(response.mediaSources?.first)
+        let url =
+            "/videos/6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f/master.m3u8?VideoCodec=\(videoCodecs)&AudioCodec=\(audioCodecs)"
+            + "&AudioStreamIndex=1&api_key=token-1&TranscodeReasons=\(reasons)"
+        #expect(PlaybackNegotiator.copiesVideoAndAudio(url, from: source, audioStreamIndex: nil) == copies)
+    }
+
     @Test func aFileAVPlayerCantDecodeIsTranscoded() async throws {
         let host = "transcode.example.com"
         let item = "7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"
