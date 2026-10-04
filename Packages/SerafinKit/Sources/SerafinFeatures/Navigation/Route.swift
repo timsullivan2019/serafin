@@ -34,6 +34,10 @@ extension EnvironmentValues {
     /// The namespace that pairs cards with the screens they zoom into, one per tab.
     @Entry var zoomNamespace: Namespace.ID?
 
+    /// The namespace that pairs the full-screen player with the controls it grows out of: the hero's play pill and
+    /// the mini player.
+    @Entry var playerZoomNamespace: Namespace.ID?
+
     /// Pushes a route onto the current tab's navigation stack.
     @Entry var navigate = NavigateAction { _ in }
 }

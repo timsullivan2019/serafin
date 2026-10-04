@@ -46,6 +46,7 @@ struct MainTabs: View {
     @State private var selection = AppTab.home
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
+    @Namespace private var playerZoom
 
     /// Creates the tabs.
     ///
@@ -89,7 +90,8 @@ struct MainTabs: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
-        .modifier(TabChrome(playback: playback))
+        .modifier(TabChrome(playback: playback, playerZoom: playerZoom))
+        .environment(\.playerZoomNamespace, playerZoom)
         .environment(playback)
         .environment(actions)
         .alert(
@@ -115,6 +117,7 @@ enum AppTab: Hashable {
 /// plays, and the full-screen player covers everything. On iPad the tab bar can open into a sidebar.
 private struct TabChrome: ViewModifier {
     @Bindable var playback: PlaybackCoordinator
+    let playerZoom: Namespace.ID
 
     func body(content: Content) -> some View {
         #if os(iOS)
@@ -126,6 +129,11 @@ private struct TabChrome: ViewModifier {
                 .fullScreenCover(isPresented: $playback.isPlayerPresented) {
                     PlayerView()
                         .environment(playback)
+                        // The player grows out of the control that opened it and shrinks back into it.
+                        .navigationTransition(.zoom(sourceID: playback.zoomSource ?? "", in: playerZoom))
+                        // The player's own swipe down turns iPhone upright before closing; the zoom's built-in
+                        // swipe would shrink it over a sideways screen.
+                        .interactiveDismissDisabled()
                 }
         #else
             content
@@ -153,7 +161,24 @@ private struct NowPlayingAccessory: View {
                     close: { playback.stop() },
                     open: { playback.showPlayer() }
                 )
+                .modifier(MiniPlayerZoomSource())
             }
+        }
+    }
+}
+
+/// Makes the mini player the source of the player's zoom transition.
+private struct MiniPlayerZoomSource: ViewModifier {
+    @Environment(\.playerZoomNamespace) private var namespace
+
+    func body(content: Content) -> some View {
+        if let namespace {
+            // A rounded rectangle as round as the bar is tall: the only shape transition sources accept.
+            content.matchedTransitionSource(id: PlaybackCoordinator.miniPlayerZoomSource, in: namespace) { source in
+                source.clipShape(.rect(cornerRadius: 24, style: .continuous))
+            }
+        } else {
+            content
         }
     }
 }

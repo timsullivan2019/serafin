@@ -17,7 +17,7 @@ struct SeasonView: View {
         Group {
             switch model.phase {
             case .loading:
-                LoadingState()
+                Skeleton(.thumbnailGrid(columnMinimum: columnWidth))
             case .failed(let message):
                 FailureState(message: message) { Task { await model.load(from: media) } }
             case .loaded(let season):

@@ -11,6 +11,7 @@ public struct HeroHeader: View {
     private let backdrop: Image?
     private let logo: Image?
     private let tint: Color
+    private let playZoomNamespace: Namespace.ID?
     private let startOver: (() -> Void)?
     private let play: () -> Void
     @State private var playCount = 0
@@ -22,6 +23,8 @@ public struct HeroHeader: View {
     ///   - backdrop: The backdrop image, or nil while it loads.
     ///   - logo: The title logo, drawn instead of the title text when present.
     ///   - tint: The glass tint for the play pill.
+    ///   - playZoomNamespace: The namespace in which the play pill is the source of a zoom transition, keyed by
+    ///     ``playZoomID(for:)``, so the player can grow out of it. Pass nil for no zoom.
     ///   - startOver: Called when Start Over is chosen from the pill's menu, offered while the item is in progress.
     ///   - play: Called when the play pill is tapped.
     public init(
@@ -29,6 +32,7 @@ public struct HeroHeader: View {
         backdrop: Image?,
         logo: Image? = nil,
         tint: Color = .accentFallback,
+        playZoomNamespace: Namespace.ID? = nil,
         startOver: (() -> Void)? = nil,
         play: @escaping () -> Void
     ) {
@@ -36,6 +40,7 @@ public struct HeroHeader: View {
         self.backdrop = backdrop
         self.logo = logo
         self.tint = tint
+        self.playZoomNamespace = playZoomNamespace
         self.startOver = startOver
         self.play = play
     }
@@ -73,6 +78,11 @@ public struct HeroHeader: View {
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+
+    /// The ID under which the play pill of the hero for `cardID` is a zoom source.
+    public static func playZoomID(for cardID: String) -> String {
+        "hero-play-\(cardID)"
     }
 
     /// The play pill, with Start Over in its menu while the item is in progress.
@@ -114,6 +124,7 @@ public struct HeroHeader: View {
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
+        .modifier(PlayZoomSource(id: Self.playZoomID(for: card.id), namespace: playZoomNamespace))
         .accessibilityLabel(playAccessibilityLabel)
         .sensoryFeedback(.impact(weight: .medium), trigger: playCount)
     }
@@ -136,6 +147,23 @@ public struct HeroHeader: View {
             bundle: .module,
             comment: "Spoken label of the resume button, such as Resume, 32 min left."
         )
+    }
+}
+
+/// Makes the play pill the source of the player's zoom transition, when there is a namespace for it.
+private struct PlayZoomSource: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        if let namespace {
+            // A rounded rectangle as round as the pill is tall: the only shape transition sources accept.
+            content.matchedTransitionSource(id: id, in: namespace) { source in
+                source.clipShape(.rect(cornerRadius: 25, style: .continuous))
+            }
+        } else {
+            content
+        }
     }
 }
 

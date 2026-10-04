@@ -4,13 +4,15 @@ import SwiftUI
 ///
 /// Unselected chips are clear glass whose label adapts to whatever scrolls behind it. The selected chip takes the
 /// screen's tint with a white label. Put neighbouring chips in a ``GlassChipGroup`` so they merge and morph
-/// together.
+/// together: when a chip grows or shrinks, as when a sort gains its direction arrow, its neighbours' glass flows
+/// with it. Make selection changes inside an animation, such as `withAnimation`, so the whole row moves together.
 public struct GlassChip: View {
     private let title: String
     private let systemImage: String?
     private let isSelected: Bool
     private let tint: Color
     private let action: () -> Void
+    @Environment(\.glassChipNamespace) private var namespace
 
     /// Creates a chip.
     ///
@@ -40,6 +42,7 @@ public struct GlassChip: View {
                 if let systemImage {
                     Image(systemName: systemImage)
                         .imageScale(.small)
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 Text(title)
             }
@@ -49,6 +52,7 @@ public struct GlassChip: View {
             .padding(.vertical, Spacing.xSmall + 2)
             .frame(minHeight: 44)
             .glassEffect(isSelected ? .regular.tint(tint).interactive() : .regular.interactive(), in: .capsule)
+            .modifier(ChipGlassID(id: title, namespace: namespace))
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -58,8 +62,11 @@ public struct GlassChip: View {
 }
 
 /// Chips laid out in a row inside one glass container, so that neighbours merge and morph together.
+///
+/// Keep menus out of the group: a `Menu` inside a glass container loses its own open and close morph.
 public struct GlassChipGroup<Content: View>: View {
     private let content: Content
+    @Namespace private var namespace
 
     /// Creates a chip group.
     ///
@@ -73,6 +80,26 @@ public struct GlassChipGroup<Content: View>: View {
             HStack(spacing: Spacing.xSmall) {
                 content
             }
+        }
+        .environment(\.glassChipNamespace, namespace)
+    }
+}
+
+extension EnvironmentValues {
+    /// The namespace of the ``GlassChipGroup`` a chip is in, which identifies its glass for morphing.
+    @Entry var glassChipNamespace: Namespace.ID?
+}
+
+/// Identifies a chip's glass within its group, so the group morphs it rather than redrawing it.
+private struct ChipGlassID: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        if let namespace {
+            content.glassEffectID(id, in: namespace)
+        } else {
+            content
         }
     }
 }
@@ -96,10 +123,14 @@ public struct GlassChipGroup<Content: View>: View {
                 ScrollView(.horizontal) {
                     GlassChipGroup {
                         GlassChip("Unplayed", systemImage: "circle.dashed", isSelected: unplayedOnly) {
-                            unplayedOnly.toggle()
+                            withAnimation(.serafinSnappy) { unplayedOnly.toggle() }
                         }
                         ForEach(sorts, id: \.self) { option in
-                            GlassChip(option, isSelected: sort == option) { sort = option }
+                            GlassChip(
+                                option, systemImage: sort == option ? "arrow.up" : nil, isSelected: sort == option
+                            ) {
+                                withAnimation(.serafinSnappy) { sort = option }
+                            }
                         }
                     }
                     .padding(.horizontal, Spacing.medium)

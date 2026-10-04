@@ -28,6 +28,14 @@
             update()
         }
 
+        /// Turns iPhone back upright before the player closes, so the player shrinks away in the same orientation as
+        /// the screen behind it. Returns whether the interface had to turn.
+        static func playerWillClose() -> Bool {
+            let turns = isPlayerShowing && UIDevice.current.userInterfaceIdiom == .phone
+            playerDisappeared()
+            return turns
+        }
+
         private static func update() {
             guard UIDevice.current.userInterfaceIdiom == .phone else { return }
             let mask = supported

@@ -69,7 +69,7 @@ struct LibraryView: View {
     @ViewBuilder private var content: some View {
         switch model.phase {
         case .loading:
-            LoadingState()
+            Skeleton(.posterGrid(columnMinimum: columnWidth))
         case .failed(let message):
             FailureState(message: message) { Task { await model.reload(from: media) } }
         case .loaded where model.items.isEmpty:
@@ -142,54 +142,79 @@ struct LibraryView: View {
 
 /// The filter and sort chips above a library grid: toggles for unplayed and favourites, menus for genre and year,
 /// then the sorts, where tapping the current one flips its direction.
+///
+/// The toggles and the sorts are each a glass group, so their glass flows as selections change; the menus sit
+/// between the groups, because a menu inside a glass group loses its own open and close morph.
 private struct LibraryChips: View {
     @Bindable var model: LibraryModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView(.horizontal) {
-            GlassChipGroup {
-                GlassChip(
-                    String(localized: "Unplayed", bundle: .module, comment: "Library filter: hide played items."),
-                    systemImage: "circle.dashed",
-                    isSelected: model.options.unplayedOnly
-                ) { model.options.unplayedOnly.toggle() }
-                GlassChip(
-                    String(localized: "Favourites", bundle: .module, comment: "Library filter: only favourites."),
-                    systemImage: "heart",
-                    isSelected: model.options.favouritesOnly
-                ) { model.options.favouritesOnly.toggle() }
-                if !model.filters.genres.isEmpty {
-                    FilterMenu(
-                        title: String(localized: "Genre", bundle: .module, comment: "Library filter menu."),
-                        allTitle: String(localized: "All Genres", bundle: .module, comment: "Genre filter: no filter."),
-                        options: model.filters.genres,
-                        label: { $0 },
-                        selection: $model.options.genre
-                    )
-                }
-                if !model.filters.years.isEmpty {
-                    FilterMenu(
-                        title: String(localized: "Year", bundle: .module, comment: "Library filter menu."),
-                        allTitle: String(localized: "All Years", bundle: .module, comment: "Year filter: no filter."),
-                        options: model.filters.years,
-                        label: { String($0) },
-                        selection: $model.options.year
-                    )
-                }
-                ForEach(LibraryQuery.Sort.allCases, id: \.self) { sort in
-                    GlassChip(
-                        sort.title,
-                        systemImage: model.options.sort == sort
-                            ? (model.options.ascending ? "arrow.up" : "arrow.down") : nil,
-                        isSelected: model.options.sort == sort
-                    ) { model.select(sort) }
-                    .accessibilityValue(model.options.sort == sort ? directionDescription : "")
-                }
+            HStack(spacing: Spacing.xSmall) {
+                toggles
+                menus
+                sorts
             }
             .padding(.horizontal, Spacing.medium)
             .padding(.vertical, Spacing.xSmall)
         }
         .scrollIndicators(.hidden)
+    }
+
+    private var toggles: some View {
+        GlassChipGroup {
+            GlassChip(
+                String(localized: "Unplayed", bundle: .module, comment: "Library filter: hide played items."),
+                systemImage: "circle.dashed",
+                isSelected: model.options.unplayedOnly
+            ) { animate { model.options.unplayedOnly.toggle() } }
+            GlassChip(
+                String(localized: "Favourites", bundle: .module, comment: "Library filter: only favourites."),
+                systemImage: "heart",
+                isSelected: model.options.favouritesOnly
+            ) { animate { model.options.favouritesOnly.toggle() } }
+        }
+    }
+
+    @ViewBuilder private var menus: some View {
+        if !model.filters.genres.isEmpty {
+            FilterMenu(
+                title: String(localized: "Genre", bundle: .module, comment: "Library filter menu."),
+                allTitle: String(localized: "All Genres", bundle: .module, comment: "Genre filter: no filter."),
+                options: model.filters.genres,
+                label: { $0 },
+                selection: $model.options.genre
+            )
+        }
+        if !model.filters.years.isEmpty {
+            FilterMenu(
+                title: String(localized: "Year", bundle: .module, comment: "Library filter menu."),
+                allTitle: String(localized: "All Years", bundle: .module, comment: "Year filter: no filter."),
+                options: model.filters.years,
+                label: { String($0) },
+                selection: $model.options.year
+            )
+        }
+    }
+
+    private var sorts: some View {
+        GlassChipGroup {
+            ForEach(LibraryQuery.Sort.allCases, id: \.self) { sort in
+                GlassChip(
+                    sort.title,
+                    systemImage: model.options.sort == sort
+                        ? (model.options.ascending ? "arrow.up" : "arrow.down") : nil,
+                    isSelected: model.options.sort == sort
+                ) { animate { model.select(sort) } }
+                .accessibilityValue(model.options.sort == sort ? directionDescription : "")
+            }
+        }
+    }
+
+    /// Makes a selection change inside Serafin's spring, so the chips and their neighbours move together.
+    private func animate(_ change: () -> Void) {
+        withAnimation(Motion.animation(reduceMotion: reduceMotion), change)
     }
 
     private var directionDescription: String {

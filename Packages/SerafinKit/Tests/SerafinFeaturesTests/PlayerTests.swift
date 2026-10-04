@@ -174,6 +174,35 @@ import Testing
         #expect(!playback.isPlayerPresented)
     }
 
+    @Test func thePlayerGrowsOutOfTheControlThatOpenedIt() throws {
+        let playback = PlaybackCoordinator(defaults: defaults, isOnExpensiveNetwork: { false })
+        let item = try episode(positionTicks: nil)
+        playback.play(item, zoomSource: "hero-play-1")
+        #expect(playback.zoomSource == "hero-play-1")
+        // Playing on, as Up Next does, keeps the control the player came from.
+        playback.play(item, zoomSource: "something-else")
+        #expect(playback.zoomSource == "hero-play-1")
+        // Minimizing shrinks the player back into it.
+        playback.minimize()
+        #expect(!playback.isPlayerPresented)
+        #expect(playback.zoomSource == "hero-play-1")
+        // Reopening from the mini player grows the player out of the mini player.
+        playback.showPlayer()
+        #expect(playback.isPlayerPresented)
+        #expect(playback.zoomSource == PlaybackCoordinator.miniPlayerZoomSource)
+    }
+
+    @Test func stoppingDoesntShrinkIntoTheVanishingMiniPlayer() throws {
+        let playback = PlaybackCoordinator(defaults: defaults, isOnExpensiveNetwork: { false })
+        playback.play(try episode(positionTicks: nil))
+        playback.minimize()
+        playback.showPlayer()
+        playback.stop()
+        #expect(playback.zoomSource == nil)
+        #expect(playback.nowPlaying == nil)
+        #expect(!playback.isPlayerPresented)
+    }
+
     @Test func showsAndSeasonsDontPlayThemselves() throws {
         let playback = PlaybackCoordinator(defaults: defaults, isOnExpensiveNetwork: { false })
         let show = try #require(MediaItem(BaseItemDto(id: "cccc3333", name: "Sherlock Holmes", type: .series)))
