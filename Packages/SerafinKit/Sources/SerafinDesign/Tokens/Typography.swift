@@ -10,8 +10,10 @@ public enum Typography: CaseIterable, Sendable {
     /// Section and shelf headers, such as Continue Watching. System title 2, bold, the size Apple's TV and
     /// Music apps use for shelves.
     case title
-    /// Card and row titles. System headline.
+    /// Row titles and emphasised labels. System headline.
     case headline
+    /// Titles under posters and thumbnails, where a headline would wrap too soon. System subheadline, semibold.
+    case cardTitle
     /// Overviews and other running text. System body.
     case body
     /// Metadata such as year, runtime and episode codes. System caption.
@@ -23,6 +25,7 @@ public enum Typography: CaseIterable, Sendable {
         case .largeTitle: .largeTitle.bold()
         case .title: .title2.bold()
         case .headline: .headline
+        case .cardTitle: .subheadline.weight(.semibold)
         case .body: .body
         case .caption: .caption
         }

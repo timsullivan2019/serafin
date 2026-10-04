@@ -1,0 +1,75 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ left" : {
+      "comment" : "Time left to watch, such as 32 min left."
+    },
+    "%@ of %@" : {
+      "comment" : "Spoken playback position, such as 12:34 of 1:39:00."
+    },
+    "%@ watched" : {
+      "comment" : "Spoken progress, such as 40% watched."
+    },
+    "%@ · %@" : {
+      "comment" : "Series title and episode code above an episode title, such as Caminandes · S1 E2."
+    },
+    "Audio and Subtitles" : {
+      "comment" : "Button that opens the audio and subtitle picker."
+    },
+    "Close" : {
+      "comment" : "Button that closes the player."
+    },
+    "Close Player" : {
+      "comment" : "Button that stops and hides the mini player."
+    },
+    "Favourite" : {
+      "comment" : "Spoken state of a favourite item."
+    },
+    "Loading" : {
+      "comment" : "Spoken while content loads."
+    },
+    "Pause" : {
+      "comment" : "Button that pauses playback."
+    },
+    "Picture in Picture" : {
+      "comment" : "Button that moves the video into a floating window."
+    },
+    "Play" : {
+      "comment" : "Button that starts playback."
+    },
+    "Playback position" : {
+      "comment" : "Spoken name of the player scrubber."
+    },
+    "Played" : {
+      "comment" : "Spoken state of a played item."
+    },
+    "Rated %@" : {
+      "comment" : "Spoken age rating, such as Rated PG."
+    },
+    "Resume · %@" : {
+      "comment" : "Button that resumes playback, such as Resume · 32 min left."
+    },
+    "Resume, %@" : {
+      "comment" : "Spoken label of the resume button, such as Resume, 32 min left."
+    },
+    "S%lld E%lld" : {
+      "comment" : "Season and episode code on cards, such as S2 E4."
+    },
+    "Season %lld, episode %lld" : {
+      "comment" : "Spoken season and episode number of an episode."
+    },
+    "Shows everything in this row" : {
+      "comment" : "Hint on a row title."
+    },
+    "Skip back 10 seconds" : {
+      "comment" : "Button that jumps back 10 seconds."
+    },
+    "Skip forward 10 seconds" : {
+      "comment" : "Button that jumps forward 10 seconds."
+    },
+    "Try Again" : {
+      "comment" : "Button that retries a failed load."
+    }
+  },
+  "version" : "1.0"
+}

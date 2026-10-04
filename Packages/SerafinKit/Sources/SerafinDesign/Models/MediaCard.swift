@@ -43,6 +43,8 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
     public var year: Int?
     /// The running time. For a series, the length of a typical episode.
     public var runtime: Duration?
+    /// The age rating as the server provides it, such as "PG-13" or "NR".
+    public var rating: String?
     /// How much has been watched, from 0 for not started to 1 for finished.
     public var progress: Double
     /// Whether the item is marked as played.
@@ -62,6 +64,7 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
     ///   - title: The title.
     ///   - year: The release year.
     ///   - runtime: The running time.
+    ///   - rating: The age rating.
     ///   - progress: How much has been watched, clamped to 0...1.
     ///   - isPlayed: Whether the item is marked as played.
     ///   - isFavourite: Whether the item is marked as a favourite.
@@ -73,6 +76,7 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
         title: String,
         year: Int? = nil,
         runtime: Duration? = nil,
+        rating: String? = nil,
         progress: Double = 0,
         isPlayed: Bool = false,
         isFavourite: Bool = false,
@@ -84,6 +88,7 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
         self.title = title
         self.year = year
         self.runtime = runtime
+        self.rating = rating
         self.progress = min(max(progress, 0), 1)
         self.isPlayed = isPlayed
         self.isFavourite = isFavourite

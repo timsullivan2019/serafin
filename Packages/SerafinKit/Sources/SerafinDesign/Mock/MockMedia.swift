@@ -49,30 +49,30 @@ public enum MockMedia {
         ),
         MediaCard(
             id: "movie-night-of-the-living-dead", kind: .movie, title: "Night of the Living Dead", year: 1968,
-            runtime: .seconds(96 * 60), isPlayed: true,
+            runtime: .seconds(96 * 60), rating: "NR", isPlayed: true,
             overview: "Strangers barricade themselves in a Pennsylvania farmhouse as the dead rise and close in."
         ),
         MediaCard(
             id: "movie-the-general", kind: .movie, title: "The General", year: 1926,
-            runtime: .seconds(79 * 60), isFavourite: true,
+            runtime: .seconds(79 * 60), rating: "NR", isFavourite: true,
             overview: "A railway engineer chases his stolen locomotive, and the woman he loves, deep behind enemy "
                 + "lines."
         ),
         MediaCard(
             id: "movie-nosferatu", kind: .movie, title: "Nosferatu", year: 1922,
-            runtime: .seconds(94 * 60),
+            runtime: .seconds(94 * 60), rating: "NR",
             overview: "An estate agent travels to a remote castle to close a sale, and brings its plague-bearing "
                 + "owner home with him."
         ),
         MediaCard(
             id: "movie-his-girl-friday", kind: .movie, title: "His Girl Friday", year: 1940,
-            runtime: .seconds(92 * 60),
+            runtime: .seconds(92 * 60), rating: "NR",
             overview: "A newspaper editor schemes to keep his star reporter, and former wife, from remarrying by "
                 + "handing her one last story."
         ),
         MediaCard(
             id: "movie-charade", kind: .movie, title: "Charade", year: 1963,
-            runtime: .seconds(113 * 60), progress: 0.2,
+            runtime: .seconds(113 * 60), rating: "NR", progress: 0.2,
             overview: "After her husband is murdered, a widow in Paris is pursued by men who want the fortune he hid."
         ),
     ]
