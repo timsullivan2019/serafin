@@ -96,3 +96,25 @@ struct RGB: Equatable, Sendable {
         component <= 0.0031308 ? component * 12.92 : 1.055 * pow(component, 1 / 2.4) - 0.055
     }
 }
+
+extension RGB {
+    /// Creates a colour from HSB components, each from 0 to 1. Hue wraps around the colour wheel.
+    init(hue: Double, saturation: Double, brightness: Double) {
+        let turn = hue - hue.rounded(.down)
+        let sector = turn * 6
+        let index = Int(sector) % 6
+        let fraction = sector - Double(Int(sector))
+        let value = brightness
+        let low = value * (1 - saturation)
+        let falling = value * (1 - saturation * fraction)
+        let rising = value * (1 - saturation * (1 - fraction))
+        switch index {
+        case 0: self.init(red: value, green: rising, blue: low)
+        case 1: self.init(red: falling, green: value, blue: low)
+        case 2: self.init(red: low, green: value, blue: rising)
+        case 3: self.init(red: low, green: falling, blue: value)
+        case 4: self.init(red: rising, green: low, blue: value)
+        default: self.init(red: value, green: low, blue: falling)
+        }
+    }
+}
