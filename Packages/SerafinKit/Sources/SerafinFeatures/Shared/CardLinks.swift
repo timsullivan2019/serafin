@@ -1,55 +1,45 @@
+import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// A poster that opens its item, zooms into it, and offers Play in its context menu.
+/// A poster that opens its item, zooms into it, and offers Play, Mark as Played and Favourite in its context menu.
 struct PosterLink: View {
-    let card: MediaCard
+    let item: MediaItem
     @Environment(\.zoomNamespace) private var zoom
 
     var body: some View {
-        NavigationLink(value: card.route) {
-            PosterCard(card: card, artwork: Catalog.poster(for: card), zoomNamespace: zoom) {
-                PlayMenuItem(card: card)
+        NavigationLink(value: item.route) {
+            ItemArtwork(item, role: .poster) { image in
+                PosterCard(card: item.card, artwork: image, zoomNamespace: zoom) {
+                    CardMenuItems(item: item)
+                }
             }
         }
         .buttonStyle(.card)
     }
 }
 
-/// A landscape thumbnail that opens its item, zooms into it, and offers Play in its context menu.
+/// A landscape thumbnail that opens its item, zooms into it, and offers the same context menu as a poster.
 struct LandscapeLink: View {
-    let card: MediaCard
+    let item: MediaItem
     @Environment(\.zoomNamespace) private var zoom
 
     var body: some View {
-        NavigationLink(value: card.route) {
-            LandscapeCard(card: card, artwork: Catalog.backdrop(for: card), zoomNamespace: zoom) {
-                PlayMenuItem(card: card)
+        NavigationLink(value: item.route) {
+            ItemArtwork(item, role: .landscape) { image in
+                LandscapeCard(card: item.card, artwork: image, zoomNamespace: zoom) {
+                    CardMenuItems(item: item)
+                }
             }
         }
         .buttonStyle(.card)
     }
 }
 
-/// The Play item in a card's context menu.
-struct PlayMenuItem: View {
-    let card: MediaCard
-    @Environment(PlaybackCoordinator.self) private var playback
-
-    var body: some View {
-        Button {
-            playback.play(Catalog.playable(for: card))
-        } label: {
-            Label(
-                String(localized: "Play", bundle: .module, comment: "Menu item that starts playback."),
-                systemImage: "play.fill")
-        }
-    }
-}
-
-extension MediaCard {
-    /// Where tapping this card goes.
+extension MediaItem {
+    /// Where tapping this item goes.
     var route: Route {
-        kind == .season ? .season(id: id) : .item(id: id)
+        guard card.kind == .season else { return .item(id: id) }
+        return .season(id: id, seriesID: source?.seriesID ?? SampleMediaSource.seriesID(ofSeason: id) ?? "")
     }
 }

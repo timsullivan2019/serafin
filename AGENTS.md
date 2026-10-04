@@ -58,6 +58,7 @@ Packages/SerafinKit/
   Tests/SerafinCoreTests/
   Tests/SerafinPlaybackTests/
   Tests/SerafinDesignTests/
+  Tests/SerafinFeaturesTests/   screen logic and the mapping from server items to cards
 docs/PLAN.md         the phased work plan
 docs/SECURITY.md     threat model (written in Phase 3)
 .github/workflows/ci.yml

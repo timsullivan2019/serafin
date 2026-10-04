@@ -48,6 +48,7 @@ let package = Package(
                 "SerafinPlayback",
                 "SerafinDesign",
                 jellyfinAPI,
+                .product(name: "Nuke", package: "Nuke"),
                 .product(name: "NukeUI", package: "Nuke"),
             ],
             resources: [.process("Resources")]
@@ -58,6 +59,7 @@ let package = Package(
             resources: [.copy("Fixtures")]
         ),
         .testTarget(name: "SerafinPlaybackTests", dependencies: ["SerafinPlayback"]),
+        .testTarget(name: "SerafinFeaturesTests", dependencies: ["SerafinFeatures", "SerafinCore", "SerafinDesign"]),
         .testTarget(name: "SerafinDesignTests", dependencies: ["SerafinDesign"]),
     ],
     // Swift 6 language mode enforces complete strict concurrency checking.

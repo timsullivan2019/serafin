@@ -6,6 +6,8 @@ public struct MediaLibrary: Identifiable, Hashable, Sendable {
         case movies
         /// Series and their episodes.
         case shows
+        /// Movies and series together.
+        case mixed
     }
 
     /// A stable identifier for the library.

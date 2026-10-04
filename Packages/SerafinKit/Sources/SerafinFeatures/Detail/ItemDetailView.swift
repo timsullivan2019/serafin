@@ -1,10 +1,11 @@
 import SerafinDesign
 import SwiftUI
 
-/// A movie, series or episode: the hero header, the overview, then seasons, episodes or suggestions.
+/// A movie, show or episode: the hero header, the overview and cast, then seasons, episodes or similar titles.
 struct ItemDetailView: View {
     @State private var model: ItemDetailModel
-    @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(\.media) private var media
+    @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
 
     init(id: String) {
@@ -13,57 +14,69 @@ struct ItemDetailView: View {
 
     var body: some View {
         Group {
-            if let card = model.card {
-                details(for: card)
-            } else {
-                ErrorState(
-                    String(
-                        localized: "Can't Find This Item", bundle: .module, comment: "Title when an item is missing."),
-                    message: String(
-                        localized: "It may have been removed from your library.",
-                        bundle: .module,
-                        comment: "Explanation when an item is missing."
-                    ),
-                    systemImage: "questionmark.square.dashed"
-                )
+            switch model.phase {
+            case .loading:
+                LoadingState()
+            case .failed(let message):
+                FailureState(message: message) { Task { await model.load(from: media) } }
+            case .loaded(let details):
+                DetailContent(details: details, model: model)
             }
         }
         .background(Color.background)
         .zoomTransition(from: model.id, in: zoom)
+        .task(id: actions.revision) { await model.load(from: media) }
+        .toolbar {
+            if let item = model.details?.item {
+                DetailToolbar(item: item)
+            }
+        }
+        .tint(model.tint)
     }
+}
 
-    private func details(for card: MediaCard) -> some View {
+/// The scrolling page under the hero.
+private struct DetailContent: View {
+    let details: ItemDetails
+    let model: ItemDetailModel
+    @Environment(PlaybackCoordinator.self) private var playback
+
+    var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xLarge) {
-                HeroHeader(card: card, backdrop: Catalog.backdrop(for: card), tint: model.tint) {
-                    playback.play(Catalog.playable(for: card))
-                }
-                if let overview = model.overview {
-                    Text(overview)
-                        .typography(.body)
-                        .foregroundStyle(.textPrimary)
-                        .padding(.horizontal, Spacing.medium)
-                }
-                if !model.seasons.isEmpty {
+                hero
+                about
+                if !details.cast.isEmpty {
                     MediaRow(
-                        String(localized: "Seasons", bundle: .module, comment: "Row of a series' seasons."),
-                        style: .posters,
-                        items: model.seasons.map(\.card)
-                    ) { PosterLink(card: $0) }
+                        String(localized: "Cast & Crew", bundle: .module, comment: "Row of an item's cast and crew."),
+                        style: .people,
+                        items: details.cast
+                    ) { person in
+                        PersonPhoto(person: person) { photo in
+                            PersonCard(name: person.name, role: person.role, photo: photo)
+                        }
+                    }
                 }
-                if !model.seasonEpisodes.isEmpty {
+                if !details.seasons.isEmpty {
+                    MediaRow(
+                        String(localized: "Seasons", bundle: .module, comment: "Row of a show's seasons."),
+                        style: .posters,
+                        items: details.seasons
+                    ) { PosterLink(item: $0) }
+                }
+                if !details.seasonEpisodes.isEmpty {
                     MediaRow(
                         String(localized: "More Episodes", bundle: .module, comment: "Row of other episodes."),
                         style: .landscape,
-                        items: model.seasonEpisodes
-                    ) { LandscapeLink(card: $0) }
+                        items: details.seasonEpisodes
+                    ) { LandscapeLink(item: $0) }
                 }
-                if !model.moreLike.isEmpty {
+                if !details.similar.isEmpty {
                     MediaRow(
-                        String(localized: "More Like This", bundle: .module, comment: "Row of suggestions."),
+                        String(localized: "More Like This", bundle: .module, comment: "Row of similar titles."),
                         style: .posters,
-                        items: model.moreLike
-                    ) { PosterLink(card: $0) }
+                        items: details.similar
+                    ) { PosterLink(item: $0) }
                 }
             }
             .padding(.bottom, Spacing.xLarge)
@@ -71,21 +84,103 @@ struct ItemDetailView: View {
         // The hero runs under the navigation bar, whose glass back button floats over the artwork.
         .ignoresSafeArea(edges: .top)
     }
+
+    private var hero: some View {
+        ItemArtwork(details.item, role: .backdrop, onLoad: { [model] in model.backdropLoaded($0) }) { backdrop in
+            ItemArtwork(details.item, role: .logo, width: 280) { logo in
+                HeroHeader(card: playCard, backdrop: backdrop, logo: logo, tint: model.tint) {
+                    playback.play(details.playable ?? details.item)
+                }
+            }
+        }
+    }
+
+    /// The card the hero describes. A show's pill resumes or starts the episode Play opens, so it shows that
+    /// episode's progress.
+    private var playCard: MediaCard {
+        var card = details.item.card
+        if card.kind == .series, let next = details.playable?.card {
+            card.progress = next.progress
+            card.runtime = next.runtime
+        }
+        return card
+    }
+
+    @ViewBuilder private var about: some View {
+        if details.item.card.overview != nil || !details.genres.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.small) {
+                if let overview = details.item.card.overview {
+                    Text(overview)
+                        .typography(.body)
+                        .foregroundStyle(.textPrimary)
+                        .textSelection(.enabled)
+                }
+                if !details.genres.isEmpty {
+                    Text(details.genres.formatted(.list(type: .and, width: .narrow)))
+                        .typography(.caption)
+                        .foregroundStyle(.textSecondary)
+                }
+            }
+            .padding(.horizontal, Spacing.medium)
+        }
+    }
+}
+
+/// Mark as Played and Favourite, as glass buttons in the navigation bar.
+private struct DetailToolbar: ToolbarContent {
+    let item: MediaItem
+    @Environment(\.media) private var media
+    @Environment(MediaActions.self) private var actions
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                Task { await actions.setPlayed(!item.card.isPlayed, for: item, in: media) }
+            } label: {
+                Label(
+                    item.card.isPlayed
+                        ? String(
+                            localized: "Mark as Unplayed", bundle: .module,
+                            comment: "Button and menu item that marks an item not played.")
+                        : String(
+                            localized: "Mark as Played", bundle: .module,
+                            comment: "Button and menu item that marks an item played."),
+                    systemImage: item.card.isPlayed ? "checkmark.circle.fill" : "checkmark.circle"
+                )
+            }
+            .sensoryFeedback(.success, trigger: item.card.isPlayed)
+            Button {
+                Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
+            } label: {
+                Label(
+                    item.card.isFavourite
+                        ? String(
+                            localized: "Remove from Favourites", bundle: .module,
+                            comment: "Button and menu item that takes an item out of the favourites.")
+                        : String(
+                            localized: "Add to Favourites", bundle: .module,
+                            comment: "Button and menu item that adds an item to the favourites."),
+                    systemImage: item.card.isFavourite ? "heart.fill" : "heart"
+                )
+            }
+            .sensoryFeedback(.selection, trigger: item.card.isFavourite)
+        }
+    }
 }
 
 #Preview("Movie") {
-    TabStack { ItemDetailView(id: "movie-sintel") }
-        .environment(PlaybackCoordinator())
+    TabStack { ItemDetailView(id: "movie-the-general") }
+        .previewEnvironment()
 }
 
 #Preview("Series, dark") {
     TabStack { ItemDetailView(id: "series-sherlock-holmes") }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
         .preferredColorScheme(.dark)
 }
 
 #Preview("Episode, largest text") {
     TabStack { ItemDetailView(id: "series-caminandes-s1e2") }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
         .dynamicTypeSize(.accessibility5)
 }

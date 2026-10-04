@@ -95,3 +95,17 @@ public struct SearchResults: Sendable {
     /// No results, for an empty search.
     public static let none = SearchResults(movies: [], series: [], episodes: [])
 }
+
+/// The genres and years a library's items have, for its filter menus.
+public struct LibraryFilters: Hashable, Sendable {
+    /// Genre names, in alphabetical order.
+    public let genres: [String]
+    /// Release years, newest first.
+    public let years: [Int]
+
+    /// Creates the filters.
+    public init(genres: [String], years: [Int]) {
+        self.genres = genres
+        self.years = years
+    }
+}

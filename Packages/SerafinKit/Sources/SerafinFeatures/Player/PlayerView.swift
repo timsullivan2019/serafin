@@ -10,7 +10,7 @@ struct PlayerView: View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
-            if let card = playback.nowPlaying {
+            if let card = playback.nowPlaying?.card {
                 PlayerControls(
                     title: card.title,
                     subtitle: card.eyebrowText,
@@ -33,7 +33,7 @@ struct PlayerView: View {
 
 #Preview {
     let playback = PlaybackCoordinator()
-    playback.play(MockMedia.movies[1])
+    playback.play(MediaItem(card: MockMedia.movies[1], source: nil))
     return PlayerView()
         .environment(playback)
 }

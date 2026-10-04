@@ -1,3 +1,5 @@
+import SerafinCore
+import SerafinDesign
 import SwiftUI
 
 /// A screen pushed onto a tab's navigation stack.
@@ -5,11 +7,17 @@ enum Route: Hashable {
     /// A movie, series or episode.
     case item(id: String)
     /// One library's full grid.
-    case library(id: String)
-    /// A season's episodes.
-    case season(id: String)
+    case library(MediaLibrary)
+    /// A season's episodes. Jellyfin lists them under the show, so the route carries both.
+    case season(id: String, seriesID: String)
     /// A person's filmography. Reserved for person pages after 1.0; nothing navigates here yet.
     case person(id: String)
+    /// Adding another server, from Settings.
+    case addServer
+    /// Signing in to a saved server, from Settings or after adding one.
+    case signIn(Server)
+    /// The open-source licences, from Settings.
+    case licences
 }
 
 /// Pushes a route onto the current tab's navigation stack, for buttons that are not navigation links.
@@ -55,17 +63,24 @@ struct TabStack<Root: View>: View {
 /// The screen for a route.
 private struct RouteDestination: View {
     let route: Route
+    @Environment(\.navigate) private var navigate
 
     var body: some View {
         switch route {
         case .item(let id):
             ItemDetailView(id: id)
-        case .library(let id):
-            LibraryView(id: id)
-        case .season(let id):
-            SeasonView(id: id)
+        case .library(let library):
+            LibraryView(library: library)
+        case .season(let id, let seriesID):
+            SeasonView(id: id, seriesID: seriesID)
         case .person:
             EmptyView()
+        case .addServer:
+            AddServerView { server in navigate(.signIn(server)) }
+        case .signIn(let server):
+            SignInView(server: server)
+        case .licences:
+            LicencesView()
         }
     }
 }

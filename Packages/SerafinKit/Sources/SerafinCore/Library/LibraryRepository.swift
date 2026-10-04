@@ -62,13 +62,19 @@ public actor LibraryRepository {
 
     /// The next episode to watch in each show the user is part way through. Episodes already started are in
     /// ``resume(limit:)`` instead.
-    public func nextUp(limit: Int = 20) async throws -> [BaseItemDto] {
+    ///
+    /// - Parameters:
+    ///   - limit: The most episodes to return.
+    ///   - seriesID: One show to ask about, for its Play button. The answer then includes an episode the user has
+    ///     started, since Play resumes it.
+    public func nextUp(limit: Int = 20, series seriesID: String? = nil) async throws -> [BaseItemDto] {
         var parameters = Paths.GetNextUpParameters(userID: userID, limit: limit)
+        parameters.seriesID = seriesID
         parameters.fields = Self.cardFields
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         parameters.enableUserData = true
-        parameters.enableResumable = false
+        parameters.enableResumable = seriesID != nil
         let request = Paths.getNextUp(parameters: parameters)
         return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
     }
@@ -122,6 +128,20 @@ public actor LibraryRepository {
         let result = try await cached(request.url, request.query) { try await client.send(request).value }
         let items = result.items ?? []
         return ItemPage(items: items, start: result.startIndex ?? start, total: result.totalRecordCount ?? items.count)
+    }
+
+    /// The genres and years of a library's items, for the grid's filter menus.
+    ///
+    /// - Parameters:
+    ///   - viewID: The library, from ``userViews()``.
+    ///   - types: The kinds of item the grid lists.
+    public func filters(in viewID: String, types: [BaseItemKind]) async throws -> LibraryFilters {
+        var parameters = Paths.GetQueryFiltersLegacyParameters(userID: userID, parentID: viewID)
+        parameters.includeItemTypes = types
+        let request = Paths.getQueryFiltersLegacy(parameters: parameters)
+        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        let genres = Set(result.genres ?? []).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        return LibraryFilters(genres: genres, years: Set(result.years ?? []).sorted(by: >))
     }
 
     /// Everything about one item, for its detail screen.

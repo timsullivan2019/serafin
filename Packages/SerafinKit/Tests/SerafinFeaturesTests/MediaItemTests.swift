@@ -1,0 +1,96 @@
+import Foundation
+import JellyfinAPI
+import SerafinDesign
+import Testing
+
+@testable import SerafinFeatures
+
+@Suite struct MediaItemTests {
+    @Test func aMovieBecomesACardWithItsProgress() throws {
+        let item = BaseItemDto(
+            id: "aaaa1111",
+            name: "Nosferatu",
+            officialRating: "NR",
+            overview: "A real estate agent travels to Transylvania.",
+            productionYear: 1922,
+            runTimeTicks: 94 * 60 * 10_000_000,
+            type: .movie,
+            userData: UserItemDataDto(isFavorite: true, isPlayed: false, key: "aaaa1111", playedPercentage: 25)
+        )
+        let card = try #require(MediaItem(item)).card
+        #expect(card.kind == .movie)
+        #expect(card.title == "Nosferatu")
+        #expect(card.year == 1922)
+        #expect(card.runtime == .seconds(94 * 60))
+        #expect(card.rating == "NR")
+        #expect(card.progress == 0.25)
+        #expect(card.isFavourite)
+        #expect(!card.isPlayed)
+        #expect(card.overview == "A real estate agent travels to Transylvania.")
+    }
+
+    @Test func progressFallsBackToThePlaybackPosition() throws {
+        let item = BaseItemDto(
+            id: "bbbb2222",
+            name: "Detour",
+            runTimeTicks: 1000,
+            type: .movie,
+            userData: UserItemDataDto(key: "bbbb2222", playbackPositionTicks: 400)
+        )
+        #expect(try #require(MediaItem(item)).card.progress == 0.4)
+    }
+
+    @Test func anEpisodeKnowsItsShowSeasonAndNumber() throws {
+        let item = BaseItemDto(
+            id: "cccc3333",
+            indexNumber: 2,
+            name: "The Red-Headed League",
+            parentIndexNumber: 1,
+            seriesID: "show1111",
+            seriesName: "Sherlock Holmes",
+            type: .episode
+        )
+        let episode = try #require(MediaItem(item)?.card.episode)
+        #expect(episode.seriesID == "show1111")
+        #expect(episode.seriesTitle == "Sherlock Holmes")
+        #expect(episode.seasonNumber == 1)
+        #expect(episode.episodeNumber == 2)
+    }
+
+    @Test(arguments: [BaseItemKind.audio, .musicAlbum, .book, .photo, .folder, .boxSet])
+    func kindsSerafinDoesNotShowAreLeftOut(_ kind: BaseItemKind) {
+        #expect(MediaItem(BaseItemDto(id: "dddd4444", name: "Something", type: kind)) == nil)
+    }
+
+    @Test func itemsWithoutAnIDAreLeftOut() {
+        #expect(MediaItem(BaseItemDto(name: "No ID", type: .movie)) == nil)
+    }
+
+    @Test func librariesMapToTheKindsSerafinShows() {
+        #expect(MediaLibrary(view: BaseItemDto(collectionType: .movies, id: "m", name: "Movies"))?.kind == .movies)
+        #expect(MediaLibrary(view: BaseItemDto(collectionType: .tvshows, id: "t", name: "Shows"))?.kind == .shows)
+        #expect(MediaLibrary(view: BaseItemDto(id: "x", name: "Everything"))?.kind == .mixed)
+        #expect(MediaLibrary(view: BaseItemDto(collectionType: .music, id: "a", name: "Music")) == nil)
+        #expect(MediaLibrary.Kind.mixed.itemTypes == [.movie, .series])
+    }
+}
+
+@Suite struct PlainTextTests {
+    @Test func tagsAreDroppedAndLineBreaksKept() {
+        let text = PlainText("<p>A <i>silent</i> classic.<br/>Restored in 4K.</p>").text
+        #expect(text == "A silent classic.\nRestored in 4K.")
+    }
+
+    @Test func entitiesAreDecodedOnce() {
+        #expect(PlainText("Tom &amp; Jerry &quot;meet&quot; &amp;lt;3").text == "Tom & Jerry \"meet\" &lt;3")
+    }
+
+    @Test func scriptsNeverSurviveAsMarkup() {
+        let text = PlainText("<script>alert('x')</script>Hello").text
+        #expect(text?.contains("<") == false)
+    }
+
+    @Test func emptyOverviewsBecomeNil() {
+        #expect(PlainText("  <br> ").text == nil)
+    }
+}

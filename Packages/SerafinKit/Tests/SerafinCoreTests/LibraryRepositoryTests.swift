@@ -67,6 +67,30 @@ private let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(request.query("limit") == "12")
     }
 
+    @Test func aShowsPlayButtonResumesAStartedEpisode() async throws {
+        let host = "series-next-up.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Shows/NextUp", .json(200, try Fixture.json("NextUp")))
+        _ = try await library(on: host).nextUp(limit: 1, series: "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c")
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Shows/NextUp").first)
+        #expect(request.query("seriesId") == "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c")
+        #expect(request.query("enableResumable") == "true")
+    }
+
+    @Test func filtersListAGridsGenresAndYears() async throws {
+        let host = "filters.example.com"
+        StubURLProtocol.stub(
+            "\(host):443",
+            path: "/Items/Filters",
+            .json(200, #"{"Genres":["Horror","Comedy","comedy","Action"],"Years":[1926,1968,1940,1926],"Tags":[]}"#)
+        )
+        let filters = try await library(on: host).filters(in: moviesView, types: [.movie])
+        #expect(filters.genres == ["Action", "comedy", "Comedy", "Horror"])
+        #expect(filters.years == [1968, 1940, 1926])
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items/Filters").first)
+        #expect(request.query("parentId") == moviesView)
+        #expect(request.queryValues("includeItemTypes") == ["Movie"])
+    }
+
     @Test func latestGroupsNewEpisodesUnderTheirShow() async throws {
         let host = "latest.example.com"
         StubURLProtocol.stub("\(host):443", path: "/Items/Latest", .json(200, try Fixture.json("Latest")))

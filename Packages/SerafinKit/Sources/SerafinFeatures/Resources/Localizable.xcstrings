@@ -1,32 +1,131 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "8 Mbps" : {
-      "comment" : "Streaming quality cap."
+    "%@ uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi." : {
+      "comment" : "Warning before connecting over plain HTTP. The argument is the server's name."
+    },
+    "%lld Mbps" : {
+      "comment" : "Streaming quality cap in megabits per second, such as 8 Mbps."
     },
     "About" : {
       "comment" : "Settings section header."
     },
+    "Add Account" : {
+      "comment" : "Settings row: sign in another user."
+    },
+    "Add Server" : {
+      "comment" : "Title of the add server screen, and its row in Settings."
+    },
+    "Add a movie or TV library on your server and it appears here." : {
+      "comment" : "Explanation when there are no movie or TV libraries."
+    },
+    "Add to Favourites" : {
+      "comment" : "Button and menu item that adds an item to the favourites."
+    },
+    "All Genres" : {
+      "comment" : "Genre filter: no filter."
+    },
+    "All Years" : {
+      "comment" : "Year filter: no filter."
+    },
+    "Ascending" : {
+      "comment" : "VoiceOver value of the current sort."
+    },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
     },
-    "Can't Find This Season" : {
-      "comment" : "Title when a season is missing."
+    "Can't Reach the Server" : {
+      "comment" : "Title when the server doesn't answer."
+    },
+    "Can't Read Your Servers" : {
+      "comment" : "Title when the server list fails."
+    },
+    "Can't Use Your Saved Sign-In" : {
+      "comment" : "Title when the Keychain fails."
+    },
+    "Cancel" : {
+      "comment" : "Button that backs out of a warning."
+    },
+    "Cast & Crew" : {
+      "comment" : "Row of an item's cast and crew."
+    },
+    "Check This Server's Certificate" : {
+      "comment" : "Title of the certificate check."
+    },
+    "Check that the server is running and that you're connected to the internet." : {
+      "comment" : "Explanation when the server doesn't answer."
+    },
+    "Check the Address" : {
+      "comment" : "Title when a server address is wrong."
+    },
+    "Check them and try again." : {
+      "comment" : "Explanation when sign-in is refused."
+    },
+    "Clear Cache" : {
+      "comment" : "Settings button."
+    },
+    "Clear Filters" : {
+      "comment" : "Button that turns off all filters."
+    },
+    "Cleared" : {
+      "comment" : "Shown after clearing the cache."
+    },
+    "Code" : {
+      "comment" : "VoiceOver label of the Quick Connect code."
+    },
+    "Composer" : {
+      "comment" : "A crew member's job on a detail screen."
+    },
+    "Connect" : {
+      "comment" : "Button that connects to a server."
+    },
+    "Connect Anyway" : {
+      "comment" : "Button that accepts the plain HTTP warning."
+    },
+    "Connect to your Jellyfin server to start watching." : {
+      "comment" : "Explanation on the first screen."
     },
     "Continue Watching" : {
       "comment" : "Home row of started items."
     },
+    "Continue as %@" : {
+      "comment" : "Button that signs back in as a saved user, such as Continue as Alice."
+    },
     "Date Added" : {
       "comment" : "Library sort option: newest additions first."
+    },
+    "Descending" : {
+      "comment" : "VoiceOver value of the current sort."
+    },
+    "Director" : {
+      "comment" : "A crew member's job on a detail screen."
+    },
+    "Enter your server's address, such as jellyfin.example.com or 192.168.1.20:8096." : {
+      "comment" : "Explanation when a server address can't be used."
     },
     "Episodes" : {
       "comment" : "Search results section."
     },
-    "Everything here has been watched." : {
-      "comment" : "Explanation when the unplayed filter hides everything."
+    "Everyone signed in to it on this device is signed out." : {
+      "comment" : "Message in the remove server dialog."
+    },
+    "Favourites" : {
+      "comment" : "Library filter: only favourites."
     },
     "Find movies, shows and episodes by title." : {
       "comment" : "Explanation before anything is searched."
+    },
+    "Fingerprint" : {
+      "comment" : "VoiceOver label of a fingerprint."
+    },
+    "Genre" : {
+      "comment" : "Library filter menu."
+    },
+    "Get a New Code" : {
+      "comment" : "Button that restarts Quick Connect."
+    },
+    "Get a new code and enter it within a few minutes." : {
+      "comment" : "Explanation when a Quick Connect code expires."
     },
     "Home" : {
       "comment" : "Title of the home tab."
@@ -40,6 +139,18 @@
     "Library" : {
       "comment" : "Title of the library tab."
     },
+    "Licences" : {
+      "comment" : "Title of the licences screen, and its row in Settings."
+    },
+    "Lower caps use less data. The server converts anything above the cap." : {
+      "comment" : "Settings footer under the streaming quality caps."
+    },
+    "Mark as Played" : {
+      "comment" : "Button and menu item that marks an item played."
+    },
+    "Mark as Unplayed" : {
+      "comment" : "Button and menu item that marks an item not played."
+    },
     "Maximum" : {
       "comment" : "Streaming quality: no cap."
     },
@@ -47,10 +158,13 @@
       "comment" : "Row of other episodes."
     },
     "More Like This" : {
-      "comment" : "Row of suggestions."
+      "comment" : "Row of similar titles."
     },
     "Movies" : {
       "comment" : "Search results section."
+    },
+    "Movies and shows you add to it on your server appear here." : {
+      "comment" : "Explanation for an empty library."
     },
     "Movies and shows you add to your server appear here." : {
       "comment" : "Explanation when the home screen is empty."
@@ -64,11 +178,29 @@
     "Next Up" : {
       "comment" : "Home row of next episodes."
     },
-    "No Unplayed Items" : {
-      "comment" : "Title when a filtered library is empty."
+    "No Libraries" : {
+      "comment" : "Title when the server has no libraries."
+    },
+    "No Matches" : {
+      "comment" : "Title when filters hide everything."
     },
     "Nothing Here Yet" : {
       "comment" : "Title when the home screen is empty."
+    },
+    "Nothing in this library matches these filters." : {
+      "comment" : "Explanation when filters hide everything."
+    },
+    "OK" : {
+      "comment" : "Button that closes an alert."
+    },
+    "On This Network" : {
+      "comment" : "Servers found nearby."
+    },
+    "On a phone, computer or TV where you're signed in to Jellyfin, open your profile, choose Quick Connect, and enter this code." : {
+      "comment" : "How to approve a Quick Connect code."
+    },
+    "Password" : {
+      "comment" : "Label of the password field."
     },
     "Play" : {
       "comment" : "Menu item that starts playback."
@@ -76,14 +208,44 @@
     "Playback" : {
       "comment" : "Settings section header."
     },
+    "Producer" : {
+      "comment" : "A crew member's job on a detail screen."
+    },
     "Quality on Cellular" : {
       "comment" : "Settings row."
     },
     "Quality on Wi-Fi" : {
       "comment" : "Settings row."
     },
-    "Sample Media" : {
-      "comment" : "Settings row: the app shows samples."
+    "Quick Connect" : {
+      "comment" : "Title of the Quick Connect panel."
+    },
+    "Quick Connect Is Off" : {
+      "comment" : "Title when Quick Connect is disabled."
+    },
+    "Quick Connect is off on this server, so sign in with your password." : {
+      "comment" : "Note when the server has Quick Connect turned off."
+    },
+    "Rating" : {
+      "comment" : "Library sort option: highest rated first."
+    },
+    "Release Date" : {
+      "comment" : "Library sort option: newest releases first."
+    },
+    "Remove %@" : {
+      "comment" : "Button that removes a server."
+    },
+    "Remove Server" : {
+      "comment" : "Settings row."
+    },
+    "Remove from Favourites" : {
+      "comment" : "Button and menu item that takes an item out of the favourites."
+    },
+    "Remove this server?" : {
+      "comment" : "Title of the remove server dialog."
+    },
+    "Removes saved artwork. It downloads again as you browse." : {
+      "comment" : "Settings footer under Clear Cache."
     },
     "Search" : {
       "comment" : "Title of the search tab."
@@ -92,31 +254,130 @@
       "comment" : "Title before anything is searched."
     },
     "Seasons" : {
-      "comment" : "Row of a series' seasons."
+      "comment" : "Row of a show's seasons."
     },
-    "Serafin is showing built-in sample titles until you connect a Jellyfin server." : {
-      "comment" : "Settings footer under the server section."
+    "Serafin couldn't open its list of servers. Unlock your device and try again." : {
+      "comment" : "Explanation when the saved server list can't be read."
     },
-    "Server" : {
-      "comment" : "Settings section header."
+    "Serafin is open source under the MIT licence. The Jellyfin SDK's files stay under the Mozilla Public License 2.0." : {
+      "comment" : "Footer under the list of open-source licences."
+    },
+    "Serafin only uses unencrypted connections on your own network. Use the server's https:// address instead." : {
+      "comment" : "Explanation when plain HTTP to a public server is refused."
+    },
+    "Serafin works with Jellyfin 10.10 or newer. This server runs %@." : {
+      "comment" : "Explanation when the server is too old. The argument is its version, such as 10.9.11."
+    },
+    "Server Address" : {
+      "comment" : "Label of the server address field."
     },
     "Settings" : {
       "comment" : "Title of the settings tab."
     },
-    "Show All" : {
-      "comment" : "Button that turns off the unplayed filter."
-    },
     "Shows" : {
       "comment" : "Search results section."
+    },
+    "Sign In" : {
+      "comment" : "Button that signs in."
+    },
+    "Sign In Again" : {
+      "comment" : "Button after a sign-in has ended."
+    },
+    "Sign In to %@" : {
+      "comment" : "Button that opens sign-in for a saved server."
+    },
+    "Sign In with a Password Instead" : {
+      "comment" : "Button that switches to password sign-in."
+    },
+    "Sign Out" : {
+      "comment" : "Button that signs a user out on this device."
+    },
+    "Signed Out" : {
+      "comment" : "Title when a sign-in has ended."
+    },
+    "Something Went Wrong" : {
+      "comment" : "Title for an unexpected failure."
+    },
+    "Something answered at that address, but it isn't Jellyfin. Check the address and port." : {
+      "comment" : "Explanation when the address isn't a Jellyfin server."
+    },
+    "Storage" : {
+      "comment" : "Settings section header."
+    },
+    "That's Not a Jellyfin Server" : {
+      "comment" : "Title when the address isn't Jellyfin."
+    },
+    "The Code Expired" : {
+      "comment" : "Title when a Quick Connect code expires."
+    },
+    "The server ended this sign-in. Sign in again to keep watching." : {
+      "comment" : "Explanation when the server no longer accepts the sign-in."
+    },
+    "The server sent an answer Serafin didn't expect. Try again in a moment." : {
+      "comment" : "Explanation for an unexpected failure."
+    },
+    "The server's certificate has changed or isn't trusted. Check it before connecting." : {
+      "comment" : "Explanation when a certificate isn't trusted."
+    },
+    "This Connection Isn't Encrypted" : {
+      "comment" : "Title of the warning before connecting over plain HTTP."
+    },
+    "This Library Is Empty" : {
+      "comment" : "Title for an empty library."
+    },
+    "This Server Needs HTTPS" : {
+      "comment" : "Title when plain HTTP is refused."
+    },
+    "This Server Needs an Update" : {
+      "comment" : "Title when the server is too old."
+    },
+    "This server has Quick Connect turned off, so sign in with your password." : {
+      "comment" : "Explanation when Quick Connect is disabled."
+    },
+    "Trust This Certificate" : {
+      "comment" : "Button that pins a certificate."
     },
     "Unplayed" : {
       "comment" : "Library filter: hide played items."
     },
+    "Unrecognized Certificate" : {
+      "comment" : "Title when a certificate isn't trusted."
+    },
+    "Use Quick Connect Instead" : {
+      "comment" : "Button that switches back to Quick Connect."
+    },
+    "Username" : {
+      "comment" : "Label of the username field."
+    },
     "Version" : {
       "comment" : "Settings row showing the app version."
     },
+    "Waiting for approval" : {
+      "comment" : "Quick Connect status."
+    },
+    "Welcome to Serafin" : {
+      "comment" : "Greeting on the first screen."
+    },
+    "Writer" : {
+      "comment" : "A crew member's job on a detail screen."
+    },
+    "Wrong Username or Password" : {
+      "comment" : "Title when sign-in is refused."
+    },
     "Year" : {
-      "comment" : "Library sort option: newest releases first."
+      "comment" : "Library filter menu."
+    },
+    "Your Servers" : {
+      "comment" : "Servers saved on this device."
+    },
+    "iOS couldn't read or save your sign-in. Restart your device and try again." : {
+      "comment" : "Explanation when the Keychain fails."
+    },
+    "iOS doesn't recognize the certificate for %@. Compare this SHA-256 fingerprint with the one your server shows, and trust it only if they match." : {
+      "comment" : "Explanation of the certificate check. The argument is the server's host name."
+    },
+    "jellyfin.example.com" : {
+      "comment" : "Example in the address field."
     }
   },
   "version" : "1.0"

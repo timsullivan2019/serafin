@@ -4,17 +4,23 @@ import SwiftUI
 /// The first tab: Continue Watching, Next Up and the newest items in each library.
 struct HomeView: View {
     @State private var model = HomeModel()
+    @Environment(\.media) private var media
+    @Environment(MediaActions.self) private var actions
 
     var body: some View {
         content
+            .background(Color.background)
             .navigationTitle(String(localized: "Home", bundle: .module, comment: "Title of the home tab."))
-            .task { await model.load() }
+            .task(id: actions.revision) { await model.load(from: media) }
     }
 
     @ViewBuilder private var content: some View {
-        if !model.hasLoaded {
+        switch model.phase {
+        case .loading:
             LoadingState()
-        } else if model.isEmpty {
+        case .failed(let message):
+            FailureState(message: message) { Task { await model.load(from: media) } }
+        case .loaded(let home) where home.isEmpty:
             EmptyState(
                 String(localized: "Nothing Here Yet", bundle: .module, comment: "Title when the home screen is empty."),
                 message: String(
@@ -24,41 +30,41 @@ struct HomeView: View {
                 ),
                 systemImage: "sparkles.tv"
             )
-        } else {
-            rows
+        case .loaded(let home):
+            rows(home)
         }
     }
 
-    private var rows: some View {
+    private func rows(_ home: HomeContent) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.xLarge) {
-                if !model.continueWatching.isEmpty {
+                if !home.continueWatching.isEmpty {
                     MediaRow(
                         String(localized: "Continue Watching", bundle: .module, comment: "Home row of started items."),
                         style: .landscape,
-                        items: model.continueWatching
-                    ) { LandscapeLink(card: $0) }
+                        items: home.continueWatching
+                    ) { LandscapeLink(item: $0) }
                 }
-                if !model.nextUp.isEmpty {
+                if !home.nextUp.isEmpty {
                     MediaRow(
                         String(localized: "Next Up", bundle: .module, comment: "Home row of next episodes."),
                         style: .landscape,
-                        items: model.nextUp
-                    ) { LandscapeLink(card: $0) }
+                        items: home.nextUp
+                    ) { LandscapeLink(item: $0) }
                 }
-                ForEach(model.latest.filter { !$0.items.isEmpty }) { row in
+                ForEach(home.latest.filter { !$0.items.isEmpty }) { row in
                     LatestRowView(row: row)
                 }
             }
             .padding(.vertical, Spacing.medium)
         }
-        .background(Color.background)
+        .refreshable { await model.refresh(from: media) }
     }
 }
 
 /// "Latest in Movies": the newest posters of one library, with See All opening the library.
 private struct LatestRowView: View {
-    let row: HomeModel.LatestRow
+    let row: HomeContent.LatestRow
     @Environment(\.navigate) private var navigate
 
     var body: some View {
@@ -70,24 +76,24 @@ private struct LatestRowView: View {
             ),
             style: .posters,
             items: row.items,
-            seeAll: { navigate(.library(id: row.library.id)) }
-        ) { PosterLink(card: $0) }
+            seeAll: { navigate(.library(row.library)) }
+        ) { PosterLink(item: $0) }
     }
 }
 
 #Preview("Light") {
     TabStack { HomeView() }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
 }
 
 #Preview("Dark") {
     TabStack { HomeView() }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
         .preferredColorScheme(.dark)
 }
 
 #Preview("Largest text") {
     TabStack { HomeView() }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
         .dynamicTypeSize(.accessibility5)
 }

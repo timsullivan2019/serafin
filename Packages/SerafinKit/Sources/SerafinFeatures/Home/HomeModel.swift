@@ -3,28 +3,28 @@ import SerafinDesign
 
 /// The rows of the home screen.
 @Observable @MainActor final class HomeModel {
-    /// The newest items of one library, shown as a row of posters.
-    struct LatestRow: Identifiable {
-        let library: MediaLibrary
-        let items: [MediaCard]
-        var id: String { library.id }
+    enum Phase {
+        case loading
+        case loaded(HomeContent)
+        case failed(UserMessage)
     }
 
-    private(set) var continueWatching: [MediaCard] = []
-    private(set) var nextUp: [MediaCard] = []
-    private(set) var latest: [LatestRow] = []
-    private(set) var hasLoaded = false
+    private(set) var phase = Phase.loading
 
-    /// Whether every row is empty, which shows the empty state.
-    var isEmpty: Bool {
-        continueWatching.isEmpty && nextUp.isEmpty && latest.allSatisfy(\.items.isEmpty)
+    /// Loads the rows. A failed reload keeps the rows already showing.
+    func load(from media: any MediaSource) async {
+        do {
+            phase = .loaded(try await media.home())
+        } catch is CancellationError {
+        } catch {
+            if case .loaded = phase { return }
+            phase = .failed(UserMessage(error))
+        }
     }
 
-    /// Fills the rows from the catalog.
-    func load() async {
-        continueWatching = Catalog.continueWatching
-        nextUp = Catalog.nextUp
-        latest = Catalog.libraries.map { LatestRow(library: $0, items: Catalog.latest(in: $0)) }
-        hasLoaded = true
+    /// Asks the server again, skipping the cache, for pull to refresh.
+    func refresh(from media: any MediaSource) async {
+        await media.refresh()
+        await load(from: media)
     }
 }

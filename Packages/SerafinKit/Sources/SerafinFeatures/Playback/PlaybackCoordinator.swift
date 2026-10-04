@@ -7,15 +7,15 @@ import SerafinDesign
 /// takes over in plan tasks 1.6 and 1.7.
 @Observable @MainActor final class PlaybackCoordinator {
     /// The movie or episode playing, or nil when nothing is.
-    private(set) var nowPlaying: MediaCard?
+    private(set) var nowPlaying: MediaItem?
     /// Whether playback is running rather than paused.
     private(set) var isPlaying = false
     /// Whether the full-screen player is showing.
     var isPlayerPresented = false
 
-    /// Starts `card` and shows the full-screen player.
-    func play(_ card: MediaCard) {
-        nowPlaying = card
+    /// Starts `item` and shows the full-screen player.
+    func play(_ item: MediaItem) {
+        nowPlaying = item
         isPlaying = true
         isPlayerPresented = true
     }

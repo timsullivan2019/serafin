@@ -29,7 +29,24 @@ public struct Artwork: Sendable {
     /// item and its show have no such image.
     public func request(_ role: ImageRole, of item: BaseItemDto, width: CGFloat, scale: CGFloat) -> ImageRequest? {
         let pixels = Self.pixelWidth(points: width, scale: scale)
-        guard let url = urls.url(role, of: item, maxWidth: pixels) else { return nil }
+        return request(urls.url(role, of: item, maxWidth: pixels), pixels: pixels)
+    }
+
+    /// The request for a cast or crew member's photo, drawn `width` points wide on a screen of `scale`, or nil when
+    /// the server has none.
+    public func request(person: BaseItemPerson, width: CGFloat, scale: CGFloat) -> ImageRequest? {
+        guard let id = person.id, let tag = person.primaryImageTag else { return nil }
+        let pixels = Self.pixelWidth(points: width, scale: scale)
+        return request(urls.url(itemID: id, type: .primary, tag: tag, maxWidth: pixels), pixels: pixels)
+    }
+
+    /// Empties the image caches in memory and on disk, for Clear Cache in Settings.
+    public func removeAllCachedImages() {
+        pipeline.cache.removeAll()
+    }
+
+    private func request(_ url: URL?, pixels: Int) -> ImageRequest? {
+        guard let url else { return nil }
         var urlRequest = URLRequest(url: url)
         urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
         var request = ImageRequest(urlRequest: urlRequest)
