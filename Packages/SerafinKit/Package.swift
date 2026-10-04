@@ -8,7 +8,7 @@ let package = Package(
     name: "SerafinKit",
     defaultLocalization: "en",
     platforms: [
-        .iOS(.v26),
+        .iOS("26.1"),
         .macOS(.v26),
     ],
     products: [
@@ -49,7 +49,8 @@ let package = Package(
                 "SerafinDesign",
                 jellyfinAPI,
                 .product(name: "NukeUI", package: "Nuke"),
-            ]
+            ],
+            resources: [.process("Resources")]
         ),
         .testTarget(name: "SerafinCoreTests", dependencies: ["SerafinCore"]),
         .testTarget(name: "SerafinPlaybackTests", dependencies: ["SerafinPlayback"]),

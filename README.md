@@ -6,7 +6,7 @@ Serafin is a native SwiftUI client for Jellyfin on iPhone and iPad, built around
 
 ## Building
 
-Serafin needs Xcode 26 or later (iOS 26 is the minimum OS) and [XcodeGen](https://github.com/yonaskolb/XcodeGen), which generates the Xcode project from `project.yml`.
+Serafin needs Xcode 26 or later (iOS 26.1 is the minimum OS) and [XcodeGen](https://github.com/yonaskolb/XcodeGen), which generates the Xcode project from `project.yml`.
 
 ```sh
 brew install xcodegen
