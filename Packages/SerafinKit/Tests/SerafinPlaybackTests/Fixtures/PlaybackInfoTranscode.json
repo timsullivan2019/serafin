@@ -1,0 +1,20 @@
+{
+  "MediaSources": [
+    {
+      "Protocol": "File", "Id": "7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a", "Type": "Default", "Container": "mkv",
+      "Name": "Charade", "IsRemote": false, "RunTimeTicks": 68400000000,
+      "SupportsTranscoding": true, "SupportsDirectStream": false, "SupportsDirectPlay": false,
+      "IsInfiniteStream": false, "UseMostCompatibleTranscodingProfile": false, "RequiresOpening": false,
+      "RequiresClosing": false, "RequiresLooping": false, "SupportsProbing": true,
+      "MediaStreams": [
+        { "Codec": "av1", "Type": "Video", "Index": 0, "Width": 3840, "Height": 2160, "IsDefault": true, "VideoRangeType": "DOVIWithHDR10" },
+        { "Codec": "truehd", "Language": "eng", "Type": "Audio", "Index": 1, "Channels": 8, "IsDefault": true },
+        { "Codec": "PGSSUB", "Language": "eng", "Type": "Subtitle", "Index": 2, "IsExternal": false, "IsTextSubtitleStream": false }
+      ],
+      "TranscodingUrl": "/videos/7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a/master.m3u8?DeviceId=device-1&MediaSourceId=7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a&VideoCodec=hevc,h264&AudioCodec=aac,eac3,ac3&AudioStreamIndex=1&VideoBitrate=7616000&AudioBitrate=384000&MaxWidth=1920&PlaySessionId=session-transcode&api_key=token-1&TranscodeReasons=VideoCodecNotSupported,AudioCodecNotSupported",
+      "TranscodingSubProtocol": "hls", "TranscodingContainer": "mp4",
+      "Formats": [], "Bitrate": 40000000, "DefaultAudioStreamIndex": 1, "HasSegments": false
+    }
+  ],
+  "PlaySessionId": "session-transcode"
+}

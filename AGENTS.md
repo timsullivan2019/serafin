@@ -78,7 +78,7 @@ Rules, enforced by `Package.swift` target dependencies and by review:
 
 - `SerafinDesign` depends on nothing in the project. It never imports `SerafinCore`, `JellyfinAPI`, or Nuke's networking. Every component renders from plain value types and `MockMedia` fixtures, so every preview works offline.
 - `SerafinCore` has no UI. It owns `JellyfinClient` construction, auth, the server registry, the Keychain store, the device identity, the image URL builder and the shared `ImagePipeline` configuration.
-- `SerafinPlayback` depends on `SerafinCore` and AVFoundation only. UIKit use (PiP controller, player layer hosting) is wrapped in `#if canImport(UIKit)` so the package still builds for macOS, which keeps `swift test` runnable on the host and keeps the door open for a Mac app later.
+- `SerafinPlayback` depends on `SerafinCore`, the SDK's models (`JellyfinAPI`) for the device profile and playback info, and AVFoundation only. UIKit use (PiP controller, player layer hosting) is wrapped in `#if canImport(UIKit)` so the package still builds for macOS, which keeps `swift test` runnable on the host and keeps the door open for a Mac app later.
 - `SerafinFeatures` composes the other three into screens. It uses the SDK's generated models directly; add a mapping type only where a screen needs a shape the SDK does not provide.
 - `App` contains only the `@main` entry, scene setup, deep-link routing and asset catalogs.
 

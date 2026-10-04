@@ -1,0 +1,20 @@
+{
+  "MediaSources": [
+    {
+      "Protocol": "File", "Id": "6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f", "Type": "Default", "Container": "mkv",
+      "Name": "Nosferatu", "IsRemote": false, "ETag": "9d1e2f3a4b5c6d7e", "RunTimeTicks": 56400000000,
+      "SupportsTranscoding": true, "SupportsDirectStream": true, "SupportsDirectPlay": false,
+      "IsInfiniteStream": false, "UseMostCompatibleTranscodingProfile": false, "RequiresOpening": false,
+      "RequiresClosing": false, "RequiresLooping": false, "SupportsProbing": true,
+      "MediaStreams": [
+        { "Codec": "h264", "Type": "Video", "Index": 0, "Width": 1440, "Height": 1080, "IsDefault": true },
+        { "Codec": "aac", "Language": "ger", "Type": "Audio", "Index": 1, "Channels": 2, "IsDefault": true },
+        { "Codec": "subrip", "Language": "eng", "Type": "Subtitle", "Index": 2, "IsExternal": false, "IsTextSubtitleStream": true }
+      ],
+      "TranscodingUrl": "/videos/6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f/master.m3u8?DeviceId=device-1&MediaSourceId=6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=139616000&AudioBitrate=384000&PlaySessionId=session-direct-stream&api_key=token-1&TranscodeReasons=ContainerNotSupported",
+      "TranscodingSubProtocol": "hls", "TranscodingContainer": "mp4",
+      "Formats": [], "Bitrate": 2214000, "DefaultAudioStreamIndex": 1, "HasSegments": false
+    }
+  ],
+  "PlaySessionId": "session-direct-stream"
+}

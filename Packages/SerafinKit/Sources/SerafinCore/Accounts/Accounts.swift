@@ -20,7 +20,8 @@ public actor Accounts {
     private let identity: DeviceIdentity
     private let sessions: SessionStore
     private let pins: PinStore
-    private let pinning: PinningDelegate
+    /// Accepts the user's pinned certificates. Shared with the player, whose streams AVFoundation loads itself.
+    public nonisolated let pinning: PinningDelegate
     private let clients: ClientFactory
     private let connector: ServerConnector
     private let images: ImagePipeline

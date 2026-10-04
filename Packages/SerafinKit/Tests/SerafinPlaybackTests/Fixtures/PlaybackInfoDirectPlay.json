@@ -1,0 +1,20 @@
+{
+  "MediaSources": [
+    {
+      "Protocol": "File", "Id": "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e", "Type": "Default", "Container": "mp4",
+      "Size": 1789000000, "Name": "The General", "IsRemote": false, "ETag": "3e0b0d2f8c1a9e7d",
+      "RunTimeTicks": 47400000000, "ReadAtNativeFramerate": false, "IgnoreDts": false, "IgnoreIndex": false,
+      "GenPtsInput": false, "SupportsTranscoding": true, "SupportsDirectStream": true, "SupportsDirectPlay": true,
+      "IsInfiniteStream": false, "UseMostCompatibleTranscodingProfile": false, "RequiresOpening": false,
+      "RequiresClosing": false, "RequiresLooping": false, "SupportsProbing": true,
+      "MediaStreams": [
+        { "Codec": "h264", "Type": "Video", "Index": 0, "Width": 1920, "Height": 1080, "IsDefault": true, "VideoRangeType": "SDR" },
+        { "Codec": "aac", "Language": "eng", "DisplayTitle": "English - AAC - Stereo", "Type": "Audio", "Index": 1, "Channels": 2, "IsDefault": true },
+        { "Codec": "ac3", "Language": "fre", "DisplayTitle": "French - Dolby Digital - 5.1", "Type": "Audio", "Index": 2, "Channels": 6, "IsDefault": false },
+        { "Codec": "mov_text", "Language": "eng", "DisplayTitle": "English", "Type": "Subtitle", "Index": 3, "IsExternal": false, "IsTextSubtitleStream": true }
+      ],
+      "Formats": [], "Bitrate": 3019000, "DefaultAudioStreamIndex": 1, "HasSegments": false
+    }
+  ],
+  "PlaySessionId": "session-direct-play"
+}
