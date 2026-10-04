@@ -194,3 +194,11 @@ import Testing
         #expect(PlaybackQuality.saved(onCellular: false, in: defaults) == .maximum)
     }
 }
+
+@Suite struct PlaybackDeliveryTests {
+    @Test func eachMethodHasItsDelivery() {
+        #expect(PlaybackDelivery(.directPlay) == .directPlay)
+        #expect(PlaybackDelivery(.directStream) == .repackaged)
+        #expect(PlaybackDelivery(.transcode) == .transcoding)
+    }
+}

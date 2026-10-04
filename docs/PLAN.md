@@ -220,15 +220,11 @@ Each item is one task; order is flexible within the phase.
 - 2.11 Error and offline behaviour: cached Home renders when the server is unreachable, with a clear banner.
 - 2.12 Dolby Vision and AV1 direct-play detection by device capability (`AVURLAsset.isPlayable`, `VTIsHardwareDecodeSupported`), extending the DeviceProfile accordingly.
 - 2.13 AVPlayer limits, documented and handled. AVPlayer can't natively play MKV containers, DTS or TrueHD audio, or ASS/SSA subtitles, so these go through the server. MKV with h264/hevc and AAC/AC3/EAC3 is a cheap remux (direct stream, no quality loss). DTS/TrueHD is a cheap audio-only transcode. ASS/SSA forces burn-in, which is a full video transcode; image subtitles (PGS, VobSub, DVB) are burned in the same way. Show which of the three is happening, with this exact wording, used identically in the player and in a short Settings explanation: "Direct play"; "Repackaged on server (no quality loss)" for a direct stream; "Transcoding on server" for a transcode. A compatibility player for users who want everything direct played is post-1.0: when we get there, evaluate libmpv (via the MPVKit package) and VLCKit for format coverage, licence, and the loss of PiP, AirPlay and Now Playing. Out of scope for 1.0; do not add either dependency now.
-  - Partially complete (1.6, and 1.7 in PR #13):
+  - Done:
     - The device profile sends MKV, DTS, TrueHD and styled or image subtitles through the server, and burns in the subtitles AVPlayer can't show.
-    - `PlaybackNegotiator` classifies every stream as direct play, direct stream or transcode. Jellyfin never reports a direct stream itself; it sends repackaging and conversion through the same HLS address. So the negotiator follows the server's own copy rules: a stream is a direct stream when the server's only reasons are the container or HEVC's codec tag and the stream accepts the original codecs. Progress reports carry that play method.
+    - `PlaybackNegotiator` classifies every stream as direct play, direct stream or transcode. Jellyfin never reports a direct stream itself; it sends repackaging and conversion through the same HLS address. So the negotiator follows the server's own copy rules: a stream is a direct stream when the server's only reasons are the container, HEVC's codec tag, or a text subtitle it adds to the stream, and the stream accepts the original codecs. A burned-in subtitle makes it a transcode. Progress reports carry that play method.
+    - One `PlaybackDelivery` type holds the three names, so the player and Settings can't drift apart. The player's Audio and Subtitles sheet shows the current one under its title, and Settings explains all three under "How Videos Play".
     - A debug log line names the container, codecs and the server's reasons, without identifying the item.
-  - Remaining:
-    - Show the state in the player, with the exact wording above.
-    - Add the short Settings explanation of the three states, in the same words.
-    - Tell subtitle conversion apart from burn-in. When the server converts a text subtitle such as SRT to WebVTT for the HLS stream, it still copies the video, but its reason is `SubtitleCodecNotSupported`, so Serafin calls it a transcode today; count it as repackaging. Burned-in subtitles stay "Transcoding on server". The owner's iPhone showed this reason for an H.264 and AAC file with a default subtitle.
-    - Tests for the wording of each state and for subtitle delivery in the classification.
 
 Gate 2: the native-feel checklist in the project plan passes on iPhone and iPad in light and dark, verified by the owner.
 

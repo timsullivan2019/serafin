@@ -35,6 +35,7 @@ struct SettingsView: View {
                     )
                 )
             }
+            DeliverySection()
             StorageSection()
             Section(String(localized: "About", bundle: .module, comment: "Settings section header.")) {
                 NavigationLink(value: Route.licences) {
@@ -186,6 +187,37 @@ private struct AccountsSection: View {
             try await change()
         } catch {
             failure = UserMessage(error)
+        }
+    }
+}
+
+/// The three ways a video can reach the player, in the words the player's audio and subtitle sheet uses.
+private struct DeliverySection: View {
+    var body: some View {
+        Section {
+            ForEach(PlaybackDelivery.allCases, id: \.self) { delivery in
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(delivery.title)
+                        Text(delivery.explanation)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: delivery.systemImage)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        } header: {
+            Text(String(localized: "How Videos Play", bundle: .module, comment: "Settings section header."))
+        } footer: {
+            Text(
+                String(
+                    localized: "The player's Audio and Subtitles sheet shows which one is happening.",
+                    bundle: .module,
+                    comment: "Settings footer under the ways a video can play."
+                )
+            )
         }
     }
 }

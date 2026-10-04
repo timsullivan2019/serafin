@@ -139,6 +139,9 @@
     "Home" : {
       "comment" : "Title of the home tab."
     },
+    "How Videos Play" : {
+      "comment" : "Settings section header."
+    },
     "It may have been removed from your library." : {
       "comment" : "Explanation when an item is missing."
     },
@@ -336,6 +339,9 @@
     },
     "The Code Expired" : {
       "comment" : "Title when a Quick Connect code expires."
+    },
+    "The player's Audio and Subtitles sheet shows which one is happening." : {
+      "comment" : "Settings footer under the ways a video can play."
     },
     "The server ended this sign-in. Sign in again to keep watching." : {
       "comment" : "Explanation when the server no longer accepts the sign-in."

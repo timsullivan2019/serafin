@@ -104,7 +104,8 @@ public struct PlaybackNegotiator: Sendable {
     ///
     /// Jellyfin sends repackaging and conversion through the same HLS address and calls both a transcode, so this
     /// follows the server's own rules: every reason it gives must be one repackaging fixes, and the stream must accept
-    /// the original video and audio codecs.
+    /// the original video and audio codecs. A subtitle the player can't read from the file doesn't count against it
+    /// when the server adds the subtitle to the stream as text; burning it into the picture means converting the video.
     ///
     /// - Parameters:
     ///   - transcodingURL: The server's HLS address for the version.
@@ -115,7 +116,13 @@ public struct PlaybackNegotiator: Sendable {
     {
         let query = URLComponents(string: transcodingURL)?.queryItems ?? []
         let reasons = list("TranscodeReasons", in: query)
-        guard !reasons.isEmpty, reasons.allSatisfy(repackagingReasons.contains) else { return false }
+        let subtitleIsAdded = value("SubtitleMethod", in: query).map {
+            $0.caseInsensitiveCompare("Encode") != .orderedSame
+        }
+        let fixedByRepackaging = { (reason: String) in
+            repackagingReasons.contains(reason) || (reason == "SubtitleCodecNotSupported" && subtitleIsAdded == true)
+        }
+        guard !reasons.isEmpty, reasons.allSatisfy(fixedByRepackaging) else { return false }
         let streams = source.mediaStreams ?? []
         if let codec = streams.first(where: { $0.type == .video })?.codec,
             !list("VideoCodec", in: query).contains(where: { $0.caseInsensitiveCompare(codec) == .orderedSame })

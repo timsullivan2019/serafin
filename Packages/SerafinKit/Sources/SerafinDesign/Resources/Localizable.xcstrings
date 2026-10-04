@@ -39,6 +39,9 @@
     "Close Player" : {
       "comment" : "Button that stops and hides the mini player."
     },
+    "Direct play" : {
+      "comment" : "How a video plays: the original file as it is."
+    },
     "Favourite" : {
       "comment" : "Spoken state of a favourite item."
     },
@@ -81,6 +84,9 @@
     "Rated %@" : {
       "comment" : "Spoken age rating, such as Rated PG."
     },
+    "Repackaged on server (no quality loss)" : {
+      "comment" : "How a video plays: the server moves the original video and audio into a new container."
+    },
     "Resume · %@" : {
       "comment" : "Button that resumes playback, such as Resume · 32 min left."
     },
@@ -107,6 +113,18 @@
     },
     "Subtitles" : {
       "comment" : "Heading of the subtitle tracks."
+    },
+    "The original file plays as it is." : {
+      "comment" : "Settings explanation of direct play."
+    },
+    "The server converts the video or audio, which takes more of its power and can lower the quality." : {
+      "comment" : "Settings explanation of transcoding on the server."
+    },
+    "The server moves the original video and audio into a format this device plays, without converting them." : {
+      "comment" : "Settings explanation of repackaging on the server."
+    },
+    "Transcoding on server" : {
+      "comment" : "How a video plays: the server converts the video or audio."
     },
     "Try Again" : {
       "comment" : "Button that retries a failed load."

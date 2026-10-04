@@ -159,6 +159,7 @@ struct PlayerView: View {
             if let plan = engine.plan {
                 let choices = TrackChoices(plan: plan)
                 TrackPicker(
+                    delivery: PlaybackDelivery(plan.method),
                     audio: choices.audio,
                     selectedAudio: choices.selectedAudio,
                     subtitles: choices.subtitles,
