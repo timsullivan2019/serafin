@@ -149,7 +149,8 @@ public enum PlaybackState: Equatable, Sendable {
         failure = nil
         elapsed = options.startPosition
         state = .loading
-        PlaybackAudioSession.activate()
+        await PlaybackAudioSession.activate()
+        guard load == generation else { return }
         do {
             guard let itemID = item.id else { throw PlaybackError.notPlayable }
             let plan = try await negotiator.plan(for: itemID, options: options)
@@ -193,7 +194,7 @@ public enum PlaybackState: Equatable, Sendable {
         plan = nil
         nextItem = nil
         state = .idle
-        PlaybackAudioSession.deactivate()
+        await PlaybackAudioSession.deactivate()
     }
 
     // MARK: - Lock Screen and Picture in Picture
