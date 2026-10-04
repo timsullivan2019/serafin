@@ -69,6 +69,11 @@ struct LiveMediaSource: MediaSource {
             details.seasons = MediaItem.from(try await seasons)
             details.similar = MediaItem.from((try? await similar) ?? [])
             details.playable = MediaItem.from((try? await next) ?? []).first
+            if details.playable == nil, let first = details.seasons.first {
+                // Nothing is next once a show is watched through, so Play starts it again from the first episode.
+                let episodes = (try? await library.episodes(series: id, season: first.id)) ?? []
+                details.playable = MediaItem.from(episodes).first
+            }
         case .episode:
             if let seriesID = source.seriesID, let seasonID = source.seasonID {
                 let episodes = (try? await library.episodes(series: seriesID, season: seasonID)) ?? []

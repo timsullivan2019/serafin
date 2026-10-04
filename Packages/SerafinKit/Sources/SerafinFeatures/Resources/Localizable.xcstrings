@@ -34,6 +34,9 @@
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
     },
+    "Can't Play This" : {
+      "comment" : "Title when the server has no version of an item that can play."
+    },
     "Can't Reach the Server" : {
       "comment" : "Title when the server doesn't answer."
     },
@@ -69,6 +72,9 @@
     },
     "Cleared" : {
       "comment" : "Shown after clearing the cache."
+    },
+    "Close" : {
+      "comment" : "Button that closes the player."
     },
     "Code" : {
       "comment" : "VoiceOver label of the Quick Connect code."
@@ -118,6 +124,9 @@
     "Fingerprint" : {
       "comment" : "VoiceOver label of a fingerprint."
     },
+    "Forced" : {
+      "comment" : "Subtitles shown only for foreign speech."
+    },
     "Genre" : {
       "comment" : "Library filter menu."
     },
@@ -153,6 +162,9 @@
     },
     "Maximum" : {
       "comment" : "Streaming quality: no cap."
+    },
+    "Mono" : {
+      "comment" : "One audio channel."
     },
     "More Episodes" : {
       "comment" : "Row of other episodes."
@@ -208,6 +220,12 @@
     "Playback" : {
       "comment" : "Settings section header."
     },
+    "Playback Not Allowed" : {
+      "comment" : "Title when the account may not play an item."
+    },
+    "Playback Stopped" : {
+      "comment" : "Title when the player can't play a stream."
+    },
     "Producer" : {
       "comment" : "A crew member's job on a detail screen."
     },
@@ -246,6 +264,9 @@
     },
     "Removes saved artwork. It downloads again as you browse." : {
       "comment" : "Settings footer under Clear Cache."
+    },
+    "SDH" : {
+      "comment" : "Subtitles for the deaf and hard of hearing, as a short label."
     },
     "Search" : {
       "comment" : "Title of the search tab."
@@ -301,6 +322,12 @@
     "Something answered at that address, but it isn't Jellyfin. Check the address and port." : {
       "comment" : "Explanation when the address isn't a Jellyfin server."
     },
+    "Something went wrong playing this. Try again, or lower the streaming quality in Settings." : {
+      "comment" : "Explanation when the player can't play a stream."
+    },
+    "Stereo" : {
+      "comment" : "Two audio channels."
+    },
     "Storage" : {
       "comment" : "Settings section header."
     },
@@ -333,6 +360,12 @@
     },
     "This server has Quick Connect turned off, so sign in with your password." : {
       "comment" : "Explanation when Quick Connect is disabled."
+    },
+    "Too Many Streams" : {
+      "comment" : "Title when the server is already playing as many streams as it allows."
+    },
+    "Track %lld" : {
+      "comment" : "A track with no language or name."
     },
     "Trust This Certificate" : {
       "comment" : "Button that pins a certificate."
@@ -369,6 +402,15 @@
     },
     "Your Servers" : {
       "comment" : "Servers saved on this device."
+    },
+    "Your account isn't allowed to play this. Ask the person who runs your server." : {
+      "comment" : "Explanation when the account may not play an item."
+    },
+    "Your server has no version of this that Serafin can play, even by converting it. Check the file on the server." : {
+      "comment" : "Explanation when the server has no version of an item that can play."
+    },
+    "Your server is already playing as many streams as it allows. Try again when one ends." : {
+      "comment" : "Explanation when the server is already playing as many streams as it allows."
     },
     "iOS Blocked This Connection" : {
       "comment" : "Title when iOS refuses plain HTTP to an address."

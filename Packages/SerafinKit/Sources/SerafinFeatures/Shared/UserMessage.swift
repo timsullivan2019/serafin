@@ -1,5 +1,6 @@
 import Foundation
 import SerafinCore
+import SerafinPlayback
 
 /// What a failure means to the user: a short title, a plain explanation and a symbol. Never a raw system error.
 struct UserMessage: Equatable, Identifiable, Sendable {
@@ -18,8 +19,12 @@ struct UserMessage: Equatable, Identifiable, Sendable {
         self.needsSignIn = needsSignIn
     }
 
-    /// The message for an error from SerafinCore. Anything else reads as an unexpected answer.
+    /// The message for an error from SerafinCore or SerafinPlayback. Anything else reads as an unexpected answer.
     init(_ error: any Error) {
+        if let error = error as? PlaybackError {
+            self = Self.playback(error)
+            return
+        }
         guard let error = error as? SerafinError else {
             self = Self.unexpected
             return
@@ -193,6 +198,60 @@ struct UserMessage: Equatable, Identifiable, Sendable {
             )
         case .unexpectedResponse:
             self = Self.unexpected
+        }
+    }
+
+    private static func playback(_ error: PlaybackError) -> UserMessage {
+        switch error {
+        case .notPlayable:
+            UserMessage(
+                title: String(
+                    localized: "Can't Play This", bundle: .module,
+                    comment: "Title when the server has no version of an item that can play."),
+                message: String(
+                    localized:
+                        "Your server has no version of this that Serafin can play, even by converting it. Check the file on the server.",
+                    bundle: .module,
+                    comment: "Explanation when the server has no version of an item that can play."
+                ),
+                systemImage: "play.slash"
+            )
+        case .notAllowed:
+            UserMessage(
+                title: String(
+                    localized: "Playback Not Allowed", bundle: .module,
+                    comment: "Title when the account may not play an item."),
+                message: String(
+                    localized: "Your account isn't allowed to play this. Ask the person who runs your server.",
+                    bundle: .module,
+                    comment: "Explanation when the account may not play an item."
+                ),
+                systemImage: "hand.raised"
+            )
+        case .tooManyStreams:
+            UserMessage(
+                title: String(
+                    localized: "Too Many Streams", bundle: .module,
+                    comment: "Title when the server is already playing as many streams as it allows."),
+                message: String(
+                    localized: "Your server is already playing as many streams as it allows. Try again when one ends.",
+                    bundle: .module,
+                    comment: "Explanation when the server is already playing as many streams as it allows."
+                ),
+                systemImage: "person.3"
+            )
+        case .playerFailed:
+            UserMessage(
+                title: String(
+                    localized: "Playback Stopped", bundle: .module,
+                    comment: "Title when the player can't play a stream."),
+                message: String(
+                    localized:
+                        "Something went wrong playing this. Try again, or lower the streaming quality in Settings.",
+                    bundle: .module,
+                    comment: "Explanation when the player can't play a stream."
+                )
+            )
         }
     }
 

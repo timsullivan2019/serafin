@@ -4,12 +4,14 @@ import SwiftUI
 ///
 /// The backdrop darkens toward the bottom so white text stays readable, then fades into the screen background so
 /// the page continues seamlessly below. The pill reads "Play", or "Resume · 32 min left" when the item is in
-/// progress, and is tinted with the screen's accent, typically ``ArtworkTint`` of the backdrop.
+/// progress, and is tinted with the screen's accent, typically ``ArtworkTint`` of the backdrop. While the item is in
+/// progress, touching and holding the pill offers Start Over.
 public struct HeroHeader: View {
     private let card: MediaCard
     private let backdrop: Image?
     private let logo: Image?
     private let tint: Color
+    private let startOver: (() -> Void)?
     private let play: () -> Void
     @State private var playCount = 0
 
@@ -20,18 +22,21 @@ public struct HeroHeader: View {
     ///   - backdrop: The backdrop image, or nil while it loads.
     ///   - logo: The title logo, drawn instead of the title text when present.
     ///   - tint: The glass tint for the play pill.
+    ///   - startOver: Called when Start Over is chosen from the pill's menu, offered while the item is in progress.
     ///   - play: Called when the play pill is tapped.
     public init(
         card: MediaCard,
         backdrop: Image?,
         logo: Image? = nil,
         tint: Color = .accentFallback,
+        startOver: (() -> Void)? = nil,
         play: @escaping () -> Void
     ) {
         self.card = card
         self.backdrop = backdrop
         self.logo = logo
         self.tint = tint
+        self.startOver = startOver
         self.play = play
     }
 
@@ -42,7 +47,7 @@ public struct HeroHeader: View {
                 VStack(spacing: Spacing.medium) {
                     titleOrLogo
                     HeroMetadata(card: card)
-                    playPill
+                    pill
                 }
                 .padding(.horizontal, Spacing.large)
                 .padding(.bottom, Spacing.xLarge + Spacing.large)
@@ -67,6 +72,26 @@ public struct HeroHeader: View {
                 .minimumScaleFactor(0.7)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
                 .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    /// The play pill, with Start Over in its menu while the item is in progress.
+    @ViewBuilder private var pill: some View {
+        if card.isInProgress, let startOver {
+            let title = String(
+                localized: "Start Over",
+                bundle: .module,
+                comment: "Menu item and action that plays an item from the beginning."
+            )
+            playPill
+                .contextMenu {
+                    Button(action: startOver) {
+                        Label(title, systemImage: "arrow.counterclockwise")
+                    }
+                }
+                .accessibilityAction(named: title, startOver)
+        } else {
+            playPill
         }
     }
 

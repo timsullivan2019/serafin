@@ -109,9 +109,12 @@
             PlayerControls(
                 title: card.title,
                 subtitle: card.year.map(String.init),
-                isPlaying: isPlaying,
-                elapsed: .seconds(1356),
-                duration: card.runtime ?? .seconds(6780),
+                status: PlayerControlsStatus(
+                    isPlaying: isPlaying,
+                    elapsed: .seconds(1356),
+                    duration: card.runtime ?? .seconds(6780),
+                    buffered: .seconds(1800)
+                ),
                 actions: PlayerControlActions(playPause: { isPlaying.toggle() })
             ) {
                 Image(systemName: "airplay.video")

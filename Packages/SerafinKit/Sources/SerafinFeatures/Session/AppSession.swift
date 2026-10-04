@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SerafinCore
+import SerafinPlayback
 import os
 
 /// Who is signed in to which server, for the whole app.
@@ -27,6 +28,8 @@ import os
     public private(set) var library: LibraryRepository?
     /// Loads the current account's images, or nil when no one is signed in.
     public private(set) var artwork: Artwork?
+    /// Plays the current account's movies and episodes, or nil when no one is signed in.
+    public private(set) var player: PlayerEngine?
 
     /// The account the app is browsing as, if any.
     public var account: Account? {
@@ -132,24 +135,34 @@ import os
         do {
             servers = try await accounts.servers()
             guard let current = try await accounts.current() else {
-                signOutScreens()
+                await signOutScreens()
                 return
             }
-            if current != account || library == nil || artwork == nil {
+            if current != account || library == nil || artwork == nil || player == nil {
                 library = try await accounts.library(for: current)
                 artwork = try await accounts.artwork(for: current)
+                let previous = player
+                player = PlayerEngine(
+                    client: try await accounts.client(for: current),
+                    userID: current.user.id,
+                    pinning: accounts.pinning
+                )
+                await previous?.stop()
             }
             state = .signedIn(current)
         } catch {
             Self.logger.error("Could not read the saved accounts: \(error.localizedDescription, privacy: .private)")
-            signOutScreens()
+            await signOutScreens()
         }
     }
 
-    private func signOutScreens() {
+    private func signOutScreens() async {
+        let previous = player
         library = nil
         artwork = nil
+        player = nil
         state = .signedOut
+        await previous?.stop()
     }
 }
 

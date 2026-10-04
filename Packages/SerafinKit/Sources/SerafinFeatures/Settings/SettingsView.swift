@@ -5,8 +5,8 @@ import SwiftUI
 
 /// The Settings tab: servers and accounts, streaming quality, the cache, and the app's details.
 struct SettingsView: View {
-    @AppStorage(PlaybackQuality.wifiKey) private var wifiQuality = PlaybackQuality.maximum
-    @AppStorage(PlaybackQuality.cellularKey) private var cellularQuality = PlaybackQuality.mbps8
+    @AppStorage(PlaybackQuality.wifiKey) private var wifiQuality = PlaybackQuality.wifiDefault
+    @AppStorage(PlaybackQuality.cellularKey) private var cellularQuality = PlaybackQuality.cellularDefault
 
     var body: some View {
         Form {

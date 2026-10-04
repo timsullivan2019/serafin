@@ -14,6 +14,18 @@ enum PlaybackQuality: Int, CaseIterable, Identifiable {
     static let wifiKey = "app.getserafin.serafin.playback.maxBitrate.wifi"
     /// Where the cellular cap is saved.
     static let cellularKey = "app.getserafin.serafin.playback.maxBitrate.cellular"
+    /// The Wi-Fi cap until the user picks one.
+    static let wifiDefault = PlaybackQuality.maximum
+    /// The cellular cap until the user picks one.
+    static let cellularDefault = PlaybackQuality.mbps8
+
+    /// The cap the user picked in Settings for the network the device is on, or the default.
+    static func saved(onCellular: Bool, in defaults: UserDefaults) -> PlaybackQuality {
+        let fallback = onCellular ? cellularDefault : wifiDefault
+        let key = onCellular ? cellularKey : wifiKey
+        guard defaults.object(forKey: key) != nil else { return fallback }
+        return PlaybackQuality(rawValue: defaults.integer(forKey: key)) ?? fallback
+    }
 
     var id: Int { rawValue }
 

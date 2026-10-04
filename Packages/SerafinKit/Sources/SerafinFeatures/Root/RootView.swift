@@ -1,5 +1,6 @@
 import SerafinCore
 import SerafinDesign
+import SerafinPlayback
 import SwiftUI
 
 /// The root of Serafin's interface: the connect flow until someone signs in, then the tabs, browsing as the
@@ -20,8 +21,9 @@ public struct RootView: View {
                 ConnectFlow()
             case .signedIn(let account):
                 if let library = session.library {
-                    MainTabs()
-                        .environment(\.media, LiveMediaSource(library: library))
+                    let media = LiveMediaSource(library: library)
+                    MainTabs(engine: session.player, media: media, artwork: session.artwork)
+                        .environment(\.media, media)
                         .environment(\.artwork, session.artwork)
                         .environment(
                             \.signInEnded,
@@ -42,8 +44,22 @@ public struct RootView: View {
 /// plays.
 struct MainTabs: View {
     @State private var selection = AppTab.home
-    @State private var playback = PlaybackCoordinator()
-    @State private var actions = MediaActions()
+    @State private var playback: PlaybackCoordinator
+    @State private var actions: MediaActions
+
+    /// Creates the tabs.
+    ///
+    /// - Parameters:
+    ///   - engine: The account's player engine, or nil to pretend to play.
+    ///   - media: The library, which playback refreshes when it stops.
+    ///   - artwork: Loads the artwork the Lock Screen shows.
+    init(engine: PlayerEngine? = nil, media: any MediaSource = SampleMediaSource(), artwork: Artwork? = nil) {
+        let actions = MediaActions()
+        _actions = State(initialValue: actions)
+        _playback = State(
+            initialValue: PlaybackCoordinator(engine: engine, media: media, actions: actions, artwork: artwork)
+        )
+    }
 
     var body: some View {
         TabView(selection: $selection) {
