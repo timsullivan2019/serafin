@@ -7,6 +7,7 @@ import SwiftUI
 public struct PosterCard<Menu: View>: View {
     private let card: MediaCard
     private let artwork: Image?
+    private let zoomNamespace: Namespace.ID?
     private let menu: Menu
 
     /// Creates a poster card with a context menu.
@@ -14,16 +15,25 @@ public struct PosterCard<Menu: View>: View {
     /// - Parameters:
     ///   - card: The item to show.
     ///   - artwork: The poster, or nil while it loads.
+    ///   - zoomNamespace: The namespace for a zoom transition into the item's detail screen, keyed by the
+    ///     card's ``MediaCard/id``. Pass nil for no zoom.
     ///   - menu: The context menu's items, such as play, mark played and favourite.
-    public init(card: MediaCard, artwork: Image?, @ViewBuilder menu: () -> Menu) {
+    public init(
+        card: MediaCard,
+        artwork: Image?,
+        zoomNamespace: Namespace.ID? = nil,
+        @ViewBuilder menu: () -> Menu
+    ) {
         self.card = card
         self.artwork = artwork
+        self.zoomNamespace = zoomNamespace
         self.menu = menu()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xSmall) {
             CardArtwork(card: card, image: artwork, aspectRatio: 2 / 3)
+                .cardZoomSource(id: card.id, in: zoomNamespace)
                 .cardHoverEffect()
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.title)
@@ -37,6 +47,8 @@ public struct PosterCard<Menu: View>: View {
                 }
             }
         }
+        // Cards always take their natural height, so a long title never squeezes the artwork in a row.
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityLabel)
         .cardContextMenu(menu) {
@@ -52,8 +64,9 @@ extension PosterCard where Menu == EmptyView {
     /// - Parameters:
     ///   - card: The item to show.
     ///   - artwork: The poster, or nil while it loads.
-    public init(card: MediaCard, artwork: Image?) {
-        self.init(card: card, artwork: artwork) { EmptyView() }
+    ///   - zoomNamespace: The namespace for a zoom transition into the item's detail screen.
+    public init(card: MediaCard, artwork: Image?, zoomNamespace: Namespace.ID? = nil) {
+        self.init(card: card, artwork: artwork, zoomNamespace: zoomNamespace) { EmptyView() }
     }
 }
 

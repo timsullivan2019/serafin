@@ -26,4 +26,15 @@ public struct MediaSeason: Identifiable, Hashable, Sendable {
         self.title = title
         self.episodes = episodes
     }
+
+    /// The season as a card, for showing it among a series' seasons.
+    public var card: MediaCard {
+        MediaCard(
+            id: id,
+            kind: .season,
+            title: title,
+            year: episodes.first?.year,
+            isPlayed: !episodes.isEmpty && episodes.allSatisfy(\.isPlayed)
+        )
+    }
 }

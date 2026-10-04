@@ -48,7 +48,9 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
             header
                 .padding(.horizontal, Spacing.medium)
             ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: Spacing.small) {
+                // An eager stack: rows hold tens of cards, and a lazy stack would size the row from the first few
+                // cards and clip a taller title further along.
+                HStack(alignment: .top, spacing: Spacing.small) {
                     ForEach(items) { item in
                         card(item)
                             .containerRelativeFrame(.horizontal) { length, _ in cardWidth(in: length) }

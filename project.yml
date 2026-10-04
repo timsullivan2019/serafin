@@ -3,7 +3,7 @@ name: Serafin
 options:
   bundleIdPrefix: app.getserafin
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "26.1"
   developmentLanguage: en
   xcodeVersion: "27.0"
   createIntermediateGroups: true

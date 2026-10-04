@@ -117,12 +117,33 @@ extension View {
         #endif
     }
 
+    /// Marks the artwork as the source of a zoom navigation transition when a namespace is given.
+    func cardZoomSource(id: String, in namespace: Namespace.ID?) -> some View {
+        modifier(CardZoomSource(id: id, namespace: namespace))
+    }
+
     /// Attaches `menu` as a context menu whose preview is a larger copy of the artwork, unless the menu is empty.
     func cardContextMenu<Menu: View, Preview: View>(
         _ menu: Menu,
         @ViewBuilder preview: () -> Preview
     ) -> some View {
         modifier(CardContextMenu(menu: menu, preview: preview()))
+    }
+}
+
+private struct CardZoomSource: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        // Whether a namespace is given never changes for a given card, so this branch keeps a stable identity.
+        if let namespace {
+            content.matchedTransitionSource(id: id, in: namespace) { source in
+                source.clipShape(.rounded(.small))
+            }
+        } else {
+            content
+        }
     }
 }
 

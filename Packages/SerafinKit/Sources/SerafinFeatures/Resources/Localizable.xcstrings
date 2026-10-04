@@ -1,0 +1,123 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "8 Mbps" : {
+      "comment" : "Streaming quality cap."
+    },
+    "About" : {
+      "comment" : "Settings section header."
+    },
+    "Can't Find This Item" : {
+      "comment" : "Title when an item is missing."
+    },
+    "Can't Find This Season" : {
+      "comment" : "Title when a season is missing."
+    },
+    "Continue Watching" : {
+      "comment" : "Home row of started items."
+    },
+    "Date Added" : {
+      "comment" : "Library sort option: newest additions first."
+    },
+    "Episodes" : {
+      "comment" : "Search results section."
+    },
+    "Everything here has been watched." : {
+      "comment" : "Explanation when the unplayed filter hides everything."
+    },
+    "Find movies, shows and episodes by title." : {
+      "comment" : "Explanation before anything is searched."
+    },
+    "Home" : {
+      "comment" : "Title of the home tab."
+    },
+    "It may have been removed from your library." : {
+      "comment" : "Explanation when an item is missing."
+    },
+    "Latest in %@" : {
+      "comment" : "Home row of a library's newest items, such as Latest in Movies."
+    },
+    "Library" : {
+      "comment" : "Title of the library tab."
+    },
+    "Maximum" : {
+      "comment" : "Streaming quality: no cap."
+    },
+    "More Episodes" : {
+      "comment" : "Row of other episodes."
+    },
+    "More Like This" : {
+      "comment" : "Row of suggestions."
+    },
+    "Movies" : {
+      "comment" : "Search results section."
+    },
+    "Movies and shows you add to your server appear here." : {
+      "comment" : "Explanation when the home screen is empty."
+    },
+    "Movies, shows and episodes" : {
+      "comment" : "Placeholder in the search field."
+    },
+    "Name" : {
+      "comment" : "Library sort option: alphabetical."
+    },
+    "Next Up" : {
+      "comment" : "Home row of next episodes."
+    },
+    "No Unplayed Items" : {
+      "comment" : "Title when a filtered library is empty."
+    },
+    "Nothing Here Yet" : {
+      "comment" : "Title when the home screen is empty."
+    },
+    "Play" : {
+      "comment" : "Menu item that starts playback."
+    },
+    "Playback" : {
+      "comment" : "Settings section header."
+    },
+    "Quality on Cellular" : {
+      "comment" : "Settings row."
+    },
+    "Quality on Wi-Fi" : {
+      "comment" : "Settings row."
+    },
+    "Sample Media" : {
+      "comment" : "Settings row: the app shows samples."
+    },
+    "Search" : {
+      "comment" : "Title of the search tab."
+    },
+    "Search Your Library" : {
+      "comment" : "Title before anything is searched."
+    },
+    "Seasons" : {
+      "comment" : "Row of a series' seasons."
+    },
+    "Serafin is showing built-in sample titles until you connect a Jellyfin server." : {
+      "comment" : "Settings footer under the server section."
+    },
+    "Server" : {
+      "comment" : "Settings section header."
+    },
+    "Settings" : {
+      "comment" : "Title of the settings tab."
+    },
+    "Show All" : {
+      "comment" : "Button that turns off the unplayed filter."
+    },
+    "Shows" : {
+      "comment" : "Search results section."
+    },
+    "Unplayed" : {
+      "comment" : "Library filter: hide played items."
+    },
+    "Version" : {
+      "comment" : "Settings row showing the app version."
+    },
+    "Year" : {
+      "comment" : "Library sort option: newest releases first."
+    }
+  },
+  "version" : "1.0"
+}
