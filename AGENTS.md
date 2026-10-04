@@ -34,7 +34,7 @@ xcodegen generate
 xcodebuild -scheme Serafin -destination 'platform=iOS Simulator,name=iPhone 17' build
 xcodebuild -scheme Serafin -destination 'platform=iOS Simulator,name=iPhone 17' test
 swift test --package-path Packages/SerafinKit          # package tests on the host, no simulator
-swift format --in-place --recursive App Packages
+swift format --in-place --recursive App AppTests Packages
 xcrun simctl list devices available                     # if the iPhone 17 simulator is not present
 ```
 
@@ -48,6 +48,7 @@ README.md  LICENSE  TRADEMARK.md
 project.yml          XcodeGen spec for the app target
 .swift-format
 App/                 app target only: SerafinApp.swift, Assets.xcassets, Info.plist keys, entitlements
+AppTests/            tests hosted in the app, for code that needs the app's identity, such as the Keychain
 Packages/SerafinKit/
   Package.swift
   Sources/SerafinCore/        networking, auth, stores, models, image pipeline
