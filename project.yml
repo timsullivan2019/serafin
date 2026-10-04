@@ -1,0 +1,80 @@
+name: Serafin
+
+options:
+  bundleIdPrefix: app.getserafin
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: en
+  xcodeVersion: "27.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  SerafinKit:
+    path: Packages/SerafinKit
+
+targets:
+  Serafin:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: SerafinKit
+        products:
+          - SerafinFeatures
+          - SerafinDesign
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Serafin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Serafin looks for Jellyfin servers on your network.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+        # iPhone is portrait only; the player screen (plan task 1.7) rotates to landscape on its own.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.getserafin.serafin
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+schemes:
+  Serafin:
+    build:
+      targets:
+        Serafin: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: SerafinKit/SerafinCoreTests
+        - package: SerafinKit/SerafinPlaybackTests
+        - package: SerafinKit/SerafinDesignTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
