@@ -3,7 +3,8 @@ import JellyfinAPI
 
 /// Where an image is drawn, which decides which of an item's images suits it.
 public enum ImageRole: Hashable, Sendable, CaseIterable {
-    /// A 2:3 poster: the item's primary image, or its show's for an episode or season.
+    /// A 2:3 poster: the item's primary image, or its show's for a season without one. An episode's poster is always
+    /// its show's, since an episode's own primary image is a 16:9 still.
     case poster
     /// A 16:9 card: an episode's still, otherwise a thumb, otherwise a backdrop, falling back to the show's.
     case landscape
@@ -79,10 +80,8 @@ public struct ImageURLs: Hashable, Sendable {
         let candidates: [Source?]
         switch role {
         case .poster:
-            candidates = [
-                own(.primary, of: item),
-                source(item.seriesID, .primary, item.seriesPrimaryImageTag),
-            ]
+            let show = source(item.seriesID, .primary, item.seriesPrimaryImageTag)
+            candidates = item.type == .episode ? [show, own(.primary, of: item)] : [own(.primary, of: item), show]
         case .landscape:
             candidates = [
                 item.type == .episode ? own(.primary, of: item) : nil,

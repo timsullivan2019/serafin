@@ -40,6 +40,13 @@ import Testing
         #expect(movie.eyebrowText == "2010")
     }
 
+    @Test func anEpisodesPosterNamesItsSeries() {
+        #expect(episode.posterTitle == "Caminandes")
+        #expect(episode.posterCaption == "S1 E2")
+        #expect(movie.posterTitle == movie.title)
+        #expect(movie.posterCaption == "2010")
+    }
+
     @Test func runtimeIsInHoursAndMinutes() {
         #expect(movie.runtimeText(locale: english) == "1 hr, 39 min")
     }

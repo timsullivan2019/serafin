@@ -50,6 +50,28 @@ extension MediaItem {
     static func from(_ items: [BaseItemDto]) -> [MediaItem] {
         items.compactMap(MediaItem.init)
     }
+
+    /// What's new in a library, as cards for Home's latest row.
+    ///
+    /// The server gathers several new episodes of one season into that season. "Season 2" alone doesn't say which
+    /// show is new, so the season stands for its series. Each item appears once.
+    static func latest(_ items: [BaseItemDto]) -> [MediaItem] {
+        var seen: Set<String> = []
+        return items.compactMap { item in
+            let shown = item.type == .season ? series(of: item) ?? item : item
+            guard let mediaItem = MediaItem(shown), seen.insert(mediaItem.id).inserted else { return nil }
+            return mediaItem
+        }
+    }
+
+    /// The series a season belongs to, made from what the season says about it, or nil when that leaves it without
+    /// a name or poster.
+    private static func series(of season: BaseItemDto) -> BaseItemDto? {
+        guard let id = season.seriesID, let name = season.seriesName, let poster = season.seriesPrimaryImageTag else {
+            return nil
+        }
+        return BaseItemDto(id: id, imageTags: [ImageType.primary.rawValue: poster], name: name, type: .series)
+    }
 }
 
 extension MediaCard.Kind {

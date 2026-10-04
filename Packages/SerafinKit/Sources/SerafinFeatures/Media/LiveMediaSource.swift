@@ -17,7 +17,7 @@ struct LiveMediaSource: MediaSource {
         let latest = await withTaskGroup(of: (Int, [MediaItem]).self) { group in
             for (index, mediaLibrary) in libraries.enumerated() {
                 group.addTask {
-                    (index, MediaItem.from((try? await library.latest(in: mediaLibrary.id)) ?? []))
+                    (index, MediaItem.latest((try? await library.latest(in: mediaLibrary.id)) ?? []))
                 }
             }
             var rows = [[MediaItem]](repeating: [], count: libraries.count)
