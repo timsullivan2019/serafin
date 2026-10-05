@@ -365,6 +365,9 @@ public enum PlaybackState: Equatable, Sendable {
 
         fileprivate func pictureInPictureWillStart() {
             isPictureInPictureEngaged = true
+            // Going home can reach the background before Picture in Picture starts, and the layer lets go of the
+            // player there, so it takes it back for the floating window.
+            hostedVideoView?.playerLayer.player = player
         }
 
         fileprivate func pictureInPictureStarted() {
