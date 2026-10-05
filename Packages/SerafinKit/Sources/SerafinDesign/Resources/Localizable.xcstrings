@@ -108,6 +108,21 @@
     "Shows everything in this row" : {
       "comment" : "Hint on a row title."
     },
+    "Skip Ad" : {
+      "comment" : "Button that skips an advert."
+    },
+    "Skip Credits" : {
+      "comment" : "Button that skips the closing credits."
+    },
+    "Skip Intro" : {
+      "comment" : "Button that skips the intro."
+    },
+    "Skip Preview" : {
+      "comment" : "Button that skips a preview."
+    },
+    "Skip Recap" : {
+      "comment" : "Button that skips a recap."
+    },
     "Skip back 10 seconds" : {
       "comment" : "Button that jumps back 10 seconds."
     },

@@ -111,7 +111,20 @@ struct PlayerView: View {
                         .allowsHitTesting(screen.controlsVisible)
                         .accessibilityHidden(!screen.controlsVisible)
                 }
+                // Outside the controls, so the offer to skip stays while they're hidden.
+                .overlay(alignment: .bottomTrailing) { skipPill }
             }
+        }
+
+        /// Skip Intro and its kin, while the server's marked stretch plays.
+        private var skipPill: some View {
+            let segment = PlaybackSegment.skippable(at: engine.elapsed, in: engine.segments)
+            return SkipPill(segment.map { SkipPill.Kind($0.kind) }) {
+                guard let segment else { return }
+                Task { await engine.seek(to: segment.end) }
+            }
+            .padding(.trailing, Spacing.medium)
+            .padding(.bottom, PlayerLayout.bottomBarClearance)
         }
 
         private var controls: some View {
@@ -314,4 +327,17 @@ private struct PretendPlayer: View {
     playback.play(MediaItem(card: MockMedia.movies[1], source: nil))
     return PlayerView()
         .environment(playback)
+}
+
+extension SkipPill.Kind {
+    /// The pill for a stretch the server marked.
+    init(_ kind: PlaybackSegment.Kind) {
+        switch kind {
+        case .intro: self = .intro
+        case .recap: self = .recap
+        case .credits: self = .credits
+        case .preview: self = .preview
+        case .advert: self = .advert
+        }
+    }
 }

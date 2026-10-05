@@ -51,6 +51,8 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var failure: (any Error)?
     /// The episode after the one playing, for autoplay. Nil for movies and last episodes.
     public private(set) var nextItem: BaseItemDto?
+    /// The stretches the server marked in the item, such as its intro, in order. Empty when it marked none.
+    public private(set) var segments: [PlaybackSegment] = []
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
 
@@ -67,6 +69,7 @@ public enum PlaybackState: Equatable, Sendable {
     private let client: JellyfinClient
     private let negotiator: PlaybackNegotiator
     private let nextEpisode: NextEpisode
+    private let mediaSegments: MediaSegments
     private let streamLoader: PinnedStreamLoader
     private var options = PlaybackOptions()
     private var reporter: ProgressReporter?
@@ -120,6 +123,7 @@ public enum PlaybackState: Equatable, Sendable {
         self.client = client
         self.negotiator = PlaybackNegotiator(client: client, userID: userID)
         self.nextEpisode = NextEpisode(client: client, userID: userID)
+        self.mediaSegments = MediaSegments(client: client)
         self.streamLoader = PinnedStreamLoader(pinning: pinning)
         player.allowsExternalPlayback = true
         observePlayer()
@@ -146,6 +150,7 @@ public enum PlaybackState: Equatable, Sendable {
         self.item = item
         self.options = options
         nextItem = nil
+        segments = []
         failure = nil
         elapsed = options.startPosition
         state = .loading
@@ -153,6 +158,9 @@ public enum PlaybackState: Equatable, Sendable {
         guard load == generation else { return }
         do {
             guard let itemID = item.id else { throw PlaybackError.notPlayable }
+            // Asked for alongside the plan, so an intro at the very start can be skipped from its first seconds, but
+            // waited for only once playback has started, so a slow answer never holds the picture up.
+            async let marked = try? mediaSegments.of(itemID)
             let plan = try await negotiator.plan(for: itemID, options: options)
             guard load == generation else { return }
             Self.logger.debug("Playing by \(String(describing: plan.method), privacy: .public)")
@@ -160,6 +168,9 @@ public enum PlaybackState: Equatable, Sendable {
             reporter = ProgressReporter(client: client, plan: plan)
             await reporter?.start(at: options.startPosition, isPaused: false)
             startReporting()
+            let found = await marked ?? []
+            guard load == generation else { return }
+            segments = found
         } catch is CancellationError {
             if load == generation {
                 state = .idle
@@ -193,6 +204,7 @@ public enum PlaybackState: Equatable, Sendable {
         item = nil
         plan = nil
         nextItem = nil
+        segments = []
         state = .idle
         await PlaybackAudioSession.deactivate()
     }
