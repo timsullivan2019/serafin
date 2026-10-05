@@ -97,9 +97,10 @@ import os
         try await changing { try await accounts.add(connected) }
     }
 
-    /// Signs everyone out of `server` and forgets it.
+    /// Signs everyone out of `server` and forgets it, with its streaming caps.
     public func remove(_ server: Server) async throws {
         try await changing { try await accounts.remove(serverID: server.id) }
+        PlaybackQuality.forget(server: server.id, in: .standard)
     }
 
     // MARK: - Signing in

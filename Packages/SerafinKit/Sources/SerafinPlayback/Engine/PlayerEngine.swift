@@ -55,6 +55,14 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var segments: [PlaybackSegment] = []
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
+    /// How text subtitles look. A change shows straight away on what's playing.
+    public var subtitleStyle = SubtitleStyle.standard {
+        didSet {
+            if subtitleStyle != oldValue {
+                player.currentItem?.textStyleRules = subtitleStyle.textStyleRules
+            }
+        }
+    }
 
     /// Whether the player is loading or waiting for data, so a spinner should show.
     public var isBuffering: Bool {
@@ -385,7 +393,7 @@ public enum PlaybackState: Equatable, Sendable {
     /// for a stream with that audio, and playback resumes where it was.
     public func selectAudio(_ streamIndex: Int) async {
         guard let plan, streamIndex != plan.audioStreamIndex else { return }
-        if await selectInPlace(streamIndex, characteristic: .audible, among: plan.streams(.audio)) {
+        if await selectInPlace(streamIndex, characteristic: .audible, among: Self.carriedAudio(of: plan)) {
             self.plan = plan.with(audio: streamIndex)
             return
         }
@@ -409,7 +417,9 @@ public enum PlaybackState: Equatable, Sendable {
             self.plan = plan.with(subtitle: -1)
             return
         }
-        if let streamIndex, await selectInPlace(streamIndex, characteristic: .legible, among: subtitles) {
+        if let streamIndex,
+            await selectInPlace(streamIndex, characteristic: .legible, among: Self.carriedSubtitles(of: plan))
+        {
             self.plan = plan.with(subtitle: streamIndex)
             return
         }
@@ -429,6 +439,7 @@ public enum PlaybackState: Equatable, Sendable {
         let asset = AVURLAsset(url: plan.url)
         asset.resourceLoader.setDelegate(streamLoader, queue: PinnedStreamLoader.queue)
         let playerItem = AVPlayerItem(asset: asset)
+        playerItem.textStyleRules = subtitleStyle.textStyleRules
         pendingStart = start > .zero ? start : nil
         playsWhenReady = playing
         clearItemObservations()
@@ -442,6 +453,39 @@ public enum PlaybackState: Equatable, Sendable {
         #endif
         player.replaceCurrentItem(with: playerItem)
         player.defaultRate = rate
+        Task { await selectPlannedTracks(in: playerItem, for: plan) }
+    }
+
+    /// Picks the audio and subtitles the plan names in a newly loaded item.
+    ///
+    /// The server chooses them from the user's language preferences and marks them as the stream's defaults, but
+    /// AVPlayer picks by the device's own settings: it plays the file's first audio, and shows subtitles only when the
+    /// audio is in another language or the system's caption settings ask. With the plan's subtitles off, AVPlayer's
+    /// choice stands, so captions the system asks for and forced subtitles still show.
+    private func selectPlannedTracks(in playerItem: AVPlayerItem, for plan: PlaybackPlan) async {
+        if let audio = plan.audioStreamIndex {
+            await select(audio, characteristic: .audible, among: Self.carriedAudio(of: plan), in: playerItem)
+        }
+        if let subtitle = plan.subtitleStreamIndex, subtitle >= 0 {
+            await select(subtitle, characteristic: .legible, among: Self.carriedSubtitles(of: plan), in: playerItem)
+        }
+    }
+
+    /// The audio streams the loaded asset carries, in order: the file's own tracks, or the one audio the server put in
+    /// its stream.
+    nonisolated static func carriedAudio(of plan: PlaybackPlan) -> [MediaStream] {
+        plan.streams(.audio).filter { $0.isExternal != true }
+    }
+
+    /// The subtitle streams the loaded asset carries as text, in order. The server's HLS stream carries every text
+    /// subtitle it can send as WebVTT, including ones in separate files; the original file carries only its own text
+    /// tracks. Subtitles burned into the picture aren't tracks at all.
+    nonisolated static func carriedSubtitles(of plan: PlaybackPlan) -> [MediaStream] {
+        let subtitles = plan.streams(.subtitle)
+        if plan.method == .directPlay {
+            return subtitles.filter { $0.isExternal != true && $0.deliveryMethod != .encode }
+        }
+        return subtitles.filter { $0.deliveryMethod == .hls }
     }
 
     /// Asks the server again with new options, then picks up where playback was.
@@ -463,16 +507,29 @@ public enum PlaybackState: Equatable, Sendable {
         }
     }
 
-    /// Selects the track for `streamIndex` in the loaded asset, matching the server's stream to the asset's option by
-    /// position among streams of its kind. Returns false when the asset doesn't carry it.
+    /// Selects the track for `streamIndex` in the loaded asset. Returns false when the asset doesn't carry it.
+    ///
+    /// - Parameter carried: The streams of that kind the asset carries, in order.
     private func selectInPlace(
         _ streamIndex: Int,
         characteristic: AVMediaCharacteristic,
-        among streams: [MediaStream]
+        among carried: [MediaStream]
     ) async -> Bool {
-        let carried = streams.filter { $0.isExternal != true }
+        guard let playerItem = player.currentItem else { return false }
+        return await select(streamIndex, characteristic: characteristic, among: carried, in: playerItem)
+    }
+
+    /// Selects the track for `streamIndex` in `playerItem`, matching the server's stream to the asset's option by
+    /// position among the streams the asset carries. Returns false when the counts don't line up, so nothing is
+    /// guessed.
+    @discardableResult
+    private func select(
+        _ streamIndex: Int,
+        characteristic: AVMediaCharacteristic,
+        among carried: [MediaStream],
+        in playerItem: AVPlayerItem
+    ) async -> Bool {
         guard
-            let playerItem = player.currentItem,
             let group = try? await playerItem.asset.loadMediaSelectionGroup(for: characteristic),
             group.options.count == carried.count,
             let position = carried.firstIndex(where: { $0.index == streamIndex })

@@ -216,12 +216,12 @@ import Testing
 @Suite struct PlaybackQualityTests {
     @Test func aCapNobodyPickedIsTheDefault() throws {
         let defaults = try #require(UserDefaults(suiteName: "app.getserafin.serafin.tests.\(UUID().uuidString)"))
-        #expect(PlaybackQuality.saved(onCellular: false, in: defaults) == .maximum)
-        #expect(PlaybackQuality.saved(onCellular: true, in: defaults) == .mbps8)
+        #expect(PlaybackQuality.saved(onCellular: false, server: nil, in: defaults) == .maximum)
+        #expect(PlaybackQuality.saved(onCellular: true, server: nil, in: defaults) == .mbps8)
         defaults.set(PlaybackQuality.mbps20.rawValue, forKey: PlaybackQuality.wifiKey)
-        #expect(PlaybackQuality.saved(onCellular: false, in: defaults) == .mbps20)
+        #expect(PlaybackQuality.saved(onCellular: false, server: nil, in: defaults) == .mbps20)
         defaults.set(123, forKey: PlaybackQuality.wifiKey)
-        #expect(PlaybackQuality.saved(onCellular: false, in: defaults) == .maximum)
+        #expect(PlaybackQuality.saved(onCellular: false, server: nil, in: defaults) == .maximum)
     }
 }
 

@@ -33,6 +33,14 @@ import SerafinPlayback
     static let miniPlayerZoomSource = "mini-player"
     /// The engine playing for the signed-in account. Nil in previews.
     let engine: PlayerEngine?
+    /// How text subtitles look, as picked in Settings. A change shows straight away on what's playing.
+    var subtitleStyle: SubtitleStyle {
+        didSet {
+            guard subtitleStyle != oldValue else { return }
+            subtitleStyle.save(in: defaults)
+            engine?.subtitleStyle = subtitleStyle
+        }
+    }
 
     /// Whether a preview is pretending to play.
     private var isPretending = false
@@ -42,6 +50,7 @@ import SerafinPlayback
     @ObservationIgnored private let media: any MediaSource
     @ObservationIgnored private let actions: MediaActions
     @ObservationIgnored private let artwork: Artwork?
+    @ObservationIgnored private let serverID: String?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isOnExpensiveNetwork: @MainActor () -> Bool
 
@@ -52,13 +61,15 @@ import SerafinPlayback
     ///   - media: The library, refreshed when playback stops.
     ///   - actions: Has the screens reload when playback stops.
     ///   - artwork: Loads the artwork the Lock Screen shows.
-    ///   - defaults: Where Settings keeps the streaming caps.
+    ///   - serverID: The account's server, whose streaming caps apply. Nil in previews.
+    ///   - defaults: Where Settings keeps the streaming caps and the subtitle style.
     ///   - isOnExpensiveNetwork: Whether the device is on cellular or a personal hotspot right now.
     init(
         engine: PlayerEngine? = nil,
         media: any MediaSource = SampleMediaSource(),
         actions: MediaActions = MediaActions(),
         artwork: Artwork? = nil,
+        serverID: String? = nil,
         defaults: UserDefaults = .standard,
         isOnExpensiveNetwork: @escaping @MainActor () -> Bool = { NetworkWatcher.shared.isExpensive }
     ) {
@@ -66,8 +77,11 @@ import SerafinPlayback
         self.media = media
         self.actions = actions
         self.artwork = artwork
+        self.serverID = serverID
         self.defaults = defaults
         self.isOnExpensiveNetwork = isOnExpensiveNetwork
+        subtitleStyle = SubtitleStyle.saved(in: defaults)
+        engine?.subtitleStyle = subtitleStyle
     }
 
     /// Whether playback is running rather than paused.
@@ -76,9 +90,9 @@ import SerafinPlayback
         return engine.state == .playing
     }
 
-    /// The most bits per second to stream on the current network, or nil for no cap.
+    /// The most bits per second to stream from the account's server on the current network, or nil for no cap.
     var maxBitrate: Int? {
-        PlaybackQuality.saved(onCellular: isOnExpensiveNetwork(), in: defaults).bitsPerSecond
+        PlaybackQuality.saved(onCellular: isOnExpensiveNetwork(), server: serverID, in: defaults).bitsPerSecond
     }
 
     /// Starts `item` and shows the full-screen player. Only movies and episodes play; a show or season plays from
