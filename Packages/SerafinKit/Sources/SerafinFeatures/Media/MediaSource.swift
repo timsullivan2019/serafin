@@ -67,8 +67,6 @@ struct CastMember: Identifiable, Hashable, Sendable {
 struct ItemDetails: Sendable {
     /// The item itself.
     var item: MediaItem
-    /// Its genres, for the line under the overview.
-    var genres: [String] = []
     /// Its cast and crew, in the server's order.
     var cast: [CastMember] = []
     /// A show's seasons.
@@ -79,6 +77,8 @@ struct ItemDetails: Sendable {
     var similar: [MediaItem] = []
     /// What Play starts: the item itself, or for a show, the episode to watch next.
     var playable: MediaItem?
+    /// The facts listed under Information.
+    var information: [InformationColumns.Column] = []
 }
 
 /// A season's episodes, with the titles its screen shows.

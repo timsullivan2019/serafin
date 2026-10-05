@@ -60,7 +60,8 @@ struct LiveMediaSource: MediaSource {
     func details(of id: String) async throws -> ItemDetails {
         let source = try await library.item(id: id)
         guard let item = MediaItem(source) else { throw SerafinError.notFound }
-        var details = ItemDetails(item: item, genres: source.genres ?? [], cast: cast(of: source), playable: item)
+        var details = ItemDetails(item: item, cast: cast(of: source), playable: item)
+        details.information = ItemInformation.columns(for: source, card: item.card)
         switch item.card.kind {
         case .series:
             async let seasons = library.seasons(series: id)

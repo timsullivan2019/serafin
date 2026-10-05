@@ -106,6 +106,18 @@ struct PlayedBadge: View {
     }
 }
 
+/// Highlights a plain button under an iPad pointer, the way system buttons respond. Other platforms have no hover
+/// effect.
+struct PointerHighlight: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+            content.hoverEffect(.highlight)
+        #else
+            content
+        #endif
+    }
+}
+
 extension View {
     /// Lifts the artwork under an iPad pointer. Other platforms have no hover effect.
     func cardHoverEffect() -> some View {

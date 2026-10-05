@@ -31,6 +31,9 @@
     "Ascending" : {
       "comment" : "VoiceOver value of the current sort."
     },
+    "Audio" : {
+      "comment" : "Detail fact: the audio's languages or format."
+    },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
     },
@@ -124,11 +127,20 @@
     "Fingerprint" : {
       "comment" : "VoiceOver label of a fingerprint."
     },
+    "First Aired" : {
+      "comment" : "Detail fact: when a show started."
+    },
     "Forced" : {
       "comment" : "Subtitles shown only for foreign speech."
     },
+    "Format" : {
+      "comment" : "Detail screen column heading."
+    },
     "Genre" : {
       "comment" : "Library filter menu."
+    },
+    "Genres" : {
+      "comment" : "Detail fact: genres."
     },
     "Get a New Code" : {
       "comment" : "Button that restarts Quick Connect."
@@ -142,8 +154,14 @@
     "How Videos Play" : {
       "comment" : "Settings section header."
     },
+    "Information" : {
+      "comment" : "Detail screen column heading."
+    },
     "It may have been removed from your library." : {
       "comment" : "Explanation when an item is missing."
+    },
+    "Languages" : {
+      "comment" : "Detail screen column heading."
     },
     "Latest in %@" : {
       "comment" : "Home row of a library's newest items, such as Latest in Movies."
@@ -247,11 +265,17 @@
     "Quick Connect is off on this server, so sign in with your password." : {
       "comment" : "Note when the server has Quick Connect turned off."
     },
+    "Rated" : {
+      "comment" : "Detail fact: age rating."
+    },
     "Rating" : {
       "comment" : "Library sort option: highest rated first."
     },
     "Release Date" : {
       "comment" : "Library sort option: newest releases first."
+    },
+    "Released" : {
+      "comment" : "Detail fact: release date."
     },
     "Remove %@" : {
       "comment" : "Button that removes a server."
@@ -267,6 +291,12 @@
     },
     "Removes saved artwork. It downloads again as you browse." : {
       "comment" : "Settings footer under Clear Cache."
+    },
+    "Run Time" : {
+      "comment" : "Detail fact: running time."
+    },
+    "SD" : {
+      "comment" : "Standard definition video."
     },
     "SDH" : {
       "comment" : "Subtitles for the deaf and hard of hearing, as a short label."
@@ -297,6 +327,9 @@
     },
     "Settings" : {
       "comment" : "Title of the settings tab."
+    },
+    "Show Player" : {
+      "comment" : "Keyboard shortcut that opens the full-screen player."
     },
     "Shows" : {
       "comment" : "Search results section."
@@ -333,6 +366,12 @@
     },
     "Storage" : {
       "comment" : "Settings section header."
+    },
+    "Studio" : {
+      "comment" : "Detail fact: studio or network."
+    },
+    "Subtitles" : {
+      "comment" : "Detail fact: subtitle languages."
     },
     "That's Not a Jellyfin Server" : {
       "comment" : "Title when the address isn't Jellyfin."
@@ -390,6 +429,9 @@
     },
     "Version" : {
       "comment" : "Settings row showing the app version."
+    },
+    "Video" : {
+      "comment" : "Detail fact: video format."
     },
     "Waiting for approval" : {
       "comment" : "Quick Connect status."

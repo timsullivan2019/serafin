@@ -38,6 +38,9 @@ extension EnvironmentValues {
     /// the mini player.
     @Entry var playerZoomNamespace: Namespace.ID?
 
+    /// Goes up each time Command-F asks for the search field.
+    @Entry var searchFocusRequest = 0
+
     /// Pushes a route onto the current tab's navigation stack.
     @Entry var navigate = NavigateAction { _ in }
 }

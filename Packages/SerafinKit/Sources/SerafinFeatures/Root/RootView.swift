@@ -44,6 +44,7 @@ public struct RootView: View {
 /// plays.
 struct MainTabs: View {
     @State private var selection = AppTab.home
+    @State private var searchRequest = 0
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
     @Namespace private var playerZoom
@@ -90,6 +91,10 @@ struct MainTabs: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .background {
+            TabShortcuts(selection: $selection, searchRequest: $searchRequest)
+        }
+        .environment(\.searchFocusRequest, searchRequest)
         .modifier(TabChrome(playback: playback, playerZoom: playerZoom))
         .environment(\.playerZoomNamespace, playerZoom)
         .environment(playback)
@@ -102,6 +107,45 @@ struct MainTabs: View {
         } message: {
             Text(actions.failure?.message ?? "")
         }
+    }
+}
+
+/// Keyboard shortcuts that work anywhere in the tabs: Command-F searches, and while something plays, F opens the
+/// full-screen player. The player handles its own keys, Space, the arrows and F to leave, so these step aside while it
+/// shows.
+private struct TabShortcuts: View {
+    @Binding var selection: AppTab
+    @Binding var searchRequest: Int
+    @Environment(PlaybackCoordinator.self) private var playback
+
+    var body: some View {
+        if !playback.isPlayerPresented {
+            buttons
+        }
+    }
+
+    private var buttons: some View {
+        Group {
+            Button(String(localized: "Search", bundle: .module, comment: "Title of the search tab.")) {
+                selection = .search
+                searchRequest += 1
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            if playback.nowPlaying != nil {
+                Button(
+                    String(
+                        localized: "Show Player", bundle: .module,
+                        comment: "Keyboard shortcut that opens the full-screen player.")
+                ) {
+                    playback.showPlayer()
+                }
+                .keyboardShortcut("f", modifiers: [])
+            }
+        }
+        // The buttons exist only for their shortcuts, which still show in the iPad's keyboard shortcut list.
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
