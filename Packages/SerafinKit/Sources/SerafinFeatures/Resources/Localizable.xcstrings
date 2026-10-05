@@ -33,7 +33,7 @@
       }
     },
     "%@. %@" : {
-      "comment" : "What Siri says when something failed: a title and its explanation, such as Can't Reach the Server. Check that the server is running.",
+      "comment" : "Two sentences in a row: a title, then what follows it, such as Can't Reach the Server. Check that the server is running. Siri says this when something fails, and VoiceOver reads it when Home's out-of-date banner appears.",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -215,6 +215,9 @@
     "Connect Anyway" : {
       "comment" : "Button that accepts the plain HTTP warning."
     },
+    "Connect to Wi-Fi or turn on cellular data to reach your server." : {
+      "comment" : "Explanation when the device has no network connection."
+    },
     "Connect to your Jellyfin server to start watching." : {
       "comment" : "Explanation on the first screen."
     },
@@ -310,6 +313,9 @@
     },
     "Large" : {
       "comment" : "Subtitle size."
+    },
+    "Last updated %@" : {
+      "comment" : "Banner on Home when its rows are out of date. The argument is when they're from, such as 9:41 AM or Oct 3 at 9:41 PM."
     },
     "Latest in %@" : {
       "comment" : "Home row of a library's newest items, such as Latest in Movies."
@@ -492,7 +498,7 @@
     "Removed from Favourites" : {
       "comment" : "Spoken once a favourite is taken out."
     },
-    "Removes saved artwork. It downloads again as you browse." : {
+    "Removes saved artwork, and the copy of Home that shows when your server can't be reached. Both download again as you browse." : {
       "comment" : "Settings footer under Clear Cache."
     },
     "Require Face ID" : {
@@ -758,6 +764,9 @@
     },
     "Year" : {
       "comment" : "Library filter menu."
+    },
+    "You're Offline" : {
+      "comment" : "Title when the device has no network connection."
     },
     "Your Servers" : {
       "comment" : "Servers saved on this device."

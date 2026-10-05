@@ -19,7 +19,8 @@ import Testing
             url: try #require(URL(string: "http://127.0.0.1:9")),
             users: [ServerUser(id: "user", name: "Alice")]
         )
-        let store = ServerStore(fileURL: URL.temporaryDirectory.appending(path: "\(UUID().uuidString)/servers.json"))
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let store = ServerStore(fileURL: directory.appending(path: "servers.json"))
         try await store.save(server)
         try secrets.set("token-value", for: "token.server.user")
         let accounts = Accounts(
@@ -28,7 +29,8 @@ import Testing
             version: "0.1.0",
             serverStore: store,
             defaults: try #require(UserDefaults(suiteName: suite)),
-            imageDiskCache: false
+            imageDiskCache: false,
+            homeSnapshots: HomeSnapshotStore(directory: directory.appending(path: "home"))
         )
 
         try await accounts.signOut(SessionKey(serverID: "server", userID: "user"))

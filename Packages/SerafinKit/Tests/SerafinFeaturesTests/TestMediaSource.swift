@@ -5,7 +5,8 @@ import SerafinDesign
 @testable import SerafinFeatures
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
-/// the server does, or a server that refuses every change.
+/// the server does, a server that refuses every change, or Home saved on the device and a server that can't be
+/// reached.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
@@ -13,9 +14,18 @@ struct TestMediaSource: MediaSource {
     var refusesChanges = false
     /// What Continue Watching and Next Up hold instead of the samples, or nil for the samples.
     var watching: [MediaCard]?
+    /// Home as saved on the device.
+    var saved: HomeContent?
+    /// Why Home fails to load, or nil when it loads the samples.
+    var homeFailure: SerafinError?
     private let samples = SampleMediaSource()
 
-    func home() async throws -> HomeContent { try await samples.home() }
+    func home() async throws -> HomeContent {
+        if let homeFailure { throw homeFailure }
+        return try await samples.home()
+    }
+
+    func savedHome() async -> HomeContent? { saved }
 
     func nextToWatch() async throws -> [MediaItem] {
         guard let watching else { return try await samples.nextToWatch() }

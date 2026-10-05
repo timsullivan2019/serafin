@@ -3,11 +3,13 @@ import JellyfinAPI
 
 /// One signed-in user's library on one server: everything Home, Library, Search and the detail screens show.
 ///
-/// Each call is one request. Reads are answered from a short-lived cache when the same request was made recently,
-/// so going back to a screen is instant. Marking an item played or favourite empties the cache, since it changes
-/// what Home shows.
+/// Each call is one request, except ``home()``. Reads are answered from a short-lived cache when the same request was
+/// made recently, so going back to a screen is instant. Marking an item played or favourite empties the cache, since
+/// it changes what Home shows.
 ///
 /// Lists ask only for the fields cards need. ``item(id:)`` returns everything a detail screen shows.
+///
+/// The last Home the server sent is also kept on the device, so Home can show it when the server can't be reached.
 public actor LibraryRepository {
     /// How long a read is answered from the cache before the server is asked again.
     public static let defaultCacheLifetime: Duration = .seconds(60)
@@ -25,20 +27,55 @@ public actor LibraryRepository {
     private let client: JellyfinClient
     private let errors: ServerErrors
     private var cache: ResponseCache
+    /// Where this account's last Home is kept, or nil to keep none.
+    private let homeSnapshots: HomeSnapshotStore.Slot?
 
     init(
         client: JellyfinClient,
         userID: String,
         errors: ServerErrors,
-        cacheLifetime: Duration = LibraryRepository.defaultCacheLifetime
+        cacheLifetime: Duration = LibraryRepository.defaultCacheLifetime,
+        homeSnapshots: HomeSnapshotStore.Slot? = nil
     ) {
         self.client = client
         self.userID = userID
         self.errors = errors
         self.cache = ResponseCache(lifetime: cacheLifetime)
+        self.homeSnapshots = homeSnapshots
     }
 
     // MARK: - Home
+
+    /// Everything Home shows, asked of the server now, and kept on the device for ``savedHome()``.
+    ///
+    /// One library's newest items failing to load leaves that library's row empty. The whole call fails only when the
+    /// libraries, Continue Watching or Next Up do, and then the Home kept before stays.
+    public func home() async throws -> HomeSnapshot {
+        async let resume = resume()
+        async let nextUp = nextUp()
+        let libraries = try await userViews()
+        let latest = await withTaskGroup(of: (String, [BaseItemDto]).self) { group in
+            for id in libraries.compactMap(\.id) {
+                group.addTask { (id, (try? await self.latest(in: id)) ?? []) }
+            }
+            var rows: [String: [BaseItemDto]] = [:]
+            for await (id, items) in group {
+                rows[id] = items
+            }
+            return rows
+        }
+        let snapshot = HomeSnapshot(
+            date: .now, libraries: libraries, resume: try await resume, nextUp: try await nextUp, latest: latest)
+        // A cancelled load may have lost rows on the way, so it doesn't replace the Home kept before.
+        try Task.checkCancellation()
+        await homeSnapshots?.save(snapshot)
+        return snapshot
+    }
+
+    /// The last Home the server sent this account, kept on the device, or nil when there's none.
+    public func savedHome() async -> HomeSnapshot? {
+        await homeSnapshots?.load()
+    }
 
     /// The user's movie and TV libraries, in the server's order. Music, books, photos and other kinds of library are
     /// left out.

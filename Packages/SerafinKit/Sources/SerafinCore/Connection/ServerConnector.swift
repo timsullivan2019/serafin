@@ -44,6 +44,7 @@ public struct ServerConnector: Sendable {
     /// is not Jellyfin, such as a router or NAS page on port 80.
     ///
     /// - Throws: ``SerafinError/insecureTransport`` before any request for plain HTTP to a public host;
+    ///   ``SerafinError/offline`` without trying the fallback when the device has no connection;
     ///   ``SerafinError/untrustedCertificate(_:)`` when the server's certificate needs the user's pin;
     ///   ``SerafinError/notJellyfin``, ``SerafinError/unsupportedServerVersion(_:)`` or
     ///   ``SerafinError/serverUnreachable`` otherwise. When both addresses fail, the first address's error wins
@@ -78,10 +79,7 @@ public struct ServerConnector: Sendable {
             if error.isCertificateFailure, let presented = pinning.rejectedCertificate(for: host) {
                 throw SerafinError.untrustedCertificate(presented)
             }
-            if error.code == .appTransportSecurityRequiresSecureConnection {
-                throw SerafinError.plainHTTPBlocked
-            }
-            throw SerafinError.serverUnreachable
+            throw SerafinError(error)
         } catch {
             // Something answered, but not with Jellyfin's public info: an HTML page, malformed JSON, another product.
             throw SerafinError.notJellyfin

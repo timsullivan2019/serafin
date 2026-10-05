@@ -27,6 +27,11 @@ import Testing
         #expect(client.configuration.client == "Serafin")
     }
 
+    @Test func requestsGiveUpOnASilentServerAfterThirtySeconds() throws {
+        let (factory, _) = try factory(InMemorySecretStore())
+        #expect(factory.urlSessionConfiguration().timeoutIntervalForRequest == 30)
+    }
+
     @Test func signedInClientsCarryTheUsersToken() async throws {
         let secrets = InMemorySecretStore()
         let (factory, sessions) = try factory(secrets)

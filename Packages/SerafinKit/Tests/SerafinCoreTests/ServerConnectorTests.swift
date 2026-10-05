@@ -81,6 +81,14 @@ private func publicInfoJSON(id: String = "c0ffee", version: String = "10.10.7", 
         }
     }
 
+    @Test func reportsADeviceWithoutAConnectionWithoutTryingAnotherPort() async throws {
+        StubURLProtocol.stub("offline.example.com:443", .failure(.notConnectedToInternet))
+        await #expect(throws: SerafinError.offline) {
+            try await connector.connect(to: ServerAddress.parse("offline.example.com"))
+        }
+        #expect(StubURLProtocol.requests(to: "offline.example.com:8920", path: "/System/Info/Public").isEmpty)
+    }
+
     @Test func reportsSomethingThatIsNotJellyfin() async throws {
         StubURLProtocol.stub("fourth.example.com:443", .json(404, "{}"))
         await #expect(throws: SerafinError.notJellyfin) {

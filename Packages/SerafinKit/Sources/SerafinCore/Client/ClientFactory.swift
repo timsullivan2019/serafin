@@ -7,6 +7,10 @@ public struct ClientFactory: Sendable {
     /// Makes the `URLSession` delegate for a server's connections, such as the certificate-pinning delegate.
     public typealias SessionDelegateProvider = @Sendable (Server) -> (any URLSessionDelegate)?
 
+    /// How long a request may wait for the server to answer before the server counts as unreachable. URLSession's own
+    /// default is a minute, which is long to look at a screen that's waiting on a server that's off.
+    static let requestTimeout: TimeInterval = 30
+
     private let identity: DeviceIdentity
     private let sessions: SessionStore
     private let sessionDelegate: SessionDelegateProvider
@@ -20,7 +24,8 @@ public struct ClientFactory: Sendable {
     ///   - sessionDelegate: The `URLSession` delegate for each server's connections. Certificate pinning plugs in
     ///     here; the default uses the system's own trust evaluation.
     ///   - sessionConfiguration: Makes each client's `URLSession` configuration. The default is ephemeral, so
-    ///     responses are never cached on disk and no cookies are kept. Tests pass one with a stub protocol.
+    ///     responses are never cached on disk and no cookies are kept. Tests pass one with a stub protocol. Each
+    ///     client gives up on a request after ``requestTimeout`` seconds without an answer.
     public init(
         identity: DeviceIdentity,
         sessions: SessionStore,
@@ -51,8 +56,15 @@ public struct ClientFactory: Sendable {
         let configuration = try await identity.configuration(serverURL: server.url, accessToken: accessToken)
         return JellyfinClient(
             configuration: configuration,
-            sessionConfiguration: sessionConfiguration(),
+            sessionConfiguration: urlSessionConfiguration(),
             sessionDelegate: sessionDelegate(server)
         )
+    }
+
+    /// The `URLSession` configuration for a client.
+    func urlSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = sessionConfiguration()
+        configuration.timeoutIntervalForRequest = Self.requestTimeout
+        return configuration
     }
 }

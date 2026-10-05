@@ -18,6 +18,8 @@ struct HomeContent: Sendable {
     var nextUp: [MediaItem]
     /// The newest items in each library.
     var latest: [LatestRow]
+    /// When the server sent these rows.
+    var date = Date.now
 
     /// Whether every row is empty, which shows the empty state.
     var isEmpty: Bool {
@@ -150,6 +152,9 @@ struct MediaSearchResults: Sendable {
 protocol MediaSource: Sendable {
     /// Continue Watching, Next Up and the newest items in each library.
     func home() async throws -> HomeContent
+    /// The rows ``home()`` last returned, kept on the device for when the server can't be reached, or nil when there
+    /// are none.
+    func savedHome() async -> HomeContent?
     /// What to watch next, as Home lists it: started movies and episodes, most recent first, then the next episode of
     /// each show in progress.
     func nextToWatch() async throws -> [MediaItem]

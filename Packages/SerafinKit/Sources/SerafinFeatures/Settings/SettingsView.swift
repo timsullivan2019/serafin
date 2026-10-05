@@ -315,18 +315,16 @@ private struct DeliverySection: View {
     }
 }
 
-/// Clearing the cached artwork and library answers.
+/// Clearing the cached artwork, saved Home and library answers.
 private struct StorageSection: View {
-    @Environment(\.artwork) private var artwork
-    @Environment(\.media) private var media
+    @Environment(AppSession.self) private var session
     @State private var clearCount = 0
 
     var body: some View {
         Section {
             Button {
-                artwork?.removeAllCachedImages()
                 Task {
-                    await media.refresh()
+                    await session.clearCaches()
                     clearCount += 1
                 }
             } label: {
@@ -344,7 +342,8 @@ private struct StorageSection: View {
         } footer: {
             Text(
                 String(
-                    localized: "Removes saved artwork. It downloads again as you browse.",
+                    localized:
+                        "Removes saved artwork, and the copy of Home that shows when your server can't be reached. Both download again as you browse.",
                     bundle: .module,
                     comment: "Settings footer under Clear Cache."
                 )
