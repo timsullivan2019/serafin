@@ -103,6 +103,11 @@ struct MainTabs: View {
         .environment(actions)
         // One place for the tap that confirms Mark as Played and Favourite, from a detail screen or a card's menu.
         .sensoryFeedback(trigger: actions.confirmation) { _, confirmation in confirmation?.feedback }
+        .onChange(of: actions.confirmation) { _, confirmation in
+            if let confirmation {
+                AccessibilityNotification.Announcement(confirmation.announcement).post()
+            }
+        }
         .alert(
             actions.failure?.title ?? "",
             isPresented: Binding(get: { actions.failure != nil }, set: { if !$0 { actions.failure = nil } })
@@ -135,6 +140,7 @@ private struct TabShortcuts: View {
                 searchRequest += 1
             }
             .keyboardShortcut("f", modifiers: .command)
+            .accessibilityHidden(true)
             if playback.nowPlaying != nil {
                 Button(
                     String(
@@ -144,9 +150,13 @@ private struct TabShortcuts: View {
                     playback.showPlayer()
                 }
                 .keyboardShortcut("f", modifiers: [])
+                .accessibilityHidden(true)
             }
         }
-        // The buttons exist only for their shortcuts, which still show in the iPad's keyboard shortcut list.
+        // The buttons exist only for their shortcuts, which still show in the iPad's keyboard shortcut list. With no
+        // size they're nothing VoiceOver or a finger can land on.
+        .frame(width: 0, height: 0)
+        .clipped()
         .opacity(0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

@@ -126,6 +126,17 @@ struct PointerHighlight: ViewModifier {
     }
 }
 
+/// Lets a card's title run to more lines at accessibility text sizes, where a long word no longer fits on one line
+/// and two lines would cut the title off.
+struct CardTitleLines: ViewModifier {
+    let standard: Int
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content.lineLimit(dynamicTypeSize.isAccessibilitySize ? standard + 2 : standard)
+    }
+}
+
 extension View {
     /// Lifts the artwork under an iPad pointer. Other platforms have no hover effect.
     func cardHoverEffect() -> some View {

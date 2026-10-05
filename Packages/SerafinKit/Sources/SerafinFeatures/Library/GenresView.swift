@@ -35,6 +35,11 @@ struct GenresView: View {
                     LabeledContent(genre.name) {
                         if let count = genre.count {
                             Text(count, format: .number)
+                                .accessibilityLabel(
+                                    String(
+                                        localized: "\(count) titles", bundle: .module,
+                                        comment: "Spoken count of a genre's movies and shows, such as 18 titles.")
+                                )
                         }
                     }
                 }

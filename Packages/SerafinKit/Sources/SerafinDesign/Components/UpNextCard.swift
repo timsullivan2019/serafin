@@ -63,6 +63,7 @@ public struct UpNextCard: View {
                         .frame(minHeight: 36)
                         .foregroundStyle(.black)
                     }
+                    .accessibilityShowsLargeContentViewer()
                     // A white pill, like the system player's play buttons, so it reads over any picture.
                     .buttonStyle(.glassProminent)
                     .tint(.white)
@@ -73,6 +74,7 @@ public struct UpNextCard: View {
                             .padding(.horizontal, Spacing.xSmall)
                             .frame(minHeight: 36)
                     }
+                    .accessibilityShowsLargeContentViewer()
                     .buttonStyle(.glass)
                     .tint(.white)
                 }
@@ -94,6 +96,8 @@ public struct UpNextCard: View {
 }
 
 /// The glass circle that flashes on the side of the video a double tap skipped back or forward on.
+///
+/// Show it inside a `GlassEffectContainer`, so it materializes as it appears and dissolves as it goes.
 public struct SkipIndicator: View {
     /// Which way the double tap skipped.
     public enum Direction: Sendable {
@@ -116,6 +120,8 @@ public struct SkipIndicator: View {
             .foregroundStyle(.white)
             .frame(width: 84, height: 84)
             .glassEffect(.regular, in: .circle)
+            // Glass arrives by materializing in place rather than fading or growing, which also suits Reduce Motion.
+            .glassEffectTransition(.materialize)
             .environment(\.colorScheme, .dark)
             .accessibilityHidden(true)
     }

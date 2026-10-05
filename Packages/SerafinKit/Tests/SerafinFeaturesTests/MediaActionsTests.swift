@@ -29,6 +29,14 @@ import Testing
         #expect(actions.confirmation?.feedback == .selection)
     }
 
+    @Test func eachConfirmationSaysWhatChanged() async {
+        let actions = MediaActions()
+        await actions.setPlayed(true, for: item, in: SampleMediaSource())
+        #expect(actions.confirmation?.announcement == "Marked as played")
+        await actions.setFavourite(false, for: item, in: SampleMediaSource())
+        #expect(actions.confirmation?.announcement == "Removed from Favourites")
+    }
+
     @Test func theSameChangeTwiceIsConfirmedTwice() async {
         let actions = MediaActions()
         await actions.setPlayed(true, for: item, in: SampleMediaSource())

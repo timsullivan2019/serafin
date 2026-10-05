@@ -42,7 +42,7 @@ public struct PosterCard<Menu: View>: View {
                 Text(card.posterTitle)
                     .typography(.cardTitle)
                     .foregroundStyle(.textPrimary)
-                    .lineLimit(2)
+                    .modifier(CardTitleLines(standard: 2))
                 if let caption = card.posterCaption {
                     Text(caption)
                         .typography(.caption)

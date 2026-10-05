@@ -11,7 +11,7 @@ import Testing
         let tint = try #require(ArtworkTint.tint(for: artwork))
         #expect(tint.hue < 0.03 || tint.hue > 0.97)
         #expect(tint.saturation > 0.8)
-        #expect(tint.contrastRatio(with: white) >= 4.5)
+        #expect(tint.contrastRatio(with: white) >= 5.5)
     }
 
     @Test func darkBlueArtworkIsLiftedToAVisibleBlue() throws {
@@ -20,7 +20,7 @@ import Testing
         #expect(abs(tint.hue - navy.hue) < 0.02)
         #expect(navy.relativeLuminance < ArtworkTint.minimumLuminance)
         #expect(tint.relativeLuminance >= ArtworkTint.minimumLuminance)
-        #expect(tint.contrastRatio(with: white) >= 4.5)
+        #expect(tint.contrastRatio(with: white) >= 5.5)
     }
 
     @Test func nearWhiteArtworkGivesANeutralTintThatKeepsWhiteTextLegible() throws {
@@ -29,7 +29,7 @@ import Testing
         #expect(tint.saturation < 0.1)
         #expect(tint.relativeLuminance >= ArtworkTint.minimumLuminance)
         #expect(tint.relativeLuminance <= ArtworkTint.maximumLuminance)
-        #expect(tint.contrastRatio(with: white) >= 4.5)
+        #expect(tint.contrastRatio(with: white) >= 5.5)
     }
 
     @Test func greyPixelsDoNotDiluteTheTint() throws {

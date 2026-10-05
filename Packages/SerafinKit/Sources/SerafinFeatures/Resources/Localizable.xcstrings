@@ -7,6 +7,29 @@
     "%lld Mbps" : {
       "comment" : "Streaming quality cap in megabits per second, such as 8 Mbps."
     },
+    "%lld titles" : {
+      "comment" : "Spoken count of a genre's movies and shows, such as 18 titles.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld title"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld titles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "About" : {
       "comment" : "Settings section header."
     },
@@ -21,6 +44,9 @@
     },
     "Add to Favourites" : {
       "comment" : "Button and menu item that adds an item to the favourites."
+    },
+    "Added to Favourites" : {
+      "comment" : "Spoken once a favourite is added."
     },
     "After 1 Hour" : {
       "comment" : "Lock grace period."
@@ -217,6 +243,12 @@
     "Mark as Unplayed" : {
       "comment" : "Button and menu item that marks an item not played."
     },
+    "Marked as played" : {
+      "comment" : "Spoken once an item is marked played."
+    },
+    "Marked as unplayed" : {
+      "comment" : "Spoken once an item is marked unplayed."
+    },
     "Maximum" : {
       "comment" : "Streaming quality: no cap."
     },
@@ -232,6 +264,9 @@
     "Movies" : {
       "comment" : "Search results section."
     },
+    "Movies and shows" : {
+      "comment" : "Placeholder in the search field."
+    },
     "Movies and shows you add to it on your server appear here." : {
       "comment" : "Explanation for an empty library or collection."
     },
@@ -240,9 +275,6 @@
     },
     "Movies and shows your server matches to this genre appear here." : {
       "comment" : "Explanation for an empty genre."
-    },
-    "Movies, shows and episodes" : {
-      "comment" : "Placeholder in the search field."
     },
     "Name" : {
       "comment" : "Library sort option: alphabetical."
@@ -339,6 +371,9 @@
     },
     "Remove this server?" : {
       "comment" : "Title of the remove server dialog."
+    },
+    "Removed from Favourites" : {
+      "comment" : "Spoken once a favourite is taken out."
     },
     "Removes saved artwork. It downloads again as you browse." : {
       "comment" : "Settings footer under Clear Cache."

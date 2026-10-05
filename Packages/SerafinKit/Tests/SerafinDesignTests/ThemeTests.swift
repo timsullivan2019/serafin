@@ -31,16 +31,46 @@ import Testing
         }
     }
 
+    /// The fallback accent stands in for an artwork tint behind white text, and also colours text and controls on
+    /// the background, so it has to pass both ways.
     @Test(arguments: [ColorScheme.light, .dark])
-    func accentFallbackIsWithinTheArtworkTintRange(scheme: ColorScheme) {
-        let luminance = rgb(.accentFallback, in: scheme).relativeLuminance
-        #expect((ArtworkTint.minimumLuminance...ArtworkTint.maximumLuminance).contains(luminance))
+    func accentFallbackCarriesWhiteTextAndReadsOnTheBackground(scheme: ColorScheme) {
+        let accent = rgb(.accentFallback, in: scheme)
+        #expect(accent.contrastRatio(with: RGB(red: 1, green: 1, blue: 1)) >= 4.5)
+        #expect(accent.relativeLuminance >= ArtworkTint.minimumLuminance)
+        if scheme == .dark {
+            #expect(accent.contrastRatio(with: rgb(.background, in: scheme)) >= 4.5)
+        }
     }
 
     @Test func backgroundFollowsTheAppearance() {
         #expect(rgb(.background, in: .light).relativeLuminance > 0.9)
         #expect(rgb(.background, in: .dark).relativeLuminance < 0.01)
     }
+
+    #if canImport(UIKit)
+        /// Increase Contrast takes secondary text and the accent to the stricter AAA level, and sets surfaces further
+        /// apart from the background.
+        @Test(arguments: [UIUserInterfaceStyle.light, .dark])
+        func increaseContrastRaisesContrast(style: UIUserInterfaceStyle) {
+            func rgb(_ colour: Color, high: Bool) -> RGB {
+                let traits = UITraitCollection { traits in
+                    traits.userInterfaceStyle = style
+                    traits.accessibilityContrast = high ? .high : .normal
+                }
+                var (red, green, blue, alpha): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+                UIColor(colour).resolvedColor(with: traits).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+                return RGB(red: red, green: green, blue: blue)
+            }
+            let background = rgb(.background, high: true)
+            #expect(rgb(.textSecondary, high: true).contrastRatio(with: background) >= 7)
+            #expect(rgb(.accentFallback, high: true).contrastRatio(with: background) >= 4.5)
+            #expect(
+                rgb(.surface, high: true).contrastRatio(with: background)
+                    > rgb(.surface, high: false).contrastRatio(with: rgb(.background, high: false))
+            )
+        }
+    #endif
 
     private func resolve(_ colour: Color, in scheme: ColorScheme) -> Color.Resolved {
         var environment = EnvironmentValues()

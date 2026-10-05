@@ -6,13 +6,14 @@ import SwiftUI
 /// The tint is the average colour of the artwork's colourful pixels: those with mid-range saturation and enough
 /// brightness for their hue to mean something. Greys, near-black shadows and the most saturated neon accents,
 /// which are usually type or logos, are left out. The result's luminance is then clamped so that white text on
-/// the tint keeps at least 4.5:1 contrast and the tint never sinks to black.
+/// the tint has at least 5.5:1 contrast and the tint never sinks to black. Glass lightens a tint where bright
+/// artwork shows through it, and the margin keeps white text above 4.5:1 there.
 ///
 /// Artwork with almost no colourful pixels, such as a black-and-white still, gets a near-neutral tint from the
 /// average of all its pixels, clamped the same way.
 public enum ArtworkTint {
-    /// The highest relative luminance a tint may have, so white text on it keeps a 4.5:1 contrast ratio.
-    public static let maximumLuminance = 1.05 / 4.5 - 0.05
+    /// The highest relative luminance a tint may have, so white text on it has a 5.5:1 contrast ratio.
+    public static let maximumLuminance = 1.05 / 5.5 - 0.05
 
     /// The lowest relative luminance a tint may have, so it still reads as a colour rather than black.
     public static let minimumLuminance = 0.03

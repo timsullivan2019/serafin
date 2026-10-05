@@ -15,7 +15,9 @@ public struct LetterIndex: View {
     @State private var touched: String?
     @State private var spoken = 0
     @State private var available: CGFloat = 0
-    @ScaledMetric(relativeTo: .caption2) private var rowHeight = 14.0
+    /// Each letter's row. Like the system index, the letters stop growing at a large text size, so their rows stay
+    /// the same height too.
+    private let rowHeight = 16.0
 
     /// Creates an index.
     ///

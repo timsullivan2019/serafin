@@ -234,15 +234,15 @@ struct PlayerView: View {
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
-            HStack {
-                if screen.skip == .backward {
-                    SkipIndicator(.backward)
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
-                }
-                Spacer()
-                if screen.skip == .forward {
-                    SkipIndicator(.forward)
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+            GlassEffectContainer {
+                HStack {
+                    if screen.skip == .backward {
+                        SkipIndicator(.backward)
+                    }
+                    Spacer()
+                    if screen.skip == .forward {
+                        SkipIndicator(.forward)
+                    }
                 }
             }
             .padding(.horizontal, Spacing.xLarge * 2)
