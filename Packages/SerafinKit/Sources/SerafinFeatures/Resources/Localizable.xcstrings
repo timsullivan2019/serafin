@@ -22,6 +22,18 @@
     "Add to Favourites" : {
       "comment" : "Button and menu item that adds an item to the favourites."
     },
+    "After 1 Hour" : {
+      "comment" : "Lock grace period."
+    },
+    "After 1 Minute" : {
+      "comment" : "Lock grace period."
+    },
+    "After 15 Minutes" : {
+      "comment" : "Lock grace period."
+    },
+    "After 5 Minutes" : {
+      "comment" : "Lock grace period."
+    },
     "All Genres" : {
       "comment" : "Genre filter: no filter."
     },
@@ -166,11 +178,17 @@
     "How Videos Play" : {
       "comment" : "Settings section header."
     },
+    "Immediately" : {
+      "comment" : "Lock grace period: no grace."
+    },
     "Information" : {
       "comment" : "Detail screen column heading."
     },
     "It may have been removed from your library." : {
       "comment" : "Explanation when an item is missing."
+    },
+    "Keeps your library private when someone else picks up this device." : {
+      "comment" : "Settings footer under the lock while it's off."
     },
     "Languages" : {
       "comment" : "Detail screen column heading."
@@ -186,6 +204,9 @@
     },
     "Loading" : {
       "comment" : "Spoken while content loads."
+    },
+    "Lock Again" : {
+      "comment" : "Settings row: the lock's grace period."
     },
     "Lower caps use less data. The server converts anything above the cap." : {
       "comment" : "Settings footer under the streaming quality caps."
@@ -274,6 +295,9 @@
     "Playback Stopped" : {
       "comment" : "Title when the player can't play a stream."
     },
+    "Privacy" : {
+      "comment" : "Settings section header."
+    },
     "Producer" : {
       "comment" : "A crew member's job on a detail screen."
     },
@@ -319,6 +343,18 @@
     "Removes saved artwork. It downloads again as you browse." : {
       "comment" : "Settings footer under Clear Cache."
     },
+    "Require Face ID" : {
+      "comment" : "Settings toggle for the lock."
+    },
+    "Require Optic ID" : {
+      "comment" : "Settings toggle for the lock."
+    },
+    "Require Passcode" : {
+      "comment" : "Settings toggle for the lock."
+    },
+    "Require Touch ID" : {
+      "comment" : "Settings toggle for the lock."
+    },
     "Run Time" : {
       "comment" : "Detail fact: running time."
     },
@@ -337,11 +373,17 @@
     "Seasons" : {
       "comment" : "Row of a show's seasons."
     },
+    "Serafin Is Locked" : {
+      "comment" : "Title of the lock screen."
+    },
     "Serafin couldn't open its list of servers. Unlock your device and try again." : {
       "comment" : "Explanation when the saved server list can't be read."
     },
     "Serafin is open source under the MIT licence. The Jellyfin SDK's files stay under the Mozilla Public License 2.0." : {
       "comment" : "Footer under the list of open-source licences."
+    },
+    "Serafin locks when it opens, and again once it has been in the background for this long." : {
+      "comment" : "Settings footer under the lock while it's on."
     },
     "Serafin only uses unencrypted connections on your own network. Use the server's https:// address instead." : {
       "comment" : "Explanation when plain HTTP to a public server is refused."
@@ -351,6 +393,9 @@
     },
     "Server Address" : {
       "comment" : "Label of the server address field."
+    },
+    "Set a passcode in the Settings app to lock Serafin." : {
+      "comment" : "Settings footer when the device has no passcode."
     },
     "Settings" : {
       "comment" : "Title of the settings tab."
@@ -444,6 +489,27 @@
     },
     "Trust This Certificate" : {
       "comment" : "Button that pins a certificate."
+    },
+    "Turn off the lock" : {
+      "comment" : "Reason the lock asks when turned off."
+    },
+    "Turn on the lock" : {
+      "comment" : "Reason the lock asks when turned on."
+    },
+    "Unlock Serafin" : {
+      "comment" : "Reason the lock asks."
+    },
+    "Unlock with Face ID" : {
+      "comment" : "Lock screen button."
+    },
+    "Unlock with Optic ID" : {
+      "comment" : "Lock screen button."
+    },
+    "Unlock with Passcode" : {
+      "comment" : "Lock screen button."
+    },
+    "Unlock with Touch ID" : {
+      "comment" : "Lock screen button."
     },
     "Unplayed" : {
       "comment" : "Library filter: hide played items."

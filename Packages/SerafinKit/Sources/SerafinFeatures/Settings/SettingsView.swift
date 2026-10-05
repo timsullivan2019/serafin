@@ -36,6 +36,7 @@ struct SettingsView: View {
                 )
             }
             DeliverySection()
+            LockSection()
             StorageSection()
             Section(String(localized: "About", bundle: .module, comment: "Settings section header.")) {
                 NavigationLink(value: Route.licences) {
@@ -63,6 +64,56 @@ struct SettingsView: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "–"
         let build = info?["CFBundleVersion"] as? String ?? "–"
         return "\(short) (\(build))"
+    }
+}
+
+/// The optional lock: Face ID, Touch ID or the passcode when Serafin opens, and how long it may sit in the background
+/// before it asks again. Changing either needs the owner to confirm.
+private struct LockSection: View {
+    @Environment(AppLock.self) private var lock: AppLock?
+
+    var body: some View {
+        if let lock {
+            let check = lock.check
+            Section {
+                Toggle(
+                    check.settingTitle,
+                    isOn: Binding(get: { lock.isEnabled }, set: { on in Task { await lock.setEnabled(on) } })
+                )
+                .disabled(check == .unavailable || lock.isConfirming)
+                if lock.isEnabled {
+                    Picker(
+                        String(
+                            localized: "Lock Again", bundle: .module, comment: "Settings row: the lock's grace period."),
+                        selection: Binding(get: { lock.grace }, set: { lock.setGrace($0) })
+                    ) {
+                        ForEach(LockGrace.allCases) { Text($0.title).tag($0) }
+                    }
+                }
+            } header: {
+                Text(String(localized: "Privacy", bundle: .module, comment: "Settings section header."))
+            } footer: {
+                Text(footer(lock: lock, check: check))
+            }
+        }
+    }
+}
+
+extension LockSection {
+    private func footer(lock: AppLock, check: OwnerCheck) -> String {
+        if check == .unavailable {
+            String(
+                localized: "Set a passcode in the Settings app to lock Serafin.", bundle: .module,
+                comment: "Settings footer when the device has no passcode.")
+        } else if lock.isEnabled {
+            String(
+                localized: "Serafin locks when it opens, and again once it has been in the background for this long.",
+                bundle: .module, comment: "Settings footer under the lock while it's on.")
+        } else {
+            String(
+                localized: "Keeps your library private when someone else picks up this device.", bundle: .module,
+                comment: "Settings footer under the lock while it's off.")
+        }
     }
 }
 

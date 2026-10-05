@@ -40,6 +40,7 @@ targets:
         LSRequiresIPhoneOS: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        NSFaceIDUsageDescription: Serafin uses Face ID to unlock when you turn on its lock in Settings.
         NSLocalNetworkUsageDescription: Serafin looks for Jellyfin servers on your network.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
