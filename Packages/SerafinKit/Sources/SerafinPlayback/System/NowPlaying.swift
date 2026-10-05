@@ -6,6 +6,8 @@
     /// Puts what's playing on the Lock Screen and in Control Center, and answers their buttons, AirPods presses and
     /// the scrubber.
     ///
+    /// Command handlers can be called off the main thread, so each hops to the main actor.
+    ///
     /// The session publishes elapsed time, duration and rate on its own; the title, subtitle and artwork come from
     /// the player item's Now Playing info.
     @MainActor final class NowPlaying {
@@ -16,15 +18,15 @@
             session.automaticallyPublishesNowPlayingInfo = true
             let commands = session.remoteCommandCenter
             commands.playCommand.addTarget { [weak engine] _ in
-                MainActor.assumeIsolated { engine?.play() }
+                Task { @MainActor in engine?.play() }
                 return .success
             }
             commands.pauseCommand.addTarget { [weak engine] _ in
-                MainActor.assumeIsolated { engine?.pause() }
+                Task { @MainActor in engine?.pause() }
                 return .success
             }
             commands.togglePlayPauseCommand.addTarget { [weak engine] _ in
-                MainActor.assumeIsolated { engine?.togglePlayPause() }
+                Task { @MainActor in engine?.togglePlayPause() }
                 return .success
             }
             commands.skipForwardCommand.preferredIntervals = [10]

@@ -752,7 +752,8 @@ public enum PlaybackState: Equatable, Sendable {
 }
 
 #if canImport(UIKit)
-    /// Hands Picture in Picture's delegate calls, which arrive on the main thread, to the engine.
+    /// Hands Picture in Picture's delegate calls to the engine on the main actor. AVKit makes most of them on the main
+    /// thread, but returning from Picture in Picture to the app arrives on a background queue.
     private final class PictureInPictureEvents: NSObject, AVPictureInPictureControllerDelegate {
         private weak var engine: PlayerEngine?
 
@@ -760,30 +761,45 @@ public enum PlaybackState: Equatable, Sendable {
             self.engine = engine
         }
 
+        /// Runs `work` with the engine on the main actor: straight away when called there, so the engine knows
+        /// before the app moves on, and otherwise as soon as the main actor is free.
+        private func withEngine(_ work: @escaping @MainActor @Sendable (PlayerEngine) -> Void) {
+            let engine = engine
+            if Thread.isMainThread {
+                MainActor.assumeIsolated {
+                    if let engine { work(engine) }
+                }
+            } else {
+                Task { @MainActor in
+                    if let engine { work(engine) }
+                }
+            }
+        }
+
         func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureWillStart() }
+            withEngine { $0.pictureInPictureWillStart() }
         }
 
         func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureStarted() }
+            withEngine { $0.pictureInPictureStarted() }
         }
 
         func pictureInPictureController(
             _ controller: AVPictureInPictureController,
             failedToStartPictureInPictureWithError error: any Error
         ) {
-            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureEnded() }
+            withEngine { $0.pictureInPictureEnded() }
         }
 
         func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureEnded() }
+            withEngine { $0.pictureInPictureEnded() }
         }
 
         func pictureInPictureController(
             _ controller: AVPictureInPictureController,
             restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
         ) {
-            MainActor.assumeIsolated { [engine] in engine?.restoreUserInterface() }
+            withEngine { $0.restoreUserInterface() }
             completionHandler(true)
         }
     }
