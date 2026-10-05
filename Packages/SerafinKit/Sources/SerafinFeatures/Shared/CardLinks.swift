@@ -2,7 +2,8 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// A poster that opens its item, zooms into it, and offers Play, Mark as Played and Favourite in its context menu.
+/// A poster that opens its item, zooms into it, and offers Play, Go to Show, Mark as Played and Favourite in its
+/// context menu.
 struct PosterLink: View {
     let item: MediaItem
     @Environment(\.zoomNamespace) private var zoom
@@ -37,6 +38,14 @@ struct LandscapeLink: View {
 }
 
 extension MediaItem {
+    /// The page of the show an episode belongs to, for Go to Show, or nil for anything else.
+    var showRoute: Route? {
+        guard card.kind == .episode, let seriesID = card.episode?.seriesID, ItemID.isPlain(seriesID) else {
+            return nil
+        }
+        return .item(id: seriesID)
+    }
+
     /// Where tapping this item goes.
     var route: Route {
         switch card.kind {

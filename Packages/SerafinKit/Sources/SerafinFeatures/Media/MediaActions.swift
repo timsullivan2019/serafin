@@ -73,12 +73,13 @@ import SwiftUI
     }
 }
 
-/// The items in a card's context menu: Play, Mark as Played and Favourite.
+/// The items in a card's context menu: Play, Go to Show for an episode, Mark as Played and Favourite.
 struct CardMenuItems: View {
     let item: MediaItem
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(MediaActions.self) private var actions
     @Environment(\.media) private var media
+    @Environment(\.navigate) private var navigate
 
     var body: some View {
         // A show or season plays from its page, which knows the episode to start.
@@ -89,6 +90,18 @@ struct CardMenuItems: View {
                 Label(
                     String(localized: "Play", bundle: .module, comment: "Menu item that starts playback."),
                     systemImage: "play.fill"
+                )
+            }
+        }
+        if let show = item.showRoute {
+            Button {
+                navigate(show)
+            } label: {
+                Label(
+                    String(
+                        localized: "Go to Show", bundle: .module,
+                        comment: "Menu item on an episode that opens the show it belongs to."),
+                    systemImage: "tv"
                 )
             }
         }

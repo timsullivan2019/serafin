@@ -57,6 +57,16 @@ import Testing
         #expect(episode.episodeNumber == 2)
     }
 
+    @Test func anEpisodeOffersItsShowAndNothingElseDoes() throws {
+        let episode = BaseItemDto(id: "cccc3333", name: "The Red-Headed League", seriesID: "show1111", type: .episode)
+        #expect(try #require(MediaItem(episode)).showRoute == .item(id: "show1111"))
+        let movie = BaseItemDto(id: "aaaa1111", name: "Metropolis", type: .movie)
+        #expect(try #require(MediaItem(movie)).showRoute == nil)
+        // A show ID Jellyfin wouldn't issue opens nothing.
+        let odd = BaseItemDto(id: "cccc4444", name: "The Blue Carbuncle", seriesID: "../show", type: .episode)
+        #expect(try #require(MediaItem(odd)).showRoute == nil)
+    }
+
     @Test(arguments: [BaseItemKind.audio, .musicAlbum, .book, .photo, .folder])
     func kindsSerafinDoesNotShowAreLeftOut(_ kind: BaseItemKind) {
         #expect(MediaItem(BaseItemDto(id: "dddd4444", name: "Something", type: kind)) == nil)
