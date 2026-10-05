@@ -19,8 +19,16 @@ struct LicensedPackage: Decodable, Identifiable, Hashable {
     let text: String
     /// The package's notice file, when it has one.
     let notice: String?
+    /// Whether the licence file is Markdown, as the Jellyfin SDK's is.
+    let markdown: Bool
 
     var id: String { identity }
+
+    /// The licence's paragraphs, with the line breaks inside each one removed so the text wraps to the screen.
+    var paragraphs: [LicenceParagraph] { LicenceParagraph.paragraphs(of: text) }
+
+    /// The notice's paragraphs, wrapped the same way.
+    var noticeParagraphs: [LicenceParagraph] { notice.map(LicenceParagraph.paragraphs(of:)) ?? [] }
 
     /// The packages listed in the app's resources, or none if the list can't be read.
     static let bundled: [LicensedPackage] = {
@@ -31,6 +39,63 @@ struct LicensedPackage: Decodable, Identifiable, Hashable {
         else { return [] }
         return packages
     }()
+}
+
+/// A paragraph of licence text, reflowed from a file written for an 80-column terminal.
+struct LicenceParagraph: Hashable {
+    enum Kind: Hashable {
+        /// A Markdown heading, or a title underlined with `=` or `-`.
+        case heading
+        /// A list item, which began with `*` or `-`.
+        case item
+        /// Running text.
+        case body
+    }
+
+    let kind: Kind
+    /// The paragraph's text, on one line apart from Markdown's hard line breaks.
+    let text: String
+
+    /// Splits text into paragraphs at blank lines, headings, list items and rules, and joins the lines of each one
+    /// with single spaces.
+    static func paragraphs(of text: String) -> [LicenceParagraph] {
+        var paragraphs: [LicenceParagraph] = []
+        var lines: [String] = []
+        var kind = Kind.body
+
+        func finish(as finished: Kind? = nil) {
+            var joined = ""
+            for (index, line) in lines.enumerated() {
+                joined += line.trimmingCharacters(in: .whitespaces)
+                if index < lines.count - 1 { joined += line.hasSuffix("  ") ? "\n" : " " }
+            }
+            if !joined.isEmpty { paragraphs.append(LicenceParagraph(kind: finished ?? kind, text: joined)) }
+            lines = []
+            kind = .body
+        }
+
+        for line in text.replacing("\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                finish()
+            } else if trimmed.count >= 3, trimmed.allSatisfy({ $0 == "=" }) || trimmed.allSatisfy({ $0 == "-" }) {
+                // An underline makes the running text above it a heading; anything else, it just ends.
+                finish(as: kind == .body && !lines.isEmpty ? .heading : nil)
+            } else if trimmed.hasPrefix("#") {
+                finish()
+                lines = [String(trimmed.drop(while: { $0 == "#" }))]
+                finish(as: .heading)
+            } else if trimmed.hasPrefix("* ") || trimmed.hasPrefix("- ") {
+                finish()
+                lines = [String(trimmed.dropFirst(2))]
+                kind = .item
+            } else {
+                lines.append(String(line))
+            }
+        }
+        finish()
+        return paragraphs
+    }
 }
 
 /// The open-source software inside Serafin, each with its licence and a link to its source.
@@ -83,20 +148,54 @@ private struct LicenceTextView: View {
                 }
             }
             Section {
-                Text(package.text)
-                    .font(.footnote.monospaced())
-                    .textSelection(.enabled)
+                LicenceParagraphs(paragraphs: package.paragraphs, markdown: package.markdown)
             }
-            if let notice = package.notice {
+            if package.notice != nil {
                 Section(String(localized: "Notice", bundle: .module, comment: "Heading of a package's notice file.")) {
-                    Text(notice)
-                        .font(.footnote.monospaced())
-                        .textSelection(.enabled)
+                    LicenceParagraphs(paragraphs: package.noticeParagraphs, markdown: false)
                 }
             }
         }
         .readableWidth()
         .navigationTitle(package.name)
+    }
+}
+
+/// Paragraphs of licence text, wrapped to the width they're given.
+private struct LicenceParagraphs: View {
+    let paragraphs: [LicenceParagraph]
+    /// Whether to show Markdown's bold and italics, rather than its asterisks.
+    let markdown: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                switch paragraph.kind {
+                case .heading:
+                    styled(paragraph.text).bold()
+                        .accessibilityAddTraits(.isHeader)
+                case .item:
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(verbatim: "•")
+                            .accessibilityHidden(true)
+                        styled(paragraph.text)
+                    }
+                case .body:
+                    styled(paragraph.text)
+                }
+            }
+        }
+        .font(.footnote)
+        .textSelection(.enabled)
+        .padding(.vertical, 4)
+    }
+
+    private func styled(_ text: String) -> Text {
+        guard markdown,
+            let attributed = try? AttributedString(
+                markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
+        else { return Text(verbatim: text) }
+        return Text(attributed)
     }
 }
 

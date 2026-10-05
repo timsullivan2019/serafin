@@ -91,6 +91,46 @@ import Testing
             })
     }
 
+    @Test func licenceTextIsReflowedIntoParagraphs() {
+        let text = "Permission is hereby granted,\r\n  free of charge.\n\n   \nTHE SOFTWARE IS PROVIDED\n\"AS IS\".\n"
+        #expect(
+            LicenceParagraph.paragraphs(of: text) == [
+                LicenceParagraph(kind: .body, text: "Permission is hereby granted, free of charge."),
+                LicenceParagraph(kind: .body, text: "THE SOFTWARE IS PROVIDED \"AS IS\"."),
+            ])
+    }
+
+    @Test func markdownHeadingsItemsAndHardBreaksKeepTheirShape() {
+        let text = """
+            Mozilla Public License Version 2.0
+            ==================================
+
+            ### 1. Definitions
+
+            **1.1. “Contributor”**  \n    means each individual
+                or legal entity.
+
+            * **(a)** that the initial
+              Contributor
+            * **(b)** that the Covered Software
+            -------------------------------
+            The end.
+            """
+        #expect(
+            LicenceParagraph.paragraphs(of: text) == [
+                LicenceParagraph(kind: .heading, text: "Mozilla Public License Version 2.0"),
+                LicenceParagraph(kind: .heading, text: "1. Definitions"),
+                LicenceParagraph(kind: .body, text: "**1.1. “Contributor”**\nmeans each individual or legal entity."),
+                LicenceParagraph(kind: .item, text: "**(a)** that the initial Contributor"),
+                LicenceParagraph(kind: .item, text: "**(b)** that the Covered Software"),
+                LicenceParagraph(kind: .body, text: "The end."),
+            ])
+    }
+
+    @Test func onlyTheJellyfinSDKLicenceIsMarkdown() {
+        #expect(LicensedPackage.bundled.filter(\.markdown).map(\.identity) == ["jellyfin-sdk-swift"])
+    }
+
     @Test func theLicencesScreenListsEveryPackageAtItsPinnedVersion() throws {
         let listed = Dictionary(uniqueKeysWithValues: LicensedPackage.bundled.map { ($0.identity, $0.version) })
         // When this fails, run scripts/licences.py after changing the packages.

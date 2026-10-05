@@ -48,11 +48,15 @@ def checkout(identity):
     sys.exit(f"No checkout for {identity}; run `swift package --package-path Packages/SerafinKit resolve` first")
 
 
-def read_first(folder, stems):
+def find_first(folder, stems):
     for path in sorted(folder.iterdir()):
         if path.is_file() and path.name.split(".")[0].upper() in stems:
-            return path.read_text(encoding="utf-8").strip()
+            return path
     return None
+
+
+def read(path):
+    return path.read_text(encoding="utf-8").strip() if path else None
 
 
 def main():
@@ -60,9 +64,10 @@ def main():
     packages = []
     for pin in sorted(pins, key=lambda pin: NAMES.get(pin["identity"], pin["identity"]).lower()):
         folder = checkout(pin["identity"])
-        text = read_first(folder, {"LICENSE", "LICENCE"})
-        if text is None:
+        path = find_first(folder, {"LICENSE", "LICENCE"})
+        if path is None:
             sys.exit(f"No licence file in {folder}")
+        text = read(path)
         packages.append({
             "identity": pin["identity"],
             "name": NAMES.get(pin["identity"], pin["identity"]),
@@ -70,7 +75,8 @@ def main():
             "url": pin["location"].removesuffix(".git"),
             "licence": licence_name(text),
             "text": text,
-            "notice": read_first(folder, {"NOTICE"}),
+            "markdown": path.suffix.lower() in {".md", ".markdown"},
+            "notice": read(find_first(folder, {"NOTICE"})),
         })
     OUTPUT.write_text(json.dumps(packages, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"Wrote {len(packages)} packages to {OUTPUT.relative_to(ROOT)}")
