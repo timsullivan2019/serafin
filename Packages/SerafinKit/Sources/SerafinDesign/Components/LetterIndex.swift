@@ -8,7 +8,7 @@ import SwiftUI
 /// adjustable element: swipe up or down to move through the letters.
 public struct LetterIndex: View {
     /// "#" for titles that start with a digit or a symbol, then A to Z.
-    public static let alphabet: [String] = ["#"] + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".map(String.init)
+    public nonisolated static let alphabet: [String] = ["#"] + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".map(String.init)
 
     private let letters: [String]
     private let jump: (String) -> Void
