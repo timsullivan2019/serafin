@@ -57,7 +57,7 @@ import Testing
         #expect(episode.episodeNumber == 2)
     }
 
-    @Test(arguments: [BaseItemKind.audio, .musicAlbum, .book, .photo, .folder, .boxSet])
+    @Test(arguments: [BaseItemKind.audio, .musicAlbum, .book, .photo, .folder])
     func kindsSerafinDoesNotShowAreLeftOut(_ kind: BaseItemKind) {
         #expect(MediaItem(BaseItemDto(id: "dddd4444", name: "Something", type: kind)) == nil)
     }

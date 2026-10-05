@@ -37,10 +37,33 @@ struct LiveMediaSource: MediaSource {
         try await library.userViews().compactMap(MediaLibrary.init(view:))
     }
 
-    func page(of mediaLibrary: MediaLibrary, options: GridOptions, start: Int) async throws -> MediaPage {
-        let query = LibraryQuery(
-            parentID: mediaLibrary.id,
-            types: mediaLibrary.kind.itemTypes,
+    func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
+        let page = try await library.items(Self.query(for: scope, options: options), start: start, limit: limit)
+        return MediaPage(items: page.items.map(MediaItem.init), total: page.total)
+    }
+
+    func filters(in scope: GridScope) async throws -> LibraryFilters {
+        guard case .library(let mediaLibrary) = scope else { return LibraryFilters(genres: [], years: []) }
+        return try await library.filters(in: mediaLibrary.id, types: mediaLibrary.kind.itemTypes)
+    }
+
+    func count(in scope: GridScope, options: GridOptions, before name: String) async throws -> Int {
+        try await library.count(Self.query(for: scope, options: options), before: name)
+    }
+
+    func genres() async throws -> [Genre] {
+        try await library.genres().compactMap(Genre.init)
+    }
+
+    func hasCollections() async throws -> Bool {
+        try await library.items(LibraryQuery(parentID: nil, types: [.boxSet]), limit: 0).total > 0
+    }
+
+    /// What the server lists for a grid.
+    static func query(for scope: GridScope, options: GridOptions) -> LibraryQuery {
+        var query = LibraryQuery(
+            parentID: nil,
+            types: [.movie, .series],
             sort: options.sort,
             ascending: options.ascending,
             unplayedOnly: options.unplayedOnly,
@@ -48,13 +71,18 @@ struct LiveMediaSource: MediaSource {
             genres: options.genre.map { [$0] } ?? [],
             years: options.year.map { [$0] } ?? []
         )
-        let page = try await library.items(query, start: start)
-        let next = page.start + page.items.count
-        return MediaPage(items: MediaItem.from(page.items), nextStart: page.hasMore && !page.items.isEmpty ? next : nil)
-    }
-
-    func filters(in mediaLibrary: MediaLibrary) async throws -> LibraryFilters {
-        try await library.filters(in: mediaLibrary.id, types: mediaLibrary.kind.itemTypes)
+        switch scope {
+        case .library(let mediaLibrary):
+            query.parentID = mediaLibrary.id
+            query.types = mediaLibrary.kind.itemTypes
+        case .genre(let genre):
+            query.genres = [genre.name]
+        case .collections:
+            query.types = [.boxSet]
+        case .collection(let id, _):
+            query.parentID = id
+        }
+        return query
     }
 
     func details(of id: String) async throws -> ItemDetails {
@@ -82,6 +110,8 @@ struct LiveMediaSource: MediaSource {
             }
         case .movie, .season:
             details.similar = MediaItem.from((try? await library.similar(to: id)) ?? [])
+        case .collection:
+            break
         }
         return details
     }

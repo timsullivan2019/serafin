@@ -7,7 +7,7 @@ import Testing
 
 @MainActor
 @Suite struct LibraryModelTests {
-    private let model = LibraryModel(library: MockLibrary.libraries[0])
+    private let model = LibraryModel(scope: .library(MockLibrary.libraries[0]))
 
     @Test func aNewSortStartsInItsNaturalDirection() {
         model.select(.dateAdded)
@@ -25,12 +25,12 @@ import Testing
 
     @Test func theSamplesLoadAndFilter() async {
         await model.reload(from: SampleMediaSource())
-        let all = model.items.count
+        let all = model.total
         #expect(all > 0)
         model.options.unplayedOnly = true
         await model.reload(from: SampleMediaSource())
-        #expect(model.items.allSatisfy { !$0.card.isPlayed })
-        #expect(model.items.count <= all)
+        #expect(model.slots.allSatisfy { $0?.card.isPlayed == false })
+        #expect(model.total <= all)
     }
 }
 

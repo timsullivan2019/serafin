@@ -26,7 +26,7 @@ public struct LibraryQuery: Hashable, Sendable {
 
     /// The library, or any folder, to list. Nil lists across every library.
     public var parentID: String?
-    /// The kinds of item to list, such as movies or shows.
+    /// The kinds of item to list, such as movies or shows, or empty for any kind.
     public var types: [BaseItemKind]
     /// The order.
     public var sort: Sort

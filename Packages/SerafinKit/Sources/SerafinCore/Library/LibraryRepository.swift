@@ -105,29 +105,47 @@ public actor LibraryRepository {
     ///   - start: The position of the first item to return.
     ///   - limit: The most items to return.
     public func items(_ query: LibraryQuery, start: Int = 0, limit: Int = 60) async throws -> ItemPage {
-        var parameters = Paths.GetItemsParameters(userID: userID)
-        parameters.parentID = query.parentID
-        parameters.includeItemTypes = query.types
-        parameters.isRecursive = true
-        parameters.sortBy = query.sort.fields
-        parameters.sortOrder = [query.ascending ? .ascending : .descending]
-        var filters: [ItemFilter] = []
-        if query.unplayedOnly { filters.append(.isUnplayed) }
-        if query.favouritesOnly { filters.append(.isFavorite) }
-        parameters.filters = filters.isEmpty ? nil : filters
-        parameters.genres = query.genres.isEmpty ? nil : query.genres
-        parameters.years = query.years.isEmpty ? nil : query.years
+        var parameters = Self.parameters(for: query, userID: userID)
         parameters.startIndex = start
         parameters.limit = limit
         parameters.fields = Self.cardFields
         parameters.enableUserData = true
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
-        parameters.enableTotalRecordCount = true
         let request = Paths.getItems(parameters: parameters)
         let result = try await cached(request.url, request.query) { try await client.send(request).value }
         let items = result.items ?? []
         return ItemPage(items: items, start: result.startIndex ?? start, total: result.totalRecordCount ?? items.count)
+    }
+
+    /// How many items of a grid sort before `name`, which is where a grid sorted by name reaches it. The server
+    /// compares sort names, which are lowercase and drop leading articles, so "The General" counts under G.
+    ///
+    /// - Parameters:
+    ///   - query: The grid, with its filters.
+    ///   - name: The name to count up to, such as "m".
+    public func count(_ query: LibraryQuery, before name: String) async throws -> Int {
+        var parameters = Self.parameters(for: query, userID: userID)
+        parameters.nameLessThan = name
+        parameters.limit = 0
+        let request = Paths.getItems(parameters: parameters)
+        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        return result.totalRecordCount ?? 0
+    }
+
+    /// The genres of the user's movies and shows, in alphabetical order, with how many of each there are.
+    ///
+    /// - Parameter types: The kinds of item whose genres to list.
+    public func genres(of types: [BaseItemKind] = [.movie, .series]) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetGenresParameters()
+        parameters.userID = userID
+        parameters.includeItemTypes = types
+        parameters.fields = [.itemCounts]
+        parameters.sortBy = [.sortName]
+        parameters.sortOrder = [.ascending]
+        parameters.enableTotalRecordCount = false
+        let request = Paths.getGenres(parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
     }
 
     /// The genres and years of a library's items, for the grid's filter menus.
@@ -237,6 +255,24 @@ public actor LibraryRepository {
     }
 
     // MARK: - Helpers
+
+    /// The parts of an items request that say which items a grid lists and in what order.
+    private static func parameters(for query: LibraryQuery, userID: String) -> Paths.GetItemsParameters {
+        var parameters = Paths.GetItemsParameters(userID: userID)
+        parameters.parentID = query.parentID
+        parameters.includeItemTypes = query.types.isEmpty ? nil : query.types
+        parameters.isRecursive = true
+        parameters.sortBy = query.sort.fields
+        parameters.sortOrder = [query.ascending ? .ascending : .descending]
+        var filters: [ItemFilter] = []
+        if query.unplayedOnly { filters.append(.isUnplayed) }
+        if query.favouritesOnly { filters.append(.isFavorite) }
+        parameters.filters = filters.isEmpty ? nil : filters
+        parameters.genres = query.genres.isEmpty ? nil : query.genres
+        parameters.years = query.years.isEmpty ? nil : query.years
+        parameters.enableTotalRecordCount = true
+        return parameters
+    }
 
     private func search(_ term: String, kind: BaseItemKind, limit: Int) async throws -> [BaseItemDto] {
         var parameters = Paths.GetItemsParameters(userID: userID)

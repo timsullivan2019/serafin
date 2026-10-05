@@ -46,12 +46,58 @@ struct GridOptions: Hashable, Sendable {
     }
 }
 
-/// One page of a library grid.
+/// One page of a grid.
 struct MediaPage: Sendable {
-    /// The items on the page.
-    let items: [MediaItem]
-    /// Where the next page starts, or nil when this is the last.
-    let nextStart: Int?
+    /// The page's items, in order. An item Serafin can't show leaves a gap, so every later position stays true.
+    let items: [MediaItem?]
+    /// How many items the whole grid has.
+    let total: Int
+}
+
+/// A genre of the user's movies and shows.
+struct Genre: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    /// How many movies and shows have the genre, when the server says.
+    let count: Int?
+}
+
+/// What a grid lists.
+enum GridScope: Hashable, Sendable {
+    /// One library's movies or shows.
+    case library(MediaLibrary)
+    /// The movies and shows in one genre, from every library.
+    case genre(Genre)
+    /// Every collection on the server.
+    case collections
+    /// The movies and shows in one collection.
+    case collection(id: String, title: String)
+
+    /// The grid's title.
+    var title: String {
+        switch self {
+        case .library(let library): library.name
+        case .genre(let genre): genre.name
+        case .collections:
+            String(localized: "Collections", bundle: .module, comment: "Collections, as a heading or a label.")
+        case .collection(_, let title): title
+        }
+    }
+
+    /// Whether the grid offers the filter and sort chips. A collection's own order is the point of it, and the
+    /// list of collections is browsed by name.
+    var offersChips: Bool {
+        switch self {
+        case .library, .genre: true
+        case .collections, .collection: false
+        }
+    }
+
+    /// The order the grid starts in: a collection in release order, everything else by name.
+    var initialOptions: GridOptions {
+        guard case .collection = self else { return GridOptions() }
+        return GridOptions(sort: .premiereDate, ascending: true)
+    }
 }
 
 /// A cast or crew member on a detail screen.
@@ -106,10 +152,17 @@ protocol MediaSource: Sendable {
     func home() async throws -> HomeContent
     /// The user's movie and TV libraries.
     func libraries() async throws -> [MediaLibrary]
-    /// One page of a library grid.
-    func page(of library: MediaLibrary, options: GridOptions, start: Int) async throws -> MediaPage
-    /// The genres and years in a library, for its filter menus.
-    func filters(in library: MediaLibrary) async throws -> LibraryFilters
+    /// One page of a grid.
+    func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage
+    /// The genres and years in a grid, for its filter menus. Only a library's grid has them.
+    func filters(in scope: GridScope) async throws -> LibraryFilters
+    /// How many items in a grid sort before `name`, for the letter index. Names compare as the server's lowercase
+    /// sort names, which drop leading articles.
+    func count(in scope: GridScope, options: GridOptions, before name: String) async throws -> Int
+    /// The genres of the user's movies and shows, in alphabetical order.
+    func genres() async throws -> [Genre]
+    /// Whether the server has any collections.
+    func hasCollections() async throws -> Bool
     /// Everything a detail screen shows about an item.
     func details(of id: String) async throws -> ItemDetails
     /// A season's episodes.

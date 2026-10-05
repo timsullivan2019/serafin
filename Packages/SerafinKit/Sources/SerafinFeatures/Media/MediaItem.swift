@@ -82,6 +82,7 @@ extension MediaCard.Kind {
         case .series: self = .series
         case .season: self = .season
         case .episode: self = .episode
+        case .boxSet: self = .collection
         default: return nil
         }
     }
@@ -111,5 +112,14 @@ struct PlainText {
         text = text.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.text = trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+extension Genre {
+    /// A genre from the server's list, or nil without an ID or a name.
+    init?(_ item: BaseItemDto) {
+        guard let id = item.id, !id.isEmpty, let name = item.name, !name.isEmpty else { return nil }
+        let counts = [item.movieCount, item.seriesCount].compactMap { $0 }
+        self.init(id: id, name: name, count: counts.isEmpty ? nil : counts.reduce(0, +))
     }
 }

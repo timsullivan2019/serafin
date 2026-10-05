@@ -1,4 +1,4 @@
-/// A movie, series, season or episode, in the shape Serafin's cards and headers display it.
+/// A movie, series, season, episode or collection, in the shape Serafin's cards and headers display it.
 ///
 /// Components in SerafinDesign render from this plain value, never from server models, so every one of them
 /// previews offline. SerafinFeatures maps the server's items into it.
@@ -13,6 +13,8 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
         case season
         /// One episode of a series.
         case episode
+        /// A collection of movies or shows, such as a film series, made on the server.
+        case collection
     }
 
     /// Where an episode sits within its series.

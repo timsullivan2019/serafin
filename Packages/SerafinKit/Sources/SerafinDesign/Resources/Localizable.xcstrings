@@ -39,11 +39,17 @@
     "Close Player" : {
       "comment" : "Button that stops and hides the mini player."
     },
+    "Collection" : {
+      "comment" : "Spoken kind of a card that opens a collection of movies."
+    },
     "Direct play" : {
       "comment" : "How a video plays: the original file as it is."
     },
     "Favourite" : {
       "comment" : "Spoken state of a favourite item."
+    },
+    "Index" : {
+      "comment" : "Spoken name of the letter index."
     },
     "Loading" : {
       "comment" : "Spoken while content loads."
