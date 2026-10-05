@@ -4,8 +4,8 @@ import JellyfinAPI
 /// Puts the closest titles first in search results: an exact title, then titles that start with what was typed,
 /// then the rest in the server's order.
 ///
-/// A title matches with or without a leading article, through the server's sort name, so "godfather" finds
-/// "The Godfather" before "The Godfather Part II". Case, accents and character widths don't matter.
+/// A title matches with or without a leading article, through the server's sort name, so "kid" finds "The Kid"
+/// before "The Kid Brother". Case, accents and character widths don't matter.
 enum SearchRanking {
     /// `items` with the closest titles to `term` first, otherwise in their order.
     static func ranked(_ items: [BaseItemDto], for term: String) -> [BaseItemDto] {
