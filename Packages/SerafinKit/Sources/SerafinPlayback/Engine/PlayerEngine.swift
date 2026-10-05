@@ -305,15 +305,17 @@ public enum PlaybackState: Equatable, Sendable {
             controller.delegate = events
             pictureInPictureEvents = events
             pictureInPictureObservations = [
+                // KVO can call from any thread, so the handlers are Sendable rather than the main actor's, and hop.
                 controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) {
-                    [weak self] controller, _ in
+                    @Sendable [weak self] controller, _ in
                     let isPossible = controller.isPictureInPicturePossible
                     Task { @MainActor in
                         Self.logger.debug("Picture in Picture possible: \(isPossible, privacy: .public)")
                         self?.isPictureInPicturePossible = isPossible
                     }
                 },
-                controller.observe(\.isPictureInPictureActive, options: [.initial, .new]) { [weak self] controller, _ in
+                controller.observe(\.isPictureInPictureActive, options: [.initial, .new]) {
+                    @Sendable [weak self] controller, _ in
                     let isActive = controller.isPictureInPictureActive
                     Task { @MainActor in self?.isPictureInPictureActive = isActive }
                 },
@@ -649,17 +651,17 @@ public enum PlaybackState: Equatable, Sendable {
                 self?.timeChanged(time)
             }
         }
-        playerObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+        playerObservation = player.observe(\.timeControlStatus, options: [.new]) { @Sendable [weak self] _, _ in
             Task { @MainActor in self?.statusChanged() }
         }
     }
 
     private func observe(_ playerItem: AVPlayerItem) {
         itemObservations = [
-            playerItem.observe(\.status, options: [.new]) { [weak self] _, _ in
+            playerItem.observe(\.status, options: [.new]) { @Sendable [weak self] _, _ in
                 Task { @MainActor in self?.itemStatusChanged() }
             },
-            playerItem.observe(\.loadedTimeRanges, options: [.new]) { [weak self] _, _ in
+            playerItem.observe(\.loadedTimeRanges, options: [.new]) { @Sendable [weak self] _, _ in
                 Task { @MainActor in self?.bufferChanged() }
             },
         ]
