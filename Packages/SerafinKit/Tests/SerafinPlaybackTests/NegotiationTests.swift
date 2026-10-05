@@ -151,6 +151,20 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(profile["MaxStreamingBitrate"] as? Int == 8_000_000)
     }
 
+    @Test func theProfileSaysWhatThisDevicePlays() async throws {
+        let host = "av1-request.example.com"
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items/\(movie)/PlaybackInfo", .json(200, try Fixture.json("PlaybackInfoDirectPlay")))
+        let negotiator = PlaybackNegotiator(
+            client: try stubClient(on: host), userID: "user-1", video: VideoSupport(av1Level: 13, dolbyVision: true))
+        _ = try await negotiator.plan(for: movie, options: PlaybackOptions())
+        let request = try #require(
+            StubURLProtocol.requests(to: "\(host):443", path: "/Items/\(movie)/PlaybackInfo").first)
+        let profile = try #require(try body(of: request)["DeviceProfile"] as? [String: Any])
+        let direct = try #require((profile["DirectPlayProfiles"] as? [[String: Any]])?.first)
+        #expect(direct["VideoCodec"] as? String == "h264,hevc,av1")
+    }
+
     @Test func turningDirectPlayOffUsesTheServersStream() throws {
         // A source the server would play directly, which also has a prepared stream.
         var response = try JSONDecoder().decode(
