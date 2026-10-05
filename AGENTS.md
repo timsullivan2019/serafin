@@ -36,6 +36,7 @@ xcodebuild -scheme Serafin -destination 'platform=iOS Simulator,name=iPhone 17' 
 xcodebuild -scheme Serafin -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 swift test --package-path Packages/SerafinKit          # package tests on the host, no simulator
 swift format --in-place --recursive App AppTests Packages
+python3 scripts/licences.py                             # after any change to the packages, for the Licences screen
 xcrun simctl list devices available                     # if the iPhone 17 simulator is not present
 ```
 

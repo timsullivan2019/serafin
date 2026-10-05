@@ -124,6 +124,8 @@ private struct WarningSheet<Details: View>: View {
         }
         .interactiveDismissDisabled()
         .presentationDetents([.large])
+        // On iPad the sheet is only as tall as what it says, rather than a tall panel that's mostly empty.
+        .presentationSizing(.form.fitted(horizontal: false, vertical: true))
     }
 }
 

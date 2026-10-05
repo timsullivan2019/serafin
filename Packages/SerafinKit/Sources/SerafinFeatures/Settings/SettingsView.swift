@@ -24,7 +24,11 @@ struct SettingsView: View {
                             comment: "Title of the licences screen, and its row in Settings."))
                 }
                 LabeledContent(
-                    String(localized: "Version", bundle: .module, comment: "Settings row showing the app version."),
+                    String(
+                        localized: "Version", bundle: .module,
+                        comment:
+                            "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
+                    ),
                     value: Self.version
                 )
             }

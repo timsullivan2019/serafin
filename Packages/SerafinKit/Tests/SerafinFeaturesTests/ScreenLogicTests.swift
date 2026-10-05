@@ -75,3 +75,33 @@ import Testing
         }
     }
 }
+
+@Suite struct LicencesTests {
+    /// The packages pinned in `Package.resolved`, by identity, with their versions.
+    private func pinned() throws -> [String: String] {
+        let resolved = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Package.resolved")
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: resolved)) as? [String: Any]
+        let pins = try #require(object?["pins"] as? [[String: Any]])
+        return Dictionary(
+            uniqueKeysWithValues: pins.compactMap { pin in
+                guard let identity = pin["identity"] as? String,
+                    let version = (pin["state"] as? [String: Any])?["version"] as? String
+                else { return nil }
+                return (identity, version)
+            })
+    }
+
+    @Test func theLicencesScreenListsEveryPackageAtItsPinnedVersion() throws {
+        let listed = Dictionary(uniqueKeysWithValues: LicensedPackage.bundled.map { ($0.identity, $0.version) })
+        // When this fails, run scripts/licences.py after changing the packages.
+        #expect(listed == (try pinned()))
+    }
+
+    @Test func everyPackageCarriesItsLicenceText() {
+        #expect(!LicensedPackage.bundled.isEmpty)
+        for package in LicensedPackage.bundled {
+            #expect(["MIT", "Apache-2.0", "MPL-2.0"].contains(package.licence))
+            #expect(package.text.count > 500)
+        }
+    }
+}

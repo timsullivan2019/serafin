@@ -1,41 +1,48 @@
+import Foundation
+import SerafinDesign
 import SwiftUI
+
+/// An open-source package inside Serafin, with its licence, from `Licences.json`, which `scripts/licences.py` writes
+/// from the packages Serafin builds with.
+struct LicensedPackage: Decodable, Identifiable, Hashable {
+    /// The package's identity in `Package.resolved`.
+    let identity: String
+    /// The name people know it by.
+    let name: String
+    /// The exact version Serafin builds with.
+    let version: String
+    /// Where its source is.
+    let url: URL
+    /// The licence's short name, such as MIT.
+    let licence: String
+    /// The licence's full text.
+    let text: String
+    /// The package's notice file, when it has one.
+    let notice: String?
+
+    var id: String { identity }
+
+    /// The packages listed in the app's resources, or none if the list can't be read.
+    static let bundled: [LicensedPackage] = {
+        guard
+            let url = Bundle.module.url(forResource: "Licences", withExtension: "json"),
+            let data = try? Data(contentsOf: url),
+            let packages = try? JSONDecoder().decode([LicensedPackage].self, from: data)
+        else { return [] }
+        return packages
+    }()
+}
 
 /// The open-source software inside Serafin, each with its licence and a link to its source.
 struct LicencesView: View {
-    private struct Package: Identifiable {
-        let name: String
-        let licence: String
-        let url: URL?
-        var id: String { name }
-    }
-
-    private let packages = [
-        Package(
-            name: "Jellyfin SDK for Swift", licence: "MPL-2.0",
-            url: URL(string: "https://github.com/jellyfin/jellyfin-sdk-swift")),
-        Package(name: "Get", licence: "MIT", url: URL(string: "https://github.com/kean/Get")),
-        Package(name: "Nuke", licence: "MIT", url: URL(string: "https://github.com/kean/Nuke")),
-        Package(name: "SwiftNIO", licence: "Apache-2.0", url: URL(string: "https://github.com/apple/swift-nio")),
-        Package(
-            name: "SwiftNIO Transport Services", licence: "Apache-2.0",
-            url: URL(string: "https://github.com/apple/swift-nio-transport-services")),
-        Package(
-            name: "Swift Atomics", licence: "Apache-2.0", url: URL(string: "https://github.com/apple/swift-atomics")),
-        Package(
-            name: "Swift Collections", licence: "Apache-2.0",
-            url: URL(string: "https://github.com/apple/swift-collections")),
-        Package(name: "Swift System", licence: "Apache-2.0", url: URL(string: "https://github.com/apple/swift-system")),
-    ]
-
     var body: some View {
         List {
             Section {
-                ForEach(packages) { package in
-                    if let url = package.url {
-                        Link(destination: url) {
-                            LabeledContent(package.name, value: package.licence)
-                        }
-                        .foregroundStyle(.primary)
+                ForEach(LicensedPackage.bundled) { package in
+                    NavigationLink {
+                        LicenceTextView(package: package)
+                    } label: {
+                        LabeledContent(package.name, value: package.licence)
                     }
                 }
             } footer: {
@@ -57,8 +64,54 @@ struct LicencesView: View {
     }
 }
 
+/// One package's licence in full, with its version and a link to its source.
+private struct LicenceTextView: View {
+    let package: LicensedPackage
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent(
+                    String(
+                        localized: "Version", bundle: .module,
+                        comment:
+                            "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
+                    ),
+                    value: package.version)
+                Link(destination: package.url) {
+                    Text(String(localized: "Source Code", bundle: .module, comment: "Link to a package's source."))
+                }
+            }
+            Section {
+                Text(package.text)
+                    .font(.footnote.monospaced())
+                    .textSelection(.enabled)
+            }
+            if let notice = package.notice {
+                Section(String(localized: "Notice", bundle: .module, comment: "Heading of a package's notice file.")) {
+                    Text(notice)
+                        .font(.footnote.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .readableWidth()
+        .navigationTitle(package.name)
+    }
+}
+
 #if DEBUG
-    #Preview {
+    #Preview("Light") {
         NavigationStack { LicencesView() }
+    }
+
+    #Preview("Dark") {
+        NavigationStack { LicencesView() }
+            .preferredColorScheme(.dark)
+    }
+
+    #Preview("Largest text") {
+        NavigationStack { LicencesView() }
+            .dynamicTypeSize(.accessibility5)
     }
 #endif
