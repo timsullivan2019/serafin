@@ -92,7 +92,7 @@ Rules, enforced by `Package.swift` target dependencies and by review:
 - Logging: `os.Logger(subsystem: "app.getserafin.serafin", category: "<area>")`. Every URL, token, username, server name and item title is logged with `privacy: .private`. Release builds log at `.error` and above only. No `print`.
 - No force unwraps, no `try!`, no `fatalError` outside of truly unreachable `switch` defaults.
 - Strings: `String(localized:)` with English as the base language in `Localizable.xcstrings`. No hard-coded user-facing text in views.
-- Accessibility: every card, button and control has an accessibility label; cards include title, year and progress ("Sintel, 2010, 40% watched").
+- Accessibility: every card, button and control has an accessibility label; cards include title, year, progress and time ("Sintel, 2010, 40% watched, 1 hour left").
 - Images: `NukeUI.LazyImage` through the shared pipeline from `SerafinCore`. Always request a sized image URL (`maxWidth`) matching the view, never a full-resolution poster in a grid.
 - Previews: every component in `SerafinDesign` has `#Preview` variants for light, dark and the largest accessibility text size, using `MockMedia` only.
 - Tests: `swift-testing` (`import Testing`), not XCTest, for new tests.
