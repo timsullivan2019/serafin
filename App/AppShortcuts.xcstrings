@@ -1,0 +1,55 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Continue watching in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Continue watching in ${applicationName}",
+              "Continue watching on ${applicationName}",
+              "Keep watching in ${applicationName}",
+              "Resume watching in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Play ${item} in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Play ${item} in ${applicationName}",
+              "Play ${item} on ${applicationName}",
+              "Watch ${item} in ${applicationName}",
+              "Watch ${item} on ${applicationName}",
+              "Play something in ${applicationName}",
+              "Watch something in ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Search ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Search ${applicationName}",
+              "Search in ${applicationName}",
+              "Find something in ${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

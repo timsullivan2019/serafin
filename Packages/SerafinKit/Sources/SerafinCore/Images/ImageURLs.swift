@@ -52,7 +52,7 @@ public struct ImageURLs: Hashable, Sendable {
     ///   - quality: The JPEG quality to ask for.
     public func url(itemID: String, type: ImageType, tag: String?, maxWidth: Int, quality: Int = defaultQuality) -> URL?
     {
-        guard Self.isPlainID(itemID) else { return nil }
+        guard ItemID.isPlain(itemID) else { return nil }
         var components = URLComponents(
             url: serverURL.appending(path: "Items/\(itemID)/Images/\(type.rawValue)"),
             resolvingAgainstBaseURL: false
@@ -116,11 +116,5 @@ public struct ImageURLs: Hashable, Sendable {
     private static func source(_ itemID: String?, _ type: ImageType, _ tag: String?) -> Source? {
         guard let itemID, !itemID.isEmpty, let tag, !tag.isEmpty else { return nil }
         return Source(itemID: itemID, type: type, tag: tag)
-    }
-
-    /// Whether `id` is the kind of ID Jellyfin issues: letters, digits and dashes, nothing that could change the
-    /// path.
-    static func isPlainID(_ id: String) -> Bool {
-        !id.isEmpty && id.count <= 64 && id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
     }
 }

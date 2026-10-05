@@ -33,6 +33,17 @@ struct LiveMediaSource: MediaSource {
         )
     }
 
+    func nextToWatch() async throws -> [MediaItem] {
+        async let resume = library.resume()
+        async let nextUp = library.nextUp()
+        return MediaItem.from(try await resume + nextUp)
+    }
+
+    func item(_ id: String) async throws -> MediaItem {
+        guard let item = MediaItem(try await library.item(id: id)) else { throw SerafinError.notFound }
+        return item
+    }
+
     func libraries() async throws -> [MediaLibrary] {
         try await library.userViews().compactMap(MediaLibrary.init(view:))
     }

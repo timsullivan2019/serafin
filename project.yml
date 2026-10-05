@@ -59,6 +59,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.getserafin.serafin
         TARGETED_DEVICE_FAMILY: "1,2"
+        # The shortcuts' titles go into Localizable.xcstrings, as SerafinKit's strings do.
+        SWIFT_EMIT_LOC_STRINGS: YES
 
   SerafinAppTests:
     type: bundle.unit-test

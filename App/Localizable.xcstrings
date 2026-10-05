@@ -1,0 +1,15 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Continue Watching" : {
+      "comment" : "Shortcuts' name for the shortcut that plays the latest started movie or episode."
+    },
+    "Play" : {
+      "comment" : "Shortcuts' name for the shortcut that plays a movie, show or episode."
+    },
+    "Search" : {
+      "comment" : "Shortcuts' name for the shortcut that searches the library."
+    }
+  },
+  "version" : "1.0"
+}

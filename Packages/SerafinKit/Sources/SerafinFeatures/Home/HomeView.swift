@@ -40,7 +40,11 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: Spacing.xLarge) {
                 if !home.continueWatching.isEmpty {
                     MediaRow(
-                        String(localized: "Continue Watching", bundle: .module, comment: "Home row of started items."),
+                        String(
+                            localized: "Continue Watching", bundle: .module,
+                            comment:
+                                "Started movies and episodes: the Home row, and the shortcut that plays the latest of them."
+                        ),
                         style: .landscape,
                         items: home.continueWatching
                     ) { LandscapeLink(item: $0) }

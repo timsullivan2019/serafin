@@ -6,8 +6,8 @@ struct SearchView: View {
     @State private var model = SearchModel()
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
-    @Environment(\.searchFocusRequest) private var focusRequest
-    @State private var answeredFocusRequest = 0
+    @Environment(\.searchRequest) private var request
+    @State private var answeredRequest = 0
     @State private var isSearchPresented = false
 
     var body: some View {
@@ -24,11 +24,17 @@ struct SearchView: View {
                     comment: "Placeholder in the search field."
                 )
             )
-            // A task rather than onChange, so the Command-F that first opens this tab isn't missed.
-            .task(id: focusRequest) {
-                guard focusRequest != answeredFocusRequest else { return }
-                answeredFocusRequest = focusRequest
-                isSearchPresented = true
+            // A task rather than onChange, so the request that first opens this tab isn't missed.
+            .task(id: request) {
+                guard request.number != answeredRequest else { return }
+                answeredRequest = request.number
+                if let term = request.term {
+                    // Siri's results show without the keyboard covering them.
+                    model.query = term
+                    isSearchPresented = false
+                } else {
+                    isSearchPresented = true
+                }
             }
             .task(id: SearchKey(term: model.term, revision: actions.revision)) { await model.search(in: media) }
     }

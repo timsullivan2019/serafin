@@ -1,11 +1,59 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@" : {
+      "comment" : "Text from the library or the app, shown as it is."
+    },
     "%@ uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi." : {
       "comment" : "Warning before connecting over plain HTTP. The argument is the server's name."
     },
+    "%@ · %@" : {
+      "comment" : "A title's kind and year in Siri, Shortcuts and Spotlight, such as Movie · 2010.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@. %@" : {
+      "comment" : "What Siri says when something failed: a title and its explanation, such as Can't Reach the Server. Check that the server is running.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
     "%lld Mbps" : {
       "comment" : "Streaming quality cap in megabits per second, such as 8 Mbps."
+    },
+    "%lld movies and shows" : {
+      "comment" : "A number of movies, shows and episodes, in Shortcuts.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld movie or show"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld movies and shows"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld titles" : {
       "comment" : "Spoken count of a genre's movies and shows, such as 18 titles.",
@@ -142,7 +190,7 @@
       "comment" : "Explanation on the first screen."
     },
     "Continue Watching" : {
-      "comment" : "Home row of started items."
+      "comment" : "Started movies and episodes: the Home row, and the shortcut that plays the latest of them."
     },
     "Continue as %@" : {
       "comment" : "Button that signs back in as a saved user, such as Continue as Alice."
@@ -213,7 +261,7 @@
     "It may have been removed from your library." : {
       "comment" : "Explanation when an item is missing."
     },
-    "Keeps your library private when someone else picks up this device." : {
+    "Keeps your library private when someone else picks up this device, and out of Spotlight and Siri." : {
       "comment" : "Settings footer under the lock while it's off."
     },
     "Languages" : {
@@ -260,6 +308,12 @@
     },
     "More Like This" : {
       "comment" : "Row of similar titles."
+    },
+    "Movie" : {
+      "comment" : "The kind of a title in Siri, Shortcuts and Spotlight."
+    },
+    "Movie or Show" : {
+      "comment" : "What Siri and Shortcuts call a movie, show or episode in the library."
     },
     "Movies" : {
       "comment" : "Search results section."
@@ -312,11 +366,18 @@
     "On a phone, computer or TV where you're signed in to Jellyfin, open your profile, choose Quick Connect, and enter this code." : {
       "comment" : "How to approve a Quick Connect code."
     },
+    "Open Movie or Show" : {
+      "comment" : "Title of the shortcut that opens a title's page."
+    },
     "Password" : {
       "comment" : "Label of the password field."
     },
     "Play" : {
       "comment" : "Menu item that starts playback."
+    },
+    "Play ${item}" : {},
+    "Play Movie or Show" : {
+      "comment" : "Title of the shortcut that plays a title from the library."
     },
     "Playback" : {
       "comment" : "Settings section header."
@@ -326,6 +387,12 @@
     },
     "Playback Stopped" : {
       "comment" : "Title when the player can't play a stream."
+    },
+    "Plays a movie or episode in Serafin from where you left off, or a show from its next episode." : {
+      "comment" : "Description of the Play shortcut."
+    },
+    "Plays the movie or episode you were last watching in Serafin, or the next episode of a show you're watching." : {
+      "comment" : "Description of the Continue Watching shortcut."
     },
     "Privacy" : {
       "comment" : "Settings section header."
@@ -402,8 +469,17 @@
     "Search" : {
       "comment" : "Title of the search tab."
     },
+    "Search For" : {
+      "comment" : "What the Search shortcut looks for."
+    },
+    "Search Serafin" : {
+      "comment" : "Title of the shortcut that searches the library."
+    },
     "Search Your Library" : {
       "comment" : "Title before anything is searched."
+    },
+    "Searches your movies, shows and episodes in Serafin." : {
+      "comment" : "Description of the Search shortcut."
     },
     "Seasons" : {
       "comment" : "Row of a show's seasons."
@@ -417,7 +493,7 @@
     "Serafin is open source under the MIT licence. The Jellyfin SDK's files stay under the Mozilla Public License 2.0." : {
       "comment" : "Footer under the list of open-source licences."
     },
-    "Serafin locks when it opens, and again once it has been in the background for this long." : {
+    "Serafin locks when it opens, and again once it has been in the background for this long. Spotlight and Siri don't show your library while the lock is on." : {
       "comment" : "Settings footer under the lock while it's on."
     },
     "Serafin only uses unencrypted connections on your own network. Use the server's https:// address instead." : {
@@ -434,6 +510,9 @@
     },
     "Settings" : {
       "comment" : "Title of the settings tab."
+    },
+    "Show" : {
+      "comment" : "The kind of a title in Siri, Shortcuts and Spotlight."
     },
     "Show Player" : {
       "comment" : "Keyboard shortcut that opens the full-screen player."
@@ -455,6 +534,9 @@
     },
     "Sign Out" : {
       "comment" : "Button that signs a user out on this device."
+    },
+    "Sign in to your Jellyfin server in Serafin first." : {
+      "comment" : "What Siri says when no one is signed in."
     },
     "Signed Out" : {
       "comment" : "Title when a sign-in has ended."
@@ -498,6 +580,9 @@
     "The server's certificate has changed or isn't trusted. Check it before connecting." : {
       "comment" : "Explanation when a certificate isn't trusted."
     },
+    "There's nothing to continue. Start a movie or show in Serafin first." : {
+      "comment" : "What Siri says when Continue Watching and Next Up are empty."
+    },
     "This Collection Is Empty" : {
       "comment" : "Title for an empty collection."
     },
@@ -515,6 +600,9 @@
     },
     "This server has Quick Connect turned off, so sign in with your password." : {
       "comment" : "Explanation when Quick Connect is disabled."
+    },
+    "Title" : {
+      "comment" : "The movie, show or episode a shortcut plays or opens."
     },
     "Too Many Streams" : {
       "comment" : "Title when the server is already playing as many streams as it allows."
@@ -569,6 +657,15 @@
     },
     "Welcome to Serafin" : {
       "comment" : "Greeting on the first screen."
+    },
+    "What do you want to find?" : {
+      "comment" : "Siri's question when Search has no term."
+    },
+    "What do you want to watch?" : {
+      "comment" : "Siri's question when Play has no title."
+    },
+    "With Serafin's lock on, Siri and Shortcuts can't look in your library. Open Serafin to find it there." : {
+      "comment" : "What Siri says when the app lock is on and Siri was asked to find a title."
     },
     "Writer" : {
       "comment" : "A crew member's job on a detail screen."

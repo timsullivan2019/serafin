@@ -109,6 +109,26 @@ private final class FakeOwner: OwnerConfirmation, @unchecked Sendable {
         #expect(lock.isLocked)
     }
 
+    @Test func siriWaitsForTheOwnerWhileTheLockIsOn() async {
+        let unlocked = lock(FakeOwner())
+        unlocked.appMoved(to: .background)
+        #expect(unlocked.isOpen)
+
+        defaults.set(true, forKey: AppLock.enabledKey)
+        let lock = lock(FakeOwner(answers: [true]))
+        #expect(!lock.isOpen)
+        await lock.unlock()
+        #expect(lock.isOpen)
+
+        lock.setGrace(.oneMinute)
+        lock.appMoved(to: .background)
+        // On the way back the lock hasn't yet decided whether to lock, so nothing goes ahead.
+        #expect(!lock.isOpen)
+        clock.now += .seconds(30)
+        lock.appMoved(to: .active)
+        #expect(lock.isOpen)
+    }
+
     @Test func theGraceSettingLasts() {
         let lock = lock(FakeOwner())
         lock.setGrace(.fifteenMinutes)

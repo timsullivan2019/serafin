@@ -200,6 +200,15 @@ private let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         }
     }
 
+    @Test(arguments: ["../../System/Info", "a/b", "id?x=1", "", "%2e%2e"])
+    func anIDJellyfinWouldNotIssueIsNeverSent(id: String) async throws {
+        let host = "odd-id.example.com"
+        await #expect(throws: SerafinError.notFound) {
+            try await library(on: host).item(id: id)
+        }
+        #expect(StubURLProtocol.lastRequest(to: "\(host):443") == nil)
+    }
+
     @Test func seasonsAndTheirEpisodesComeInOrder() async throws {
         let host = "show.example.com"
         let series = "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"
