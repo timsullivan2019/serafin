@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// Place it in `tabViewBottomAccessory`, which supplies the glass around it. Tapping the thumbnail or title opens
 /// the full player. When the tab bar minimizes and the accessory moves inline, the bar drops its subtitle and
-/// close button to fit.
+/// close button to fit. Play and pause give a light tap, like the full player's.
 public struct MiniPlayer: View {
     private let title: String
     private let subtitle: String?
@@ -13,6 +13,7 @@ public struct MiniPlayer: View {
     private let playPause: () -> Void
     private let close: () -> Void
     private let open: () -> Void
+    @State private var playPauseTaps = 0
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     /// Creates the mini player.
@@ -70,7 +71,10 @@ public struct MiniPlayer: View {
             .accessibilityHint(
                 String(localized: "Opens the player", bundle: .module, comment: "Hint on the mini player's title.")
             )
-            Button(action: playPause) {
+            Button {
+                playPauseTaps += 1
+                playPause()
+            } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3)
                     .contentTransition(.symbolEffect(.replace))
@@ -78,6 +82,7 @@ public struct MiniPlayer: View {
                     .contentShape(.rect)
             }
             .modifier(PointerHighlight())
+            .sensoryFeedback(.impact(weight: .light), trigger: playPauseTaps)
             .accessibilityLabel(
                 isPlaying
                     ? String(localized: "Pause", bundle: .module, comment: "Button that pauses playback.")

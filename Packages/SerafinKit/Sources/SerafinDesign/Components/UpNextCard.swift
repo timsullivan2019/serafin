@@ -10,6 +10,7 @@ public struct UpNextCard: View {
     private let secondsLeft: Int
     private let playNow: () -> Void
     private let cancel: () -> Void
+    @State private var playNowTaps = 0
 
     /// Creates the card.
     ///
@@ -49,7 +50,10 @@ public struct UpNextCard: View {
                 .frame(width: 280)
             GlassEffectContainer(spacing: Spacing.small) {
                 HStack(spacing: Spacing.small) {
-                    Button(action: playNow) {
+                    Button {
+                        playNowTaps += 1
+                        playNow()
+                    } label: {
                         Label(
                             String(
                                 localized: "Play Now", bundle: .module, comment: "Button that plays the next episode."),
@@ -62,6 +66,8 @@ public struct UpNextCard: View {
                     // A white pill, like the system player's play buttons, so it reads over any picture.
                     .buttonStyle(.glassProminent)
                     .tint(.white)
+                    // The same tap as the hero's Play. When the countdown runs out, nothing taps: nobody touched it.
+                    .sensoryFeedback(.impact(weight: .medium), trigger: playNowTaps)
                     Button(action: cancel) {
                         Text(String(localized: "Cancel", bundle: .module, comment: "Button that stops autoplay."))
                             .padding(.horizontal, Spacing.xSmall)
