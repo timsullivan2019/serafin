@@ -17,29 +17,29 @@
             session = MPNowPlayingSession(players: [engine.player])
             session.automaticallyPublishesNowPlayingInfo = true
             let commands = session.remoteCommandCenter
-            commands.playCommand.addTarget { [weak engine] _ in
+            commands.playCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in engine?.play() }
                 return .success
             }
-            commands.pauseCommand.addTarget { [weak engine] _ in
+            commands.pauseCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in engine?.pause() }
                 return .success
             }
-            commands.togglePlayPauseCommand.addTarget { [weak engine] _ in
+            commands.togglePlayPauseCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in engine?.togglePlayPause() }
                 return .success
             }
             commands.skipForwardCommand.preferredIntervals = [10]
-            commands.skipForwardCommand.addTarget { [weak engine] _ in
+            commands.skipForwardCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in await engine?.skip(by: 10) }
                 return .success
             }
             commands.skipBackwardCommand.preferredIntervals = [10]
-            commands.skipBackwardCommand.addTarget { [weak engine] _ in
+            commands.skipBackwardCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in await engine?.skip(by: -10) }
                 return .success
             }
-            commands.changePlaybackPositionCommand.addTarget { [weak engine] event in
+            commands.changePlaybackPositionCommand.addTarget { @Sendable [weak engine] event in
                 guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
                 let position = Duration.milliseconds(Int64(event.positionTime * 1000))
                 Task { @MainActor in await engine?.seek(to: position) }

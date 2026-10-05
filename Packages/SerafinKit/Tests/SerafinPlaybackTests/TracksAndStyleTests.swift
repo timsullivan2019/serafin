@@ -85,6 +85,19 @@ import Testing
             #expect(info[MPNowPlayingInfoPropertyMediaType] as? UInt == MPNowPlayingInfoMediaType.video.rawValue)
         }
 
+        @Test func theArtworkCanBeDrawnAwayFromTheMainThread() async throws {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 9)).image { context in
+                UIColor.purple.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 16, height: 9))
+            }
+            let jpeg = try #require(image.jpegData(compressionQuality: 0.8))
+            let info = NowPlayingDetails(title: "Metropolis", subtitle: nil, artwork: jpeg).nowPlayingInfo
+            nonisolated(unsafe) let artwork = try #require(info[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork)
+            // The system asks for the artwork on a queue of its own, as when Picture in Picture hands back the picture.
+            let drawn = await Task.detached { artwork.image(at: CGSize(width: 16, height: 9)) != nil }.value
+            #expect(drawn)
+        }
+
         @Test func aMovieWithoutArtworkStillHasItsTitle() {
             let info = NowPlayingDetails(title: "Metropolis", subtitle: nil, artwork: nil).nowPlayingInfo
             #expect(info[MPMediaItemPropertyTitle] as? String == "Metropolis")
