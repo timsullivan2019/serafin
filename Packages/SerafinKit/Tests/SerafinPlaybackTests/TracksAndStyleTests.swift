@@ -63,3 +63,33 @@ import Testing
         #expect(SubtitleStyle(size: size).textStyleRules.count == 1)
     }
 }
+
+#if canImport(UIKit)
+    import MediaPlayer
+    import UIKit
+
+    @Suite struct NowPlayingDetailsTests {
+        @Test func theLockScreenGetsTheTitleShowAndArtwork() throws {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 9)).image { context in
+                UIColor.purple.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 16, height: 9))
+            }
+            let jpeg = try #require(image.jpegData(compressionQuality: 0.8))
+            let info = NowPlayingDetails(
+                title: "A Scandal in Bohemia", subtitle: "Sherlock Holmes · S1 E1", artwork: jpeg
+            )
+            .nowPlayingInfo
+            #expect(info[MPMediaItemPropertyTitle] as? String == "A Scandal in Bohemia")
+            #expect(info[MPMediaItemPropertyArtist] as? String == "Sherlock Holmes · S1 E1")
+            #expect(info[MPMediaItemPropertyArtwork] is MPMediaItemArtwork)
+            #expect(info[MPNowPlayingInfoPropertyMediaType] as? UInt == MPNowPlayingInfoMediaType.video.rawValue)
+        }
+
+        @Test func aMovieWithoutArtworkStillHasItsTitle() {
+            let info = NowPlayingDetails(title: "Metropolis", subtitle: nil, artwork: nil).nowPlayingInfo
+            #expect(info[MPMediaItemPropertyTitle] as? String == "Metropolis")
+            #expect(info[MPMediaItemPropertyArtist] == nil)
+            #expect(info[MPMediaItemPropertyArtwork] == nil)
+        }
+    }
+#endif

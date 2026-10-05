@@ -110,6 +110,10 @@ public enum PlaybackState: Equatable, Sendable {
         /// True from the moment Picture in Picture begins to start until it has stopped, so the video layer keeps
         /// the player meanwhile.
         @ObservationIgnored private var isPictureInPictureEngaged = false
+        /// Whether something was playing as the app stopped being active, so playback carries on if iOS pauses it on
+        /// the way to the background.
+        @ObservationIgnored private var wasPlayingOnResign = false
+        @ObservationIgnored private var lifecycleObservers: [any NSObjectProtocol] = []
         /// Whether Picture in Picture can start now.
         public private(set) var isPictureInPicturePossible = false
         /// Whether the video is playing in Picture in Picture.
@@ -135,6 +139,9 @@ public enum PlaybackState: Equatable, Sendable {
         self.streamLoader = PinnedStreamLoader(pinning: pinning)
         player.allowsExternalPlayback = true
         observePlayer()
+        #if canImport(UIKit)
+            observeLifecycle()
+        #endif
     }
 
     isolated deinit {
@@ -143,6 +150,11 @@ public enum PlaybackState: Equatable, Sendable {
         }
         reportingTask?.cancel()
         clearItemObservations()
+        #if canImport(UIKit)
+            for observer in lifecycleObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        #endif
     }
 
     // MARK: - Loading
@@ -229,6 +241,7 @@ public enum PlaybackState: Equatable, Sendable {
         #if canImport(UIKit)
             details = NowPlayingDetails(title: title, subtitle: subtitle, artwork: artwork)
             player.currentItem?.externalMetadata = details?.metadata ?? []
+            player.currentItem?.nowPlayingInfo = details?.nowPlayingInfo
         #endif
     }
 
@@ -306,6 +319,46 @@ public enum PlaybackState: Equatable, Sendable {
                 },
             ]
             pictureInPicture = controller
+        }
+
+        /// Follows the app in and out of the background, as when the device locks or the user goes home.
+        private func observeLifecycle() {
+            func on(_ name: Notification.Name, _ handle: @escaping @MainActor (PlayerEngine) -> Void)
+                -> any NSObjectProtocol
+            {
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        if let self { handle(self) }
+                    }
+                }
+            }
+            lifecycleObservers = [
+                on(UIApplication.willResignActiveNotification) { engine in
+                    engine.wasPlayingOnResign = engine.player.timeControlStatus != .paused
+                },
+                on(UIApplication.didEnterBackgroundNotification) { $0.enteredBackground() },
+                on(UIApplication.willEnterForegroundNotification) { $0.enteringForeground() },
+            ]
+        }
+
+        /// The app went to the background. iOS pauses a player whose picture is on screen, so unless Picture in
+        /// Picture has the picture, the layer lets go of the player and the film carries on as sound. If iOS paused it
+        /// on the way, it plays on.
+        private func enteredBackground() {
+            if !isPictureInPictureEngaged {
+                hostedVideoView?.playerLayer.player = nil
+            }
+            if wasPlayingOnResign, player.currentItem != nil, player.timeControlStatus == .paused, state != .ended {
+                Self.logger.debug("Playing on after iOS paused for the background")
+                player.playImmediately(atRate: rate)
+            }
+        }
+
+        /// The app is coming back, so a player screen that's showing gets its picture back.
+        private func enteringForeground() {
+            if isSurfaceShowing || isPictureInPictureEngaged {
+                hostedVideoView?.playerLayer.player = player
+            }
         }
 
         fileprivate func pictureInPictureWillStart() {
@@ -446,6 +499,7 @@ public enum PlaybackState: Equatable, Sendable {
         observe(playerItem)
         #if canImport(UIKit)
             playerItem.externalMetadata = details?.metadata ?? []
+            playerItem.nowPlayingInfo = details?.nowPlayingInfo
             if nowPlaying == nil {
                 nowPlaying = NowPlaying(engine: self)
             }

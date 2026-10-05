@@ -1,12 +1,13 @@
 #if canImport(UIKit)
     import AVFoundation
     import MediaPlayer
+    import UIKit
 
     /// Puts what's playing on the Lock Screen and in Control Center, and answers their buttons, AirPods presses and
     /// the scrubber.
     ///
     /// The session publishes elapsed time, duration and rate on its own; the title, subtitle and artwork come from
-    /// the player item's metadata.
+    /// the player item's Now Playing info.
     @MainActor final class NowPlaying {
         private let session: MPNowPlayingSession
 
@@ -55,6 +56,22 @@
         let title: String
         let subtitle: String?
         let artwork: Data?
+
+        /// The details as Now Playing info on a player item, which the session publishes alongside the playback
+        /// state it tracks itself. The Lock Screen and Control Center read the title and artwork from here.
+        var nowPlayingInfo: [String: Any] {
+            var info: [String: Any] = [
+                MPMediaItemPropertyTitle: title,
+                MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
+            ]
+            if let subtitle {
+                info[MPMediaItemPropertyArtist] = subtitle
+            }
+            if let artwork, let image = UIImage(data: artwork) {
+                info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            }
+            return info
+        }
 
         /// The details as metadata on a player item, which the Now Playing session reads.
         var metadata: [AVMetadataItem] {
