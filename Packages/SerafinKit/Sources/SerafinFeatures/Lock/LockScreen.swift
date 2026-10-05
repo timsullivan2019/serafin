@@ -85,16 +85,18 @@ extension OwnerCheck {
     }
 }
 
-#Preview("Light") {
-    LockScreen(lock: AppLock())
-}
+#if DEBUG
+    #Preview("Light") {
+        LockScreen(lock: AppLock())
+    }
 
-#Preview("Dark") {
-    LockScreen(lock: AppLock())
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        LockScreen(lock: AppLock())
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    LockScreen(lock: AppLock())
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        LockScreen(lock: AppLock())
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

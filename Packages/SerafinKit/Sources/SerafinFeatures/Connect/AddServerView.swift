@@ -221,19 +221,21 @@ extension View {
     }
 }
 
-#Preview("Welcome") {
-    NavigationStack { AddServerView(isWelcome: true) { _ in } }
-        .environment(AppSession.preview())
-}
+#if DEBUG
+    #Preview("Welcome") {
+        NavigationStack { AddServerView(isWelcome: true) { _ in } }
+            .environment(AppSession.preview())
+    }
 
-#Preview("From Settings, dark") {
-    NavigationStack { AddServerView { _ in } }
-        .environment(AppSession.preview())
-        .preferredColorScheme(.dark)
-}
+    #Preview("From Settings, dark") {
+        NavigationStack { AddServerView { _ in } }
+            .environment(AppSession.preview())
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    NavigationStack { AddServerView(isWelcome: true) { _ in } }
-        .environment(AppSession.preview())
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        NavigationStack { AddServerView(isWelcome: true) { _ in } }
+            .environment(AppSession.preview())
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

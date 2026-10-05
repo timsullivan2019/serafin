@@ -199,22 +199,24 @@ private struct SampleLanguageStore: LanguagePreferenceStore {
     func setLanguagePreferences(_ preferences: LanguagePreferences) async throws {}
 }
 
-#Preview("Light") {
-    TabStack { AudioAndSubtitlesView() }
-        .environment(AppSession.preview())
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Light") {
+        TabStack { AudioAndSubtitlesView() }
+            .environment(AppSession.preview())
+            .previewEnvironment()
+    }
 
-#Preview("Dark") {
-    TabStack { AudioAndSubtitlesView() }
-        .environment(AppSession.preview())
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { AudioAndSubtitlesView() }
+            .environment(AppSession.preview())
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { AudioAndSubtitlesView() }
-        .environment(AppSession.preview())
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { AudioAndSubtitlesView() }
+            .environment(AppSession.preview())
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

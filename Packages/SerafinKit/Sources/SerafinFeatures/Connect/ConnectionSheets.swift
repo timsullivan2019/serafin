@@ -147,30 +147,31 @@ extension WarningSheet where Details == EmptyView {
     }
 }
 
-#Preview("Unencrypted") {
-    Color.clear
-        .sheet(isPresented: .constant(true)) {
-            UnencryptedConnectionSheet(
-                server: Server(
-                    id: "home", name: "Living Room", url: URL(string: "http://192.168.1.20:8096") ?? .temporaryDirectory
-                ),
-                accept: {},
-                cancel: {}
-            )
-        }
-}
-
-#Preview("Certificate, dark") {
-    Color.clear
-        .sheet(isPresented: .constant(true)) {
-            if let certificate = PreviewCertificate.fingerprint {
-                CertificateSheet(fingerprint: certificate, host: "jellyfin.local", trust: {}, cancel: {})
-            }
-        }
-        .preferredColorScheme(.dark)
-}
-
 #if DEBUG
+    #Preview("Unencrypted") {
+        Color.clear
+            .sheet(isPresented: .constant(true)) {
+                UnencryptedConnectionSheet(
+                    server: Server(
+                        id: "home", name: "Living Room",
+                        url: URL(string: "http://192.168.1.20:8096") ?? .temporaryDirectory
+                    ),
+                    accept: {},
+                    cancel: {}
+                )
+            }
+    }
+
+    #Preview("Certificate, dark") {
+        Color.clear
+            .sheet(isPresented: .constant(true)) {
+                if let certificate = PreviewCertificate.fingerprint {
+                    CertificateSheet(fingerprint: certificate, host: "jellyfin.local", trust: {}, cancel: {})
+                }
+            }
+            .preferredColorScheme(.dark)
+    }
+
     /// A throwaway self-signed certificate, for previewing the certificate check.
     private enum PreviewCertificate {
         static var fingerprint: CertificateFingerprint? {

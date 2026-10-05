@@ -32,6 +32,7 @@ struct HomeView: View {
             )
         case .loaded(let home):
             rows(home)
+                .onAppear { LaunchSignpost.end(showing: "Home") }
         }
     }
 
@@ -85,19 +86,21 @@ private struct LatestRowView: View {
     }
 }
 
-#Preview("Light") {
-    TabStack { HomeView() }
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Light") {
+        TabStack { HomeView() }
+            .previewEnvironment()
+    }
 
-#Preview("Dark") {
-    TabStack { HomeView() }
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { HomeView() }
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { HomeView() }
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { HomeView() }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

@@ -57,6 +57,8 @@ struct LicencesView: View {
     }
 }
 
-#Preview {
-    NavigationStack { LicencesView() }
-}
+#if DEBUG
+    #Preview {
+        NavigationStack { LicencesView() }
+    }
+#endif

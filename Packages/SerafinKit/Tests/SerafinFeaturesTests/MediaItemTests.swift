@@ -81,6 +81,25 @@ import Testing
         #expect(MediaItem.latest([season]).map(\.card.kind) == [.season])
     }
 
+    @Test func itemsFromTheSameServerItemCompareEqualAndHashAlike() throws {
+        let server = BaseItemDto(id: "aaaa1111", imageTags: ["Primary": "p1"], name: "Nosferatu", type: .movie)
+        let item = try #require(MediaItem(server))
+        let copy = item
+        let reloaded = try #require(MediaItem(server))
+        #expect(copy == item)
+        #expect(reloaded == item)
+        #expect(reloaded.hashValue == item.hashValue)
+        #expect(reloaded.source?.imageTags == ["Primary": "p1"])
+
+        var newPoster = server
+        newPoster.imageTags = ["Primary": "p2"]
+        #expect(try #require(MediaItem(newPoster)) != item)
+
+        var renamed = item
+        renamed.card.title = "Nosferatu the Vampyre"
+        #expect(renamed != item)
+    }
+
     @Test func itemsWithoutAnIDAreLeftOut() {
         #expect(MediaItem(BaseItemDto(name: "No ID", type: .movie)) == nil)
     }

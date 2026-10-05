@@ -33,6 +33,7 @@ Out of scope until after 1.0. Do not build, scaffold, or stub these: downloads, 
 xcodegen generate
 xcodebuild -scheme Serafin -destination 'platform=iOS Simulator,name=iPhone 17' build
 xcodebuild -scheme Serafin -destination 'platform=iOS Simulator,name=iPhone 17' test
+xcodebuild -scheme Serafin -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 swift test --package-path Packages/SerafinKit          # package tests on the host, no simulator
 swift format --in-place --recursive App AppTests Packages
 xcrun simctl list devices available                     # if the iPhone 17 simulator is not present
