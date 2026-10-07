@@ -101,10 +101,8 @@ enum LibraryTilesLayout {
     }
 }
 
-/// One library's tile: a collage of its newest posters.
-///
-/// Not the library's own picture: the one Jellyfin generates for a library has the library's name drawn across its
-/// middle, which doubled the name the tile already shows.
+/// One library's tile: its own picture when the server has one, otherwise four of its newest posters side by side,
+/// or its newest title's backdrop when it has too few for that.
 private struct LibraryTileArtwork: View {
     let library: MediaLibrary
     let overview: LibrariesModel.Overview?
@@ -114,7 +112,9 @@ private struct LibraryTileArtwork: View {
             name: library.name,
             caption: overview.map { LibrariesModel.caption(total: $0.total, kind: library.kind) }
         ) {
-            if let newest = overview?.newest, newest.count >= LibrariesModel.collageSize {
+            if let cover = overview?.cover {
+                ItemArtwork(cover, role: .poster) { CollagePoster(image: $0) }
+            } else if let newest = overview?.newest, newest.count >= LibrariesModel.collageSize {
                 LibraryCollage { index in
                     ItemArtwork(newest[index], role: .poster) { CollagePoster(image: $0) }
                 }
@@ -417,11 +417,11 @@ private struct GridPlace: View {
     }
 }
 
-/// The filter and sort chips above a library grid: toggles for unplayed and favourites, menus for genre and year,
-/// then the sorts, where tapping the current one flips its direction.
+/// The filter chips above a library grid: toggles for unwatched and favourites, then menus for genre and year. A
+/// toggle the screen already implies, such as Unwatched on the Unwatched screen, is left out.
 ///
-/// The toggles and the sorts are each a glass group, so their glass flows as selections change; the menus sit
-/// between the groups, because a menu inside a glass group loses its own open and close morph.
+/// The toggles are a glass group, so their glass flows as selections change; the menus sit beside the group,
+/// because a menu inside a glass group loses its own open and close morph.
 private struct LibraryChips: View {
     @Bindable var model: LibraryModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -440,18 +440,24 @@ private struct LibraryChips: View {
 
     private var toggles: some View {
         GlassChipGroup {
-            GlassChip(
-                String(localized: "Unplayed", bundle: .module, comment: "Library filter: hide played items."),
-                systemImage: "circle.dashed",
-                isSelected: model.options.unplayedOnly
-            ) { animate { model.options.unplayedOnly.toggle() } }
-            GlassChip(
-                String(
-                    localized: "Favourites", bundle: .module,
-                    comment: "Favourites: the library filter chip, and the Library tab's Browse row and grid."),
-                systemImage: "heart",
-                isSelected: model.options.favouritesOnly
-            ) { animate { model.options.favouritesOnly.toggle() } }
+            if model.scope.offersUnwatchedChip {
+                GlassChip(
+                    String(
+                        localized: "Unwatched", bundle: .module,
+                        comment: "Unwatched: the library filter chip, and the Library tab's Browse row and grid."),
+                    systemImage: "circle.dashed",
+                    isSelected: model.options.unplayedOnly
+                ) { animate { model.options.unplayedOnly.toggle() } }
+            }
+            if model.scope.offersFavouritesChip {
+                GlassChip(
+                    String(
+                        localized: "Favourites", bundle: .module,
+                        comment: "Favourites: the library filter chip, and the Library tab's Browse row and grid."),
+                    systemImage: "heart",
+                    isSelected: model.options.favouritesOnly
+                ) { animate { model.options.favouritesOnly.toggle() } }
+            }
         }
     }
 
@@ -557,7 +563,7 @@ private struct FilterMenu<Option: Hashable>: View {
     @Environment(\.accent) private var accent
 
     var body: some View {
-        // Clear glass while off, tinted glass once a choice is made, like the toggle chips beside it.
+        // Clear glass while off, tinted prominent glass once a choice is made, like the toggle chips beside it.
         if selection == nil {
             // The glass style colours its label with the tint, so a plain label needs a plain tint.
             menu.buttonStyle(.glass).tint(.primary)

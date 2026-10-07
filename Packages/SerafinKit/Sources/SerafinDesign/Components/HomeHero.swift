@@ -24,17 +24,45 @@ public enum HomeHeroLayout {
     /// How far the first row under the hero rises into its fade, so the page reads as one piece.
     public static let rowOverlap: CGFloat = Spacing.xLarge
 
-    /// Whether a page with a hero at its top has scrolled past it, so rows rather than artwork pass under the
-    /// navigation bar and the bar's edge effect should soften them. Home and the detail screen both ask this.
+    /// How far below the top safe area a hero's text and buttons start to fade, in points. They're gone by the time
+    /// they reach it, so nothing sits under the status bar or the navigation bar.
+    public static let topFadeDistance: CGFloat = 80
+
+    /// The shortest distance a hero's text or button fades over, for one that rests too near the top for the whole
+    /// ``topFadeDistance``, as in a short iPad window.
+    static let shortestTopFade: CGFloat = 24
+
+    /// The name of the coordinate space of a hero screen's scrolling content, which tells the hero's text and buttons
+    /// where they rest. A screen gives it to its content with `heroScrollContent()`.
+    static let scrollContentSpace = "serafin.hero.scroll-content"
+
+    /// How visible a hero's text or button is when its top edge is `top` points from the top of the window.
     ///
-    /// The page counts as past the hero once the hero's bottom is less than 100 points from the top of the screen,
-    /// and back over it once that's more than 140. The gap means resting near either never flips back and forth.
+    /// It's fully shown at rest and anywhere ``topFadeDistance`` or more below the top safe area, and fades to
+    /// nothing as it reaches the safe area. One that rests nearer the top than that, as in a short iPad window,
+    /// fades over the room it has, and one that rests under the bars fades over its first few points of travel.
     ///
     /// - Parameters:
-    ///   - heroBottom: How far the hero's bottom is from the top of the screen, in points.
-    ///   - wasPast: The answer last time.
-    public static func isPastHero(heroBottom: CGFloat, wasPast: Bool) -> Bool {
-        wasPast ? heroBottom <= 140 : heroBottom < 100
+    ///   - top: Where the view's top edge is, in the window's coordinates.
+    ///   - restingTop: Where the view's top edge is with the page at rest.
+    ///   - safeAreaTop: Where the top safe area ends, below the status bar and any navigation bar.
+    public static func topFadeOpacity(top: CGFloat, restingTop: CGFloat, safeAreaTop: CGFloat) -> Double {
+        let start = min(safeAreaTop + topFadeDistance, restingTop)
+        let end = min(safeAreaTop, start - shortestTopFade)
+        return Double(min(max((top - end) / (start - end), 0), 1))
+    }
+
+    /// Whether a page with a hero at its top has been scrolled at all, so the top edge effect should cover what
+    /// passes under the status bar. At rest the artwork runs clear to the top of the screen.
+    ///
+    /// The page counts as scrolled once it has moved 8 points, and back at rest under 2. The gap means resting near
+    /// either never flips back and forth.
+    ///
+    /// - Parameters:
+    ///   - offset: How far the page has scrolled, in points.
+    ///   - wasScrolled: The answer last time.
+    public static func isScrolled(offset: CGFloat, wasScrolled: Bool) -> Bool {
+        wasScrolled ? offset > 2 : offset > 8
     }
 
     /// The source a featured item's detail screen zooms in from, distinct from the item's cards in the rows below.
@@ -81,6 +109,7 @@ public struct HomeHero<Page: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.heroSafeAreaTop) private var safeAreaTop
 
     /// Creates a hero.
     ///
@@ -122,6 +151,7 @@ public struct HomeHero<Page: View>: View {
             if items.count > 1 {
                 HeroPageIndicator(count: items.count, current: currentIndex, select: select)
                     .frame(height: HomeHeroLayout.actionHeight)
+                    .fadesBeforeTopSafeArea(safeAreaTop)
                     .padding(.trailing, Spacing.medium)
                     .padding(.bottom, HomeHeroLayout.contentBottomPadding)
             }
@@ -179,6 +209,7 @@ public struct HeroPage<Menu: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.heroSafeAreaTop) private var safeAreaTop
 
     /// Creates a page.
     ///
@@ -246,18 +277,22 @@ public struct HeroPage<Menu: View>: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: Spacing.xSmall) {
+            // Each piece fades out on its own as it nears the status bar, so none of it ever sits under the clock.
             VStack(alignment: .leading, spacing: Spacing.xSmall) {
                 heading
                     .animation(.easeOut(duration: 0.3), value: logo != nil)
+                    .fadesBeforeTopSafeArea(safeAreaTop)
                 Text(item.metadata(includesSeries: logo != nil))
                     .typography(.cardTitle)
                     .foregroundStyle(.textSecondary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+                    .fadesBeforeTopSafeArea(safeAreaTop)
                 if !dynamicTypeSize.isAccessibilitySize, let overview = item.card.overview, !overview.isEmpty {
                     Text(overview)
                         .typography(.body)
                         .foregroundStyle(.textPrimary.opacity(contrast == .increased ? 1 : 0.85))
                         .lineLimit(2)
+                        .fadesBeforeTopSafeArea(safeAreaTop)
                 }
             }
             // The text is part of the artwork: touches pass through it to the layer under it.
@@ -270,6 +305,7 @@ public struct HeroPage<Menu: View>: View {
                 play: play,
                 showDetails: showDetails
             )
+            .fadesBeforeTopSafeArea(safeAreaTop)
             .padding(.top, Spacing.xSmall)
         }
         .frame(maxWidth: 560, alignment: .leading)
@@ -628,6 +664,38 @@ private struct HeroPlayZoomSource: ViewModifier {
 extension EnvironmentValues {
     /// The width the hero's page dots take, which each page's buttons leave free.
     @Entry fileprivate var heroIndicatorReserve: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Where the top safe area ends on the screen showing a hero, measured by that screen: below the status bar and
+    /// any navigation bar. A hero's text and buttons fade out before they reach it.
+    @Entry public var heroSafeAreaTop: CGFloat = 0
+}
+
+extension View {
+    /// Marks the content of a scroll view that starts with a hero, so the hero's text and buttons know where they
+    /// rest and fade only as the page scrolls. Put it on the content inside the `ScrollView`, which ignores the top
+    /// safe area so the content starts at the top of the window.
+    public func heroScrollContent() -> some View {
+        coordinateSpace(.named(HomeHeroLayout.scrollContentSpace))
+    }
+
+    /// Fades the view out as scrolling takes its top edge up to `safeAreaTop`, over the last
+    /// ``HomeHeroLayout/topFadeDistance`` points or what room it has, so it never sits under the status bar. Drawn by
+    /// the renderer as the page scrolls, with no state.
+    func fadesBeforeTopSafeArea(_ safeAreaTop: CGFloat) -> some View {
+        visualEffect { [safeAreaTop] content, proxy in
+            content.opacity(
+                HomeHeroLayout.topFadeOpacity(
+                    top: proxy.frame(in: .global).minY,
+                    // Outside a hero screen's scroll content, as in a preview, this is where the view is, so it
+                    // never fades.
+                    restingTop: proxy.frame(in: .named(HomeHeroLayout.scrollContentSpace)).minY,
+                    safeAreaTop: safeAreaTop
+                )
+            )
+        }
+    }
 }
 
 #if DEBUG

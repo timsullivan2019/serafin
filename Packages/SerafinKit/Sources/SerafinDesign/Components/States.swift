@@ -152,7 +152,7 @@ public struct LoadingState: View {
             ScrollView {
                 VStack(spacing: Spacing.xLarge) {
                     EmptyState(
-                        "No Unplayed Movies",
+                        "No Unwatched Movies",
                         message: "Everything in this library has been watched. Clear the filter to see it all.",
                         systemImage: "film.stack",
                         action: StateAction("Clear Filter") {}

@@ -32,7 +32,7 @@ import Testing
     @Test func eachConfirmationSaysWhatChanged() async {
         let actions = MediaActions()
         await actions.setPlayed(true, for: item, in: SampleMediaSource())
-        #expect(actions.confirmation?.announcement == "Marked as played")
+        #expect(actions.confirmation?.announcement == "Marked as watched")
         await actions.setFavourite(false, for: item, in: SampleMediaSource())
         #expect(actions.confirmation?.announcement == "Removed from Favourites")
     }

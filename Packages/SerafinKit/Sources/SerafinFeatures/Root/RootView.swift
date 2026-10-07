@@ -168,7 +168,7 @@ struct MainTabs: View {
         .environment(\.playerZoomNamespace, playerZoom)
         .environment(playback)
         .environment(actions)
-        // One place for the tap that confirms Mark as Played and Favourite, from a detail screen or a card's menu.
+        // One place for the tap that confirms Mark as Watched and Favourite, from a detail screen or a card's menu.
         .sensoryFeedback(trigger: actions.confirmation) { _, confirmation in confirmation?.feedback }
         .onChange(of: actions.confirmation) { _, confirmation in
             if let confirmation {

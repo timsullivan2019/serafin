@@ -146,9 +146,6 @@
     "Playback position" : {
       "comment" : "Spoken name of the player scrubber."
     },
-    "Played" : {
-      "comment" : "Spoken state of a played item."
-    },
     "Plays in %@" : {
       "comment" : "Countdown before the next episode plays, such as Plays in 7 seconds."
     },
@@ -235,6 +232,9 @@
     },
     "Violet" : {
       "comment" : "Accent colour."
+    },
+    "Watched" : {
+      "comment" : "Spoken state of a watched item."
     },
     "and %lld more" : {
       "comment" : "Link after the first few items of a list, such as languages, that shows the rest: and 4 more."

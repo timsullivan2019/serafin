@@ -122,27 +122,51 @@ import Testing
         #expect((3...5).contains(MockLibrary.hero.count))
     }
 
-    @Test func aCardWithoutItsPlayedCheckDoesntSayPlayed() {
-        let rewatching = MediaCard(
-            id: "movie", kind: .movie, title: "Metropolis", year: 1927, runtime: .seconds(92 * 60), progress: 0.5,
-            isPlayed: true)
-        #expect(rewatching.accessibilityLabel(locale: english).contains("Played"))
-        #expect(!rewatching.accessibilityLabel(locale: english, includesPlayed: false).contains("Played"))
+    @Test func aCardWithoutItsWatchedCheckDoesntSayWatched() {
+        let watched = MediaCard(
+            id: "movie", kind: .movie, title: "Metropolis", year: 1927, runtime: .seconds(92 * 60), isPlayed: true)
+        #expect(watched.accessibilityLabel(locale: english).contains("Watched"))
+        #expect(!watched.accessibilityLabel(locale: english, includesPlayed: false).contains("Watched"))
     }
 }
 
 @Suite struct HeroScrollTests {
-    @Test func aPageIsPastItsHeroOnceTheHeroIsNearlyUnderTheBar() {
-        #expect(!HomeHeroLayout.isPastHero(heroBottom: 400, wasPast: false))
-        #expect(!HomeHeroLayout.isPastHero(heroBottom: 120, wasPast: false))
-        #expect(HomeHeroLayout.isPastHero(heroBottom: 99, wasPast: false))
-        #expect(HomeHeroLayout.isPastHero(heroBottom: -300, wasPast: false))
+    @Test func aPageCountsAsScrolledOnceItMovesAndAtRestOnceBack() {
+        #expect(!HomeHeroLayout.isScrolled(offset: 0, wasScrolled: false))
+        #expect(!HomeHeroLayout.isScrolled(offset: -40, wasScrolled: false))
+        #expect(!HomeHeroLayout.isScrolled(offset: 8, wasScrolled: false))
+        #expect(HomeHeroLayout.isScrolled(offset: 9, wasScrolled: false))
+        #expect(HomeHeroLayout.isScrolled(offset: 4, wasScrolled: true))
+        #expect(!HomeHeroLayout.isScrolled(offset: 2, wasScrolled: true))
     }
 
-    @Test func restingBetweenTheThresholdsKeepsTheLastAnswer() {
-        #expect(HomeHeroLayout.isPastHero(heroBottom: 120, wasPast: true))
-        #expect(HomeHeroLayout.isPastHero(heroBottom: 140, wasPast: true))
-        #expect(!HomeHeroLayout.isPastHero(heroBottom: 141, wasPast: true))
-        #expect(!HomeHeroLayout.isPastHero(heroBottom: 100, wasPast: false))
+    @Test func theForegroundFadesOverTheEightyPointsBeforeTheSafeArea() {
+        func opacity(_ top: CGFloat) -> Double {
+            HomeHeroLayout.topFadeOpacity(top: top, restingTop: 400, safeAreaTop: 116)
+        }
+        #expect(opacity(400) == 1)
+        #expect(opacity(116 + 80) == 1)
+        #expect(opacity(116 + 40) == 0.5)
+        #expect(opacity(116) == 0)
+        #expect(opacity(20) == 0)
+    }
+
+    @Test func aForegroundRestingNearTheTopIsWholeAtRestAndFadesOverTheRoomItHas() {
+        // As in a short iPad window: resting 40 points below the safe area, it fades over those 40.
+        func nearer(_ top: CGFloat) -> Double {
+            HomeHeroLayout.topFadeOpacity(top: top, restingTop: 120, safeAreaTop: 80)
+        }
+        #expect(nearer(120) == 1)
+        #expect(nearer(100) == 0.5)
+        #expect(nearer(80) == 0)
+        // Resting under the bars, it fades over its first 24 points of travel.
+        func under(_ top: CGFloat) -> Double {
+            HomeHeroLayout.topFadeOpacity(top: top, restingTop: 50, safeAreaTop: 80)
+        }
+        #expect(under(50) == 1)
+        #expect(under(38) == 0.5)
+        #expect(under(26) == 0)
+        // Pulled down past rest, it stays whole.
+        #expect(under(90) == 1)
     }
 }

@@ -25,6 +25,7 @@ public struct HeroHeader: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.isPresented) private var isPresented
+    @Environment(\.heroSafeAreaTop) private var safeAreaTop
 
     /// Creates a hero header.
     ///
@@ -90,8 +91,10 @@ public struct HeroHeader: View {
                 withAnimation(.easeIn(duration: 0.3)) { arrivalFade = 1 }
             }
             .overlay(alignment: .bottom) {
+                // Each piece fades out on its own as it nears the navigation bar, so none of it sits under the clock.
                 VStack(spacing: Spacing.medium) {
                     titleOrLogo
+                        .fadesBeforeTopSafeArea(safeAreaTop)
                     VStack(spacing: Spacing.xSmall) {
                         HeroMetadata(card: card)
                         if let nextEpisode, let code = nextEpisode.episodeCode {
@@ -112,7 +115,9 @@ public struct HeroHeader: View {
                             MediaBadgeRow(badges: badges)
                         }
                     }
+                    .fadesBeforeTopSafeArea(safeAreaTop)
                     pill
+                        .fadesBeforeTopSafeArea(safeAreaTop)
                 }
                 .padding(.horizontal, Spacing.large)
                 .padding(.bottom, Spacing.xLarge + Spacing.large)

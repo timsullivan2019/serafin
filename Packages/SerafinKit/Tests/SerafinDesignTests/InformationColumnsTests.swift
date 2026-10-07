@@ -3,6 +3,7 @@ import Testing
 
 @testable import SerafinDesign
 
+@MainActor
 @Suite struct InformationColumnsTests {
     private let english = Locale(identifier: "en_US")
     private let languages = [
@@ -37,6 +38,7 @@ import Testing
     }
 }
 
+@MainActor
 @Suite struct PlayPillTitleTests {
     @Test func thePillSaysWhatItPlays() throws {
         var film = MockMedia.movies[0]

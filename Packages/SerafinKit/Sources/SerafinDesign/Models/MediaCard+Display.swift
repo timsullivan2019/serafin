@@ -68,7 +68,7 @@ extension MediaCard {
         )
     }
 
-    /// The description without "Played", for a card that leaves off its played check.
+    /// The description without "Watched", for a card that leaves off its watched check.
     var accessibilityLabelWithoutPlayed: String {
         accessibilityLabel(locale: .current, includesPlayed: false)
     }
@@ -121,9 +121,10 @@ extension MediaCard {
                 parts.append(Self.spokenDuration(runtime, locale: locale))
             }
         }
-        if isPlayed, includesPlayed {
+        if isWatched, includesPlayed {
             parts.append(
-                String(localized: "Played", bundle: .module, locale: locale, comment: "Spoken state of a played item.")
+                String(
+                    localized: "Watched", bundle: .module, locale: locale, comment: "Spoken state of a watched item.")
             )
         }
         if isFavourite {

@@ -51,7 +51,7 @@ struct CardArtwork: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if card.isPlayed, showsPlayedBadge {
+                if card.isWatched, showsPlayedBadge {
                     PlayedBadge()
                         .padding(Spacing.xSmall)
                 }

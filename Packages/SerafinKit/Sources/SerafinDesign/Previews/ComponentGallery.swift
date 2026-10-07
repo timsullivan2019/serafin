@@ -109,7 +109,7 @@
         var body: some View {
             ScrollView(.horizontal) {
                 GlassChipGroup {
-                    GlassChip("Unplayed", systemImage: "circle.dashed", isSelected: unplayedOnly) {
+                    GlassChip("Unwatched", systemImage: "circle.dashed", isSelected: unplayedOnly) {
                         unplayedOnly.toggle()
                     }
                     ForEach(["Name", "Date Added", "Year", "Rating"], id: \.self) { option in
@@ -165,7 +165,7 @@
         var body: some View {
             VStack(spacing: Spacing.medium) {
                 EmptyState(
-                    "No Unplayed Movies",
+                    "No Unwatched Movies",
                     message: "Everything in this library has been watched.",
                     systemImage: "film.stack",
                     action: StateAction("Clear Filter") {}

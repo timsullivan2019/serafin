@@ -3,8 +3,8 @@ import SwiftUI
 /// A library on the Library tab: a 16:9 picture with the library's name and how many titles it holds over a fade
 /// at the bottom.
 ///
-/// The picture is a ``LibraryCollage`` of the library's newest posters, or one backdrop when it has too few. Wrap it
-/// in a `Button` with `.buttonStyle(.card)` for the press effect.
+/// The picture is the library's own when the server has one, otherwise a ``LibraryCollage`` of its newest posters, or
+/// one backdrop when it has too few. Wrap it in a `Button` with `.buttonStyle(.card)` for the press effect.
 public struct LibraryTile<Artwork: View>: View {
     private let name: String
     private let caption: String?
@@ -66,34 +66,38 @@ public struct LibraryTile<Artwork: View>: View {
     }
 }
 
-/// Four posters in a two-by-two grid, each cropped to fill its quarter, for a library without a picture of its own.
+/// Four whole posters side by side, all the same size, over a blurred wash of the first, for a library without a
+/// picture of its own.
+///
+/// The posters run edge to edge along the top of the tile at their own 2:3 shape, so none is cropped, and leave the
+/// bottom of the tile, where ``LibraryTile`` darkens toward its name, to the wash.
 public struct LibraryCollage<Cell: View>: View {
     private let cell: (Int) -> Cell
 
     /// Creates a collage.
     ///
-    /// - Parameter cell: Draws the poster for each of the four places, numbered 0 to 3 across then down.
+    /// - Parameter cell: Draws the poster for each of the four places, numbered 0 to 3 from the leading edge.
     public init(@ViewBuilder cell: @escaping (Int) -> Cell) {
         self.cell = cell
     }
 
     public var body: some View {
-        Grid(horizontalSpacing: 1, verticalSpacing: 1) {
-            GridRow {
-                place(0)
-                place(1)
-            }
-            GridRow {
-                place(2)
-                place(3)
+        HStack(spacing: 1) {
+            ForEach(0..<4, id: \.self) { index in
+                Color.clear
+                    .aspectRatio(2 / 3, contentMode: .fit)
+                    .overlay { cell(index) }
+                    .clipped()
             }
         }
-    }
-
-    private func place(_ index: Int) -> some View {
-        Color.clear
-            .overlay { cell(index) }
-            .clipped()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background {
+            // Opaque, so the blur doesn't pale at the tile's edges where it would sample past them.
+            cell(0)
+                .blur(radius: 24, opaque: true)
+                .overlay(Color.black.opacity(0.25))
+                .clipped()
+        }
     }
 }
 
