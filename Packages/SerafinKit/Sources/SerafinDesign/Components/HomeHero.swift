@@ -2,12 +2,15 @@ import SwiftUI
 
 /// Sizes and identifiers that Home's hero and the screen around it share.
 public enum HomeHeroLayout {
-    /// The hero's height as a fraction of the screen's: 62% in a compact width, such as iPhone, and 48% in a regular
-    /// width, such as iPad.
+    /// The hero's height as a fraction of the screen's, from the top down to the home indicator: 58% in a compact
+    /// width, such as iPhone, and 48% in a regular width, such as iPad.
+    ///
+    /// The screen, rather than the space a scroll view has above the tab bar, so the hero keeps its size when the mini
+    /// player comes and goes.
     ///
     /// - Parameter isRegularWidth: Whether the horizontal size class is regular.
     public static func heightFraction(isRegularWidth: Bool) -> CGFloat {
-        isRegularWidth ? 0.48 : 0.62
+        isRegularWidth ? 0.48 : 0.58
     }
 
     /// The hero's height as a fraction of the screen's, taller at accessibility text sizes so the larger title and
@@ -18,7 +21,7 @@ public enum HomeHeroLayout {
     ///   - dynamicTypeSize: The text size.
     public static func heightFraction(isRegularWidth: Bool, dynamicTypeSize: DynamicTypeSize) -> CGFloat {
         guard dynamicTypeSize.isAccessibilitySize else { return heightFraction(isRegularWidth: isRegularWidth) }
-        return isRegularWidth ? 0.62 : 0.82
+        return isRegularWidth ? 0.62 : 0.77
     }
 
     /// How far the first row under the hero rises into its fade, so the page reads as one piece.
@@ -99,15 +102,14 @@ public enum HomeHeroLayout {
 /// line of details and a Play button. A small glass capsule of dots in the bottom-trailing corner shows the page,
 /// and tapping a dot goes to its page. Pages never advance on their own.
 ///
-/// Put the hero first in a vertical `ScrollView` that ignores the top safe area, and give it ``HeroPage`` views.
-/// It is ``HomeHeroLayout/heightFraction(isRegularWidth:)`` of the scroll view's height. VoiceOver says "Page 2 of
+/// Put the hero first in a vertical `ScrollView` that ignores the top safe area, inside a tab view marked with
+/// `heroScreen()`, and give it ``HeroPage`` views. It is ``HomeHeroLayout/heightFraction(isRegularWidth:)`` of the
+/// screen's height. VoiceOver says "Page 2 of
 /// 4" when the page changes.
 public struct HomeHero<Page: View>: View {
     private let items: [HeroItem]
     @Binding private var selection: String?
     private let page: (HeroItem) -> Page
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.heroSafeAreaTop) private var safeAreaTop
 
@@ -143,10 +145,7 @@ public struct HomeHero<Page: View>: View {
         // The artwork stretches upward when Home is pulled down, so the pager clips only at its sides.
         .scrollClipDisabled()
         .mask { Rectangle().padding(.vertical, -2000) }
-        .containerRelativeFrame(.vertical) { height, _ in
-            height
-                * HomeHeroLayout.heightFraction(isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
-        }
+        .heroFrame()
         .overlay(alignment: .bottomTrailing) {
             if items.count > 1 {
                 HeroPageIndicator(count: items.count, current: currentIndex, select: select)
@@ -674,6 +673,53 @@ extension EnvironmentValues {
     /// Where the top safe area ends on the screen showing a hero, measured by that screen: below the status bar and
     /// any navigation bar. A hero's text and buttons fade out before they reach it.
     @Entry public var heroSafeAreaTop: CGFloat = 0
+
+    /// The height of the screen a hero is on, from the top down to the home indicator, measured by `heroScreen()`.
+    /// Zero until measured.
+    @Entry var heroScreenHeight: CGFloat = 0
+}
+
+extension View {
+    /// Measures the screen for the heroes inside this view, which are a share of its height: from the top of the
+    /// window down to this view's bottom. Put it on the tab view, which reaches down to the home indicator: the tab
+    /// bar and the mini player sit inside it and never change its size, so a hero keeps its size as they come and go.
+    public func heroScreen() -> some View {
+        modifier(HeroScreen())
+    }
+
+    /// Makes a hero, or its skeleton, ``HomeHeroLayout/heightFraction(isRegularWidth:dynamicTypeSize:)`` of the
+    /// screen's height. Before the screen is measured, as in previews, it's that fraction of the scroll view's space.
+    func heroFrame() -> some View {
+        modifier(HeroFrame())
+    }
+}
+
+private struct HeroScreen: ViewModifier {
+    @State private var height: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.heroScreenHeight, height)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .global).maxY
+            } action: {
+                height = $0
+            }
+    }
+}
+
+private struct HeroFrame: ViewModifier {
+    @Environment(\.heroScreenHeight) private var screenHeight
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        let fraction = HomeHeroLayout.heightFraction(
+            isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
+        content.containerRelativeFrame(.vertical) { [screenHeight] height, _ in
+            (screenHeight > 0 ? screenHeight : height) * fraction
+        }
+    }
 }
 
 extension View {

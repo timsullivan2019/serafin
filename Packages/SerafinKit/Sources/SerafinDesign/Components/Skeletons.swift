@@ -144,19 +144,12 @@ struct SkeletonGrid: View {
 /// Home's skeleton: a plain hero as tall as the real one, with a title, a line and a Play button, then rows rising
 /// into its fade.
 struct SkeletonHome: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Rectangle()
                     .fill(.surface)
-                    .containerRelativeFrame(.vertical) { height, _ in
-                        height
-                            * HomeHeroLayout.heightFraction(
-                                isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
-                    }
+                    .heroFrame()
                     .overlay {
                         LinearGradient(
                             stops: [
@@ -234,19 +227,12 @@ struct SkeletonLibraries: View {
 
 /// A detail screen's skeleton: a plain hero with a title and play pill, the overview's lines, then a row.
 struct SkeletonDetail: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xLarge) {
                 Rectangle()
                     .fill(.surface)
-                    .containerRelativeFrame(.vertical) { height, _ in
-                        height
-                            * HomeHeroLayout.heightFraction(
-                                isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
-                    }
+                    .heroFrame()
                     .overlay {
                         LinearGradient(
                             stops: [

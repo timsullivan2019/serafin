@@ -98,11 +98,18 @@ import Testing
     }
 
     @Test func theHeroIsTallerOnPhonesAndAtAccessibilitySizes() {
-        #expect(HomeHeroLayout.heightFraction(isRegularWidth: false) == 0.62)
+        #expect(HomeHeroLayout.heightFraction(isRegularWidth: false) == 0.58)
         #expect(HomeHeroLayout.heightFraction(isRegularWidth: true) == 0.48)
-        #expect(HomeHeroLayout.heightFraction(isRegularWidth: false, dynamicTypeSize: .large) == 0.62)
-        #expect(HomeHeroLayout.heightFraction(isRegularWidth: false, dynamicTypeSize: .accessibility5) > 0.62)
+        #expect(HomeHeroLayout.heightFraction(isRegularWidth: false, dynamicTypeSize: .large) == 0.58)
+        #expect(HomeHeroLayout.heightFraction(isRegularWidth: false, dynamicTypeSize: .accessibility5) > 0.58)
         #expect(HomeHeroLayout.heightFraction(isRegularWidth: true, dynamicTypeSize: .accessibility1) > 0.48)
+    }
+
+    @Test func theHeroIsAsTallAsBeforeOnAPhone() {
+        // The iPhone 17's 840 points down to the home indicator, against the 791 points Home's scroll view has above
+        // the tab bar, which the hero used to take 62% of.
+        let height = 840 * HomeHeroLayout.heightFraction(isRegularWidth: false)
+        #expect(abs(height - 791 * 0.62) < 4)
     }
 
     @Test func theButtonsLeaveRoomForThePageDotsOnlyWhenThereAreSeveralPages() {
