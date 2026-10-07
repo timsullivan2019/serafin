@@ -5,6 +5,10 @@ import SerafinCore
 import SerafinDesign
 import SerafinPlayback
 
+#if canImport(UIKit)
+    import UIKit
+#endif
+
 /// What is playing, shared by the full-screen player and the mini player.
 ///
 /// It starts items on the account's ``PlayerEngine`` at their resume point, under the streaming cap Settings gives
@@ -119,8 +123,13 @@ import SerafinPlayback
         }
         let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: Self.startPosition(of: item, from: start))
         #if canImport(UIKit)
-            // Picture in Picture puts the player screen away when it starts, and brings it back on the way out.
-            engine.pictureInPictureDidStart = { [weak self] in self?.closePlayer() }
+            // Picture in Picture started from its button puts the player screen away, and brings it back on the way
+            // out. Started by going home, the screen stays: putting it away in the background left it half gone, and
+            // coming back from Picture in Picture then showed a black screen.
+            engine.pictureInPictureDidStart = { [weak self] in
+                guard UIApplication.shared.applicationState == .active else { return }
+                self?.closePlayer()
+            }
             engine.restoreFromPictureInPicture = { [weak self] in self?.showPlayer() }
         #endif
         let card = item.card

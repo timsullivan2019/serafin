@@ -1,12 +1,15 @@
 #if canImport(UIKit)
     import AVFoundation
     import MediaPlayer
+    import UIKit
 
     /// Puts what's playing on the Lock Screen and in Control Center, and answers their buttons, AirPods presses and
     /// the scrubber.
     ///
+    /// Command handlers can be called off the main thread, so each hops to the main actor.
+    ///
     /// The session publishes elapsed time, duration and rate on its own; the title, subtitle and artwork come from
-    /// the player item's metadata.
+    /// the player item's Now Playing info.
     @MainActor final class NowPlaying {
         private let session: MPNowPlayingSession
 
@@ -14,29 +17,29 @@
             session = MPNowPlayingSession(players: [engine.player])
             session.automaticallyPublishesNowPlayingInfo = true
             let commands = session.remoteCommandCenter
-            commands.playCommand.addTarget { [weak engine] _ in
-                MainActor.assumeIsolated { engine?.play() }
+            commands.playCommand.addTarget { @Sendable [weak engine] _ in
+                Task { @MainActor in engine?.play() }
                 return .success
             }
-            commands.pauseCommand.addTarget { [weak engine] _ in
-                MainActor.assumeIsolated { engine?.pause() }
+            commands.pauseCommand.addTarget { @Sendable [weak engine] _ in
+                Task { @MainActor in engine?.pause() }
                 return .success
             }
-            commands.togglePlayPauseCommand.addTarget { [weak engine] _ in
-                MainActor.assumeIsolated { engine?.togglePlayPause() }
+            commands.togglePlayPauseCommand.addTarget { @Sendable [weak engine] _ in
+                Task { @MainActor in engine?.togglePlayPause() }
                 return .success
             }
             commands.skipForwardCommand.preferredIntervals = [10]
-            commands.skipForwardCommand.addTarget { [weak engine] _ in
+            commands.skipForwardCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in await engine?.skip(by: 10) }
                 return .success
             }
             commands.skipBackwardCommand.preferredIntervals = [10]
-            commands.skipBackwardCommand.addTarget { [weak engine] _ in
+            commands.skipBackwardCommand.addTarget { @Sendable [weak engine] _ in
                 Task { @MainActor in await engine?.skip(by: -10) }
                 return .success
             }
-            commands.changePlaybackPositionCommand.addTarget { [weak engine] event in
+            commands.changePlaybackPositionCommand.addTarget { @Sendable [weak engine] event in
                 guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
                 let position = Duration.milliseconds(Int64(event.positionTime * 1000))
                 Task { @MainActor in await engine?.seek(to: position) }
@@ -55,6 +58,22 @@
         let title: String
         let subtitle: String?
         let artwork: Data?
+
+        /// The details as Now Playing info on a player item, which the session publishes alongside the playback
+        /// state it tracks itself. The Lock Screen and Control Center read the title and artwork from here.
+        var nowPlayingInfo: [String: Any] {
+            var info: [String: Any] = [
+                MPMediaItemPropertyTitle: title,
+                MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
+            ]
+            if let subtitle {
+                info[MPMediaItemPropertyArtist] = subtitle
+            }
+            if let artwork, let image = UIImage(data: artwork) {
+                info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            }
+            return info
+        }
 
         /// The details as metadata on a player item, which the Now Playing session reads.
         var metadata: [AVMetadataItem] {
