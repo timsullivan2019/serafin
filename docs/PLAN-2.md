@@ -126,6 +126,19 @@ The flow led with Quick Connect. On iPhone and iPad, lead with a password and of
 
 Acceptance: signing in with a password saved in iCloud Keychain takes two taps and Face ID; Quick Connect still works; no password appears in logs, UserDefaults or the Keychain store.
 
+### 3.5.8 Design pass from the second screenshot review
+
+One PR, with screenshots before and after for each point.
+
+1. Library tiles: remove the centred library-name overlay; keep the bottom-leading name and count; deepen the bottom gradient to 70% at the edge.
+2. Library grids: remove the filled sort button from the chip scroller; add a toolbar `Menu` with `arrow.up.arrow.down` containing the sort options as an inline `Picker`.
+3. Settings sheet: replace the filled checkmark with a plain glass circle xmark close button.
+4. Information > Languages: show three, then "and N more" expanding inline; if more than ten, open a sheet listing them.
+5. Hide Information rows whose value is zero or empty; a series' Run Time shows the average episode runtime when available.
+6. Accent Colour preview: render the real `HeroHeader` play pill, a tab bar fragment and a Settings row, not a solid fill.
+7. Confirm the Search tab uses the system bottom search field on iPhone; if it is custom, switch to the system one.
+8. Chapter cards without an image show a dark tile with the chapter number.
+
 ### Gate 3.5
 
 Owner review on device of Home, Library, a movie detail, a series detail, Search, Settings and sign-in in light and dark. Then 1.0 proceeds through Phase 3.
