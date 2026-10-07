@@ -209,9 +209,17 @@ public struct HeroPage<Menu: View>: View {
 
     public var body: some View {
         HeroPageBackdrop(image: backdrop, isPoster: backdropIsPoster, kind: item.card.kind)
-            .contentShape(.rect)
-            .onTapGesture(perform: showDetails)
             .modifier(HeroZoomSource(id: HomeHeroLayout.zoomID(for: item.id), namespace: zoomNamespace))
+            // Taps and the context menu belong to a clear layer over the artwork. Touching and holding lifts this
+            // layer, which iOS hides while the menu shows, so the artwork stays in view behind the menu.
+            .overlay {
+                Color.clear
+                    .contentShape(.rect)
+                    .onTapGesture(perform: showDetails)
+                    .cardContextMenu(menu) {
+                        HeroPageBackdrop.preview(backdrop, kind: item.card.kind)
+                    }
+            }
             .overlay(alignment: .bottomLeading) { details }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(item.accessibilityLabel)
@@ -219,10 +227,8 @@ public struct HeroPage<Menu: View>: View {
             .accessibilityAction { showDetails() }
             .accessibilityAction(named: Text(item.playActionName), play)
             .accessibilityAction(named: Text(Self.showDetailsTitle), showDetails)
-            // After the accessibility element, so VoiceOver offers the menu too.
-            .cardContextMenu(menu) {
-                HeroPageBackdrop.preview(backdrop, kind: item.card.kind)
-            }
+            // The context menu's items, which VoiceOver can't reach inside the combined element otherwise.
+            .accessibilityActions { menu }
     }
 
     private var details: some View {
@@ -241,12 +247,12 @@ public struct HeroPage<Menu: View>: View {
                         .lineLimit(2)
                 }
             }
-            // The text is part of the artwork: tapping it opens the details too.
-            .contentShape(.rect)
-            .onTapGesture(perform: showDetails)
+            // The text is part of the artwork: touches pass through it to the layer under it.
+            .allowsHitTesting(false)
             HeroActions(
                 item: item,
                 tint: tint,
+                menu: menu,
                 playZoomNamespace: playZoomNamespace,
                 play: play,
                 showDetails: showDetails
@@ -287,10 +293,11 @@ public struct HeroPage<Menu: View>: View {
 }
 
 /// The Play button and the round info button, glass that merges as one group, or plain material under Reduce
-/// Transparency.
-private struct HeroActions: View {
+/// Transparency. Touching and holding either lifts just that button with the item's context menu.
+private struct HeroActions<Menu: View>: View {
     let item: HeroItem
     let tint: Color
+    let menu: Menu
     let playZoomNamespace: Namespace.ID?
     let play: () -> Void
     let showDetails: () -> Void
@@ -363,11 +370,14 @@ private struct HeroActions: View {
                 .padding(.horizontal, Spacing.xxSmall)
         }
         .modifier(HeroPlayZoomSource(id: HomeHeroLayout.playZoomID(for: item.id), namespace: playZoomNamespace))
-        if reduceTransparency {
-            button.buttonStyle(HeroMaterialButtonStyle(fill: tint, shape: .capsule))
-        } else {
-            button.buttonStyle(.glassProminent).tint(tint).controlSize(.large)
+        Group {
+            if reduceTransparency {
+                button.buttonStyle(HeroMaterialButtonStyle(fill: tint, shape: .capsule))
+            } else {
+                button.buttonStyle(.glassProminent).tint(tint).controlSize(.large)
+            }
         }
+        .contextMenu { menu }
     }
 
     @ViewBuilder private var infoButton: some View {
@@ -377,12 +387,15 @@ private struct HeroActions: View {
                 .frame(width: 22, height: 22)
         }
         .accessibilityLabel(HeroPage<EmptyView>.showDetailsTitle)
-        if reduceTransparency {
-            button.buttonStyle(HeroMaterialButtonStyle(fill: nil, shape: .circle))
-        } else {
-            // The glass style colours its symbol with the tint, so a plain symbol needs a plain tint.
-            button.buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large).tint(.primary)
+        Group {
+            if reduceTransparency {
+                button.buttonStyle(HeroMaterialButtonStyle(fill: nil, shape: .circle))
+            } else {
+                // The glass style colours its symbol with the tint, so a plain symbol needs a plain tint.
+                button.buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large).tint(.primary)
+            }
         }
+        .contextMenu { menu }
     }
 }
 
@@ -444,7 +457,7 @@ private struct HeroPageBackdrop: View {
             // Clipped to the page's sides and bottom, so it never covers the next page while swiping, but open at the
             // top, so the stretch can reach the top of the screen.
             .mask { Rectangle().padding(.top, -2000) }
-            .overlay { fade }
+            .overlay { HeroFade() }
             .accessibilityHidden(true)
     }
 
@@ -474,8 +487,26 @@ private struct HeroPageBackdrop: View {
         )
     }
 
-    /// The artwork frosting from 30% down, behind the text, and fading into the screen from 45% down.
-    private var fade: some View {
+    /// The context menu's preview: the artwork at 16:9.
+    static func preview(_ image: Image?, kind: MediaCard.Kind) -> some View {
+        Color.clear
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay {
+                if let image {
+                    image.resizable().scaledToFill()
+                } else {
+                    ArtworkPlaceholder(kind: kind)
+                }
+            }
+            .clipped()
+            .frame(width: 340)
+    }
+}
+
+/// The artwork frosting from 30% down, behind the text, and fading into the screen from 45% down. The detail screen
+/// starts with it when it zooms in from Home's hero, and fades it away, so the two read as one movement.
+struct HeroFade: View {
+    var body: some View {
         ZStack {
             Rectangle()
                 .fill(.regularMaterial)
@@ -497,21 +528,7 @@ private struct HeroPageBackdrop: View {
             )
         }
         .allowsHitTesting(false)
-    }
-
-    /// The context menu's preview: the artwork at 16:9.
-    static func preview(_ image: Image?, kind: MediaCard.Kind) -> some View {
-        Color.clear
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .overlay {
-                if let image {
-                    image.resizable().scaledToFill()
-                } else {
-                    ArtworkPlaceholder(kind: kind)
-                }
-            }
-            .clipped()
-            .frame(width: 340)
+        .accessibilityHidden(true)
     }
 }
 

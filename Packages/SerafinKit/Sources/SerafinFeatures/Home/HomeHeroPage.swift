@@ -35,7 +35,7 @@ struct HomeHeroPage: View {
                     zoomNamespace: zoom,
                     playZoomNamespace: playerZoom,
                     play: play,
-                    showDetails: { navigate(.featured(id: entry.id)) }
+                    showDetails: { navigate(.featured(entry.item, playable: entry.playable)) }
                 ) {
                     CardMenuItems(item: entry.item)
                 }
@@ -48,8 +48,9 @@ struct HomeHeroPage: View {
         }
     }
 
-    /// How wide a backdrop to ask for so that, filling a page of `size`, it isn't enlarged: a 16:9 image filling a
-    /// tall page is as wide as 16:9 of the page's height. Zero until the page has a size, which asks for nothing yet.
+    /// How wide a backdrop to ask for so that, filling a frame of `size`, it isn't enlarged: a 16:9 image filling a
+    /// tall frame is as wide as 16:9 of the frame's height. Zero until the frame has a size, which asks for nothing
+    /// yet. The detail screen's hero asks the same way, so zooming in from Home finds the same image already loaded.
     static func backdropWidth(for size: CGSize) -> CGFloat {
         guard size.width > 0, size.height > 0 else { return 0 }
         return max(size.width, size.height * 16 / 9)
@@ -86,7 +87,7 @@ struct HomeHeroPage: View {
                 playback.play(episode, zoomSource: zoomSource)
             } else {
                 // Without its episode, as when the server can't be reached, the show's own screen says why.
-                navigate(.featured(id: entry.id))
+                navigate(.featured(entry.item, playable: entry.playable))
             }
         }
     }

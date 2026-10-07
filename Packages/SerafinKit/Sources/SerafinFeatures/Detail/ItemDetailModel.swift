@@ -19,6 +19,15 @@ import SwiftUI
         self.id = id
     }
 
+    /// Starts with `item` showing, and for a show the episode its Play button starts, while the full details load.
+    init(showing item: MediaItem, playable: MediaItem?) {
+        id = item.id
+        phase = .loaded(ItemDetails(item: item, playable: playable ?? item))
+        if item.source == nil {
+            tint = MockMedia.tint(for: item.card)
+        }
+    }
+
     /// The details once they have loaded.
     var details: ItemDetails? {
         if case .loaded(let details) = phase { details } else { nil }

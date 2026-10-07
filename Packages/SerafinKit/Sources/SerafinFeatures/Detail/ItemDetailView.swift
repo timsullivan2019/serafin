@@ -8,15 +8,26 @@ struct ItemDetailView: View {
     @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
     private let zoomSource: String
+    private let arrivesFromHomeHero: Bool
 
     /// Creates the screen.
     ///
-    /// - Parameters:
-    ///   - id: The movie, series or episode.
-    ///   - zoomSource: What the screen zooms in from, when that isn't the item's card, as for Home's hero.
-    init(id: String, zoomSource: String? = nil) {
+    /// - Parameter id: The movie, series or episode.
+    init(id: String) {
         _model = State(initialValue: ItemDetailModel(id: id))
-        self.zoomSource = zoomSource ?? id
+        zoomSource = id
+        arrivesFromHomeHero = false
+    }
+
+    /// Creates the screen for an item featured in Home's hero, which it zooms in from, showing the item at once.
+    ///
+    /// - Parameters:
+    ///   - item: The featured movie, show or episode.
+    ///   - playable: For a show, the episode its Play button starts, when the hero knows it.
+    init(featured item: MediaItem, playable: MediaItem?) {
+        _model = State(initialValue: ItemDetailModel(showing: item, playable: playable))
+        zoomSource = HomeHeroLayout.zoomID(for: item.id)
+        arrivesFromHomeHero = true
     }
 
     var body: some View {
@@ -27,7 +38,7 @@ struct ItemDetailView: View {
             case .failed(let message):
                 FailureState(message: message) { Task { await model.load(from: media) } }
             case .loaded(let details):
-                DetailContent(details: details, model: model)
+                DetailContent(details: details, model: model, arrivesFromHomeHero: arrivesFromHomeHero)
             }
         }
         .background(Color.background)
@@ -46,6 +57,9 @@ struct ItemDetailView: View {
 private struct DetailContent: View {
     let details: ItemDetails
     let model: ItemDetailModel
+    let arrivesFromHomeHero: Bool
+    /// The hero's size, which decides how wide a backdrop to ask for.
+    @State private var heroSize: CGSize = .zero
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.playerZoomNamespace) private var playerZoom
 
@@ -96,7 +110,10 @@ private struct DetailContent: View {
     }
 
     private var hero: some View {
-        ItemArtwork(details.item, role: .backdrop, onLoad: { [model] in model.backdropLoaded($0) }) { backdrop in
+        ItemArtwork(
+            details.item, role: .backdrop, width: HomeHeroPage.backdropWidth(for: heroSize),
+            onLoad: { [model] in model.backdropLoaded($0) }
+        ) { backdrop in
             ItemArtwork(details.item, role: .logo, width: 280) { logo in
                 HeroHeader(
                     card: playCard,
@@ -106,11 +123,17 @@ private struct DetailContent: View {
                     playZoomNamespace: playerZoom,
                     startOver: {
                         playback.play(details.playable ?? details.item, from: .beginning, zoomSource: pillZoom)
-                    }
+                    },
+                    arrivesFromHomeHero: arrivesFromHomeHero
                 ) {
                     playback.play(details.playable ?? details.item, zoomSource: pillZoom)
                 }
             }
+        }
+        .onGeometryChange(for: CGSize.self) {
+            $0.size
+        } action: {
+            heroSize = $0
         }
     }
 

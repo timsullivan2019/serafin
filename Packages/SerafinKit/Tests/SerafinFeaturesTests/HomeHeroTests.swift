@@ -246,3 +246,25 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
         #expect(HomeHeroPage.backdropWidth(for: CGSize(width: 1200, height: 400)) == 1200)
     }
 }
+
+@MainActor
+@Suite struct FeaturedDetailTests {
+    @Test func aFeaturedItemsScreenShowsTheItemAtOnce() throws {
+        let show = try #require(MockMedia.series.first)
+        let episode = try #require(MockMedia.episodes.first { $0.episode?.seriesID == show.id })
+        let model = ItemDetailModel(
+            showing: MediaItem(card: show, source: nil), playable: MediaItem(card: episode, source: nil))
+        let details = try #require(model.details)
+        #expect(details.item.id == show.id)
+        #expect(details.playable?.id == episode.id)
+        #expect(model.id == show.id)
+    }
+
+    @Test func itsFullDetailsReplaceItOnceLoaded() async throws {
+        let movie = MockMedia.movies[1]
+        let model = ItemDetailModel(showing: MediaItem(card: movie, source: nil), playable: nil)
+        #expect(model.details?.similar.isEmpty == true)
+        await model.load(from: SampleMediaSource())
+        #expect(model.details?.similar.isEmpty == false)
+    }
+}
