@@ -7,8 +7,9 @@ enum Route: Hashable {
     /// A movie, series or episode.
     case item(id: String)
     /// A movie, series or episode featured at the top of Home: the same screen as ``item(id:)``, zooming in from the
-    /// hero's artwork rather than from a card showing the same item.
-    case featured(id: String)
+    /// hero's artwork rather than from a card showing the same item. It carries the item, and for a show the episode
+    /// Play starts, so the screen shows its hero at once while the rest loads.
+    case featured(MediaItem, playable: MediaItem?)
     /// Every started movie and episode, from Continue Watching's chevron on Home.
     case continueWatching
     /// The next episode of every show in progress, from Next Up's chevron on Home.
@@ -113,8 +114,8 @@ private struct RouteDestination: View {
         switch route {
         case .item(let id):
             ItemDetailView(id: id)
-        case .featured(let id):
-            ItemDetailView(id: id, zoomSource: HomeHeroLayout.zoomID(for: id))
+        case .featured(let item, let playable):
+            ItemDetailView(featured: item, playable: playable)
         case .continueWatching:
             WatchListView(list: .continueWatching)
         case .nextUp:

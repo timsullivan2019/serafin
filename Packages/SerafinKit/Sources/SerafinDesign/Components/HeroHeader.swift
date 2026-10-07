@@ -14,7 +14,13 @@ public struct HeroHeader: View {
     private let playZoomNamespace: Namespace.ID?
     private let startOver: (() -> Void)?
     private let play: () -> Void
+    private let arrivesFromHomeHero: Bool
     @State private var playCount = 0
+    /// How much of Home's hero fade still shows, from 1 as the screen zooms in from the hero to 0 once it has.
+    @State private var arrivalFade: Double
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.isPresented) private var isPresented
 
     /// Creates a hero header.
     ///
@@ -26,6 +32,8 @@ public struct HeroHeader: View {
     ///   - playZoomNamespace: The namespace in which the play pill is the source of a zoom transition, keyed by
     ///     ``playZoomID(for:)``, so the player can grow out of it. Pass nil for no zoom.
     ///   - startOver: Called when Start Over is chosen from the pill's menu, offered while the item is in progress.
+    ///   - arrivesFromHomeHero: Whether the screen zooms in from Home's hero. The hero's fade then starts over the
+    ///     backdrop and fades away as the screen opens, and returns as it closes, so the two read as one movement.
     ///   - play: Called when the play pill is tapped.
     public init(
         card: MediaCard,
@@ -34,6 +42,7 @@ public struct HeroHeader: View {
         tint: Color = .accentFallback,
         playZoomNamespace: Namespace.ID? = nil,
         startOver: (() -> Void)? = nil,
+        arrivesFromHomeHero: Bool = false,
         play: @escaping () -> Void
     ) {
         self.card = card
@@ -43,11 +52,32 @@ public struct HeroHeader: View {
         self.playZoomNamespace = playZoomNamespace
         self.startOver = startOver
         self.play = play
+        self.arrivesFromHomeHero = arrivesFromHomeHero
+        _arrivalFade = State(initialValue: arrivesFromHomeHero ? 1 : 0)
     }
 
     public var body: some View {
         HeroBackdrop(image: backdrop, kind: card.kind)
-            .containerRelativeFrame(.vertical) { height, _ in height * 0.68 }
+            .overlay {
+                if arrivesFromHomeHero {
+                    HeroFade().opacity(arrivalFade)
+                }
+            }
+            // As tall as Home's hero, so zooming in from it keeps the artwork the same size and place.
+            .containerRelativeFrame(.vertical) { height, _ in
+                height
+                    * HomeHeroLayout.heightFraction(
+                        isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
+            }
+            .onAppear {
+                guard arrivesFromHomeHero else { return }
+                withAnimation(.easeOut(duration: 0.45)) { arrivalFade = 0 }
+            }
+            .onChange(of: isPresented) { _, presented in
+                // Closing, the fade returns as the screen shrinks back into the hero.
+                guard arrivesFromHomeHero, !presented else { return }
+                withAnimation(.easeIn(duration: 0.3)) { arrivalFade = 1 }
+            }
             .overlay(alignment: .bottom) {
                 VStack(spacing: Spacing.medium) {
                     titleOrLogo

@@ -191,12 +191,19 @@ struct SkeletonHome: View {
 
 /// A detail screen's skeleton: a plain hero with a title and play pill, the overview's lines, then a row.
 struct SkeletonDetail: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xLarge) {
                 Rectangle()
                     .fill(.surface)
-                    .containerRelativeFrame(.vertical) { height, _ in height * 0.68 }
+                    .containerRelativeFrame(.vertical) { height, _ in
+                        height
+                            * HomeHeroLayout.heightFraction(
+                                isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
+                    }
                     .overlay {
                         LinearGradient(
                             stops: [
