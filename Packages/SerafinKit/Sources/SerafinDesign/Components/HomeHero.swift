@@ -355,8 +355,11 @@ public struct HeroPage<Menu: View>: View {
     }
 }
 
-/// The Play button and the round info button, glass that merges as one group, or plain material under Reduce
-/// Transparency. Touching and holding either lifts just that button with the item's context menu.
+/// The Play button and the round info button, each its own glass, or plain material under Reduce Transparency.
+/// Touching and holding either lifts just that button with the item's context menu.
+///
+/// Not in a `GlassEffectContainer`: a container draws its buttons itself, which hides Play from UIKit's zoom
+/// transition, so the full-screen player couldn't grow out of it. The two sit apart, so they wouldn't merge anyway.
 private struct HeroActions<Menu: View>: View {
     let item: HeroItem
     let tint: Color
@@ -378,11 +381,9 @@ private struct HeroActions<Menu: View>: View {
                     ViewThatFits(in: .horizontal) {
                         buttons
                             .fixedSize()
-                        GlassEffectContainer(spacing: Spacing.small) {
-                            VStack(alignment: .leading, spacing: Spacing.small) {
-                                playButton
-                                infoButton
-                            }
+                        VStack(alignment: .leading, spacing: Spacing.small) {
+                            playButton
+                            infoButton
                         }
                         // Play's title wraps rather than running off the screen.
                         .fixedSize(horizontal: false, vertical: true)
@@ -407,11 +408,9 @@ private struct HeroActions<Menu: View>: View {
     }
 
     private var buttons: some View {
-        GlassEffectContainer(spacing: Spacing.small) {
-            HStack(spacing: Spacing.small) {
-                playButton
-                infoButton
-            }
+        HStack(spacing: Spacing.small) {
+            playButton
+            infoButton
         }
     }
 

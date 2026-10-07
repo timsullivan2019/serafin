@@ -205,7 +205,11 @@ import SerafinPlayback
 
     /// Shows the full-screen player again, as when Picture in Picture hands the video back, which it's already
     /// doing, so it isn't asked to stop as well.
+    ///
+    /// The control the player first grew out of may have gone by now, with the screen behind changed while the video
+    /// was away, so the player comes back as usual rather than zooming out of it.
     private func presentPlayer() {
+        zoomSource = nil
         if closing != nil {
             // Changed course while the interface was turning upright to close: keep the player.
             closing?.cancel()

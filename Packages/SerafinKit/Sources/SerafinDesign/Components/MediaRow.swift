@@ -141,11 +141,12 @@ struct RowSizing: Equatable {
         return max(whole, 1) + peek
     }
 
-    /// The card width that fits ``across(in:)`` cards, and the gaps between them, in `length`.
+    /// The card width that fits ``across(in:)`` cards, and the gaps between them, in `length`. Never negative: before
+    /// the row has a width, as in the first layout pass, it's zero.
     func cardWidth(in length: CGFloat) -> CGFloat {
         let across = across(in: length)
         let gaps = Spacing.small * across.rounded(.down)
-        return (length - Spacing.medium - gaps) / across
+        return max((length - Spacing.medium - gaps) / across, 0)
     }
 }
 

@@ -391,8 +391,9 @@ private struct TabChrome: ViewModifier {
                 .fullScreenCover(isPresented: $playback.isPlayerPresented) {
                     PlayerView()
                         .environment(playback)
-                        // The player grows out of the control that opened it and shrinks back into it.
-                        .navigationTransition(.zoom(sourceID: playback.zoomSource ?? "", in: playerZoom))
+                        // The player grows out of the control that opened it and shrinks back into it. Without one,
+                        // as from a card's menu or coming back from Picture in Picture, it slides up as usual.
+                        .modifier(PlayerZoom(source: playback.zoomSource, namespace: playerZoom))
                         // The player's own swipe down turns iPhone upright before closing; the zoom's built-in
                         // swipe would shrink it over a sideways screen.
                         .interactiveDismissDisabled()
@@ -406,6 +407,23 @@ private struct TabChrome: ViewModifier {
         #endif
     }
 }
+
+#if os(iOS)
+    /// Zooms the full-screen player out of the control with ID `source`, or leaves the standard slide up when there's
+    /// none: asked to zoom from a control that isn't there, UIKit falls back to another transition and logs an error.
+    private struct PlayerZoom: ViewModifier {
+        let source: String?
+        let namespace: Namespace.ID
+
+        func body(content: Content) -> some View {
+            if let source {
+                content.navigationTransition(.zoom(sourceID: source, in: namespace))
+            } else {
+                content
+            }
+        }
+    }
+#endif
 
 #if DEBUG
     #Preview("Light") {
