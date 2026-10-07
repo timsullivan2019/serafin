@@ -25,6 +25,7 @@ struct CardArtwork: View {
     let card: MediaCard
     let image: Image?
     let aspectRatio: CGFloat
+    var showsPlayedBadge = true
 
     var body: some View {
         Color.clear
@@ -50,7 +51,7 @@ struct CardArtwork: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if card.isPlayed {
+                if card.isPlayed, showsPlayedBadge {
                     PlayedBadge()
                         .padding(Spacing.xSmall)
                 }

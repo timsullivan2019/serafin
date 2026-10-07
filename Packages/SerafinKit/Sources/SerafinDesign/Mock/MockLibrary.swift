@@ -21,6 +21,14 @@ public enum MockLibrary {
     ]
     .compactMap { id in (MockMedia.movies + MockMedia.series).first { $0.id == id } }
 
+    /// Home's featured items as a server with some history would pick them: the latest started item, the first Next
+    /// Up episode, then the newest additions.
+    public static let hero: [HeroItem] = {
+        var seen: Set<String> = []
+        let picks = Array(continueWatching.prefix(1)) + Array(nextUp.prefix(1)) + latest
+        return picks.filter { seen.insert($0.id).inserted }.prefix(4).map { HeroItem(card: $0) }
+    }()
+
     /// The Movies and Shows libraries.
     public static let libraries: [MediaLibrary] = [
         MediaLibrary(id: "library-movies", name: "Movies", kind: .movies, items: MockMedia.movies),

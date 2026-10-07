@@ -99,12 +99,20 @@ extension MediaItem {
     }
 
     /// The series a season belongs to, made from what the season says about it, or nil when that leaves it without
-    /// a name or poster.
-    private static func series(of season: BaseItemDto) -> BaseItemDto? {
+    /// a name or poster. The season's parent artwork is the series', so the series keeps its backdrop and logo for
+    /// Home's hero, and the season's date added says how new it is.
+    static func series(of season: BaseItemDto) -> BaseItemDto? {
         guard let id = season.seriesID, let name = season.seriesName, let poster = season.seriesPrimaryImageTag else {
             return nil
         }
-        return BaseItemDto(id: id, imageTags: [ImageType.primary.rawValue: poster], name: name, type: .series)
+        var series = BaseItemDto(id: id, imageTags: [ImageType.primary.rawValue: poster], name: name, type: .series)
+        series.parentBackdropItemID = season.parentBackdropItemID
+        series.parentBackdropImageTags = season.parentBackdropImageTags
+        series.parentLogoItemID = season.parentLogoItemID
+        series.parentLogoImageTag = season.parentLogoImageTag
+        series.dateCreated = season.dateCreated
+        series.dateLastMediaAdded = season.dateLastMediaAdded ?? season.dateCreated
+        return series
     }
 }
 

@@ -23,12 +23,16 @@ struct PosterLink: View {
 /// A landscape thumbnail that opens its item, zooms into it, and offers the same context menu as a poster.
 struct LandscapeLink: View {
     let item: MediaItem
+    /// Whether a played item shows its check, which Continue Watching leaves off.
+    var showsPlayedBadge = true
     @Environment(\.zoomNamespace) private var zoom
 
     var body: some View {
         NavigationLink(value: item.route) {
             ItemArtwork(item, role: .landscape) { image in
-                LandscapeCard(card: item.card, artwork: image, zoomNamespace: zoom) {
+                LandscapeCard(
+                    card: item.card, artwork: image, zoomNamespace: zoom, showsPlayedBadge: showsPlayedBadge
+                ) {
                     CardMenuItems(item: item)
                 }
             }
