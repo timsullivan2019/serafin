@@ -143,7 +143,7 @@ struct PlayerView: View {
                 showsPictureInPicture: engine.isPictureInPicturePossible,
                 fillsScreen: engine.fillsScreen,
                 actions: PlayerControlActions(
-                    minimize: { playback.minimize() },
+                    minimize: { playback.dismissPlayer() },
                     playPause: {
                         screen.touched()
                         playback.togglePlayPause()
@@ -194,7 +194,7 @@ struct PlayerView: View {
     }
 
     /// Taps and swipes on the video: a tap shows or hides the controls, a double tap on either half skips 10
-    /// seconds that way, and a swipe down puts the player away.
+    /// seconds that way, and a swipe down puts the player away, into Picture in Picture while it plays.
     private struct PlayerGestures: View {
         let screen: PlayerScreenModel
         let engine: PlayerEngine
@@ -232,7 +232,7 @@ struct PlayerView: View {
                         .onEnded { value in
                             let down = value.translation.height
                             if down > 120, abs(value.translation.width) < down {
-                                playback.minimize()
+                                playback.dismissPlayer()
                             }
                         }
                 )
@@ -333,7 +333,7 @@ private struct PretendPlayer: View {
                 duration: card.runtime ?? .zero
             ),
             actions: PlayerControlActions(
-                minimize: { playback.minimize() },
+                minimize: { playback.dismissPlayer() },
                 playPause: { playback.togglePlayPause() }
             )
         )

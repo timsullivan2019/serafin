@@ -197,7 +197,7 @@ Steps:
 3. Playback speed menu (0.75, 1, 1.25, 1.5, 2).
 4. Resume prompt on the hero play pill ("Resume · 32 min left" or "Start over" in the context menu).
 5. Autoplay next: at the end of an episode, a 10-second countdown card with the next episode's `LandscapeCard`; cancel returns to the detail screen.
-6. Mini player in the tab bar accessory while audio continues in the background; tapping returns to the full player.
+6. No mini player for video (changed after Gate 3.5, replacing the tab bar accessory). Putting the player away while a video plays, by swiping down or with the minimize button, carries it on in Picture in Picture through `AVPictureInPictureController` when `isPictureInPicturePossible`; the Picture in Picture window's restore returns to the full player. Settings › Playback › "Minimize to Picture in Picture" turns this off (on by default). With it off, or when Picture in Picture isn't possible, putting the player away pauses, reports the stop to the server and returns to the previous screen. Going to the background during playback also enters Picture in Picture (`canStartPictureInPictureAutomaticallyFromInline`). The tab bar never changes width and Home never rescales when playback starts or ends. The tab bar's bottom accessory is for Music only (PLAN-2 §6.3).
 
 Acceptance (Gate 1): on the owner's server, a movie and a TV episode each play from start to end with correct resume, audio and subtitle switching, PiP, AirPlay, lock-screen controls, and progress visible in the Jellyfin dashboard. Direct play, direct stream and transcode have each been exercised at least once (use a mkv to force a direct stream and a bitrate cap to force a transcode).
 

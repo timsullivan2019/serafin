@@ -68,12 +68,14 @@ private struct AppearanceSection: View {
     }
 }
 
-/// Audio and subtitles, and the current server's streaming caps on Wi-Fi and cellular.
+/// Audio and subtitles, the current server's streaming caps on Wi-Fi and cellular, and whether putting the player
+/// away carries a playing video on in Picture in Picture.
 private struct PlaybackSection: View {
     let server: Server?
     let isOneOfSeveral: Bool
     @AppStorage private var wifiQuality: PlaybackQuality
     @AppStorage private var cellularQuality: PlaybackQuality
+    @AppStorage private var minimizesToPictureInPicture: Bool
 
     /// Creates the section for `server`'s caps, or for the caps every server shares when there's no server, as in
     /// previews.
@@ -89,6 +91,9 @@ private struct PlaybackSection: View {
         }
         _wifiQuality = storage(onCellular: false)
         _cellularQuality = storage(onCellular: true)
+        _minimizesToPictureInPicture = AppStorage(
+            wrappedValue: PlaybackCoordinator.minimizesToPictureInPicture(in: defaults),
+            PlaybackCoordinator.minimizesToPictureInPictureKey, store: defaults)
     }
 
     var body: some View {
@@ -110,6 +115,14 @@ private struct PlaybackSection: View {
                 ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
             }
             .rebuiltForAccent()
+            Toggle(
+                String(
+                    localized: "Minimize to Picture in Picture", bundle: .module,
+                    comment:
+                        "Settings switch: putting the player away while a video plays carries it on in Picture in Picture."
+                ),
+                isOn: $minimizesToPictureInPicture
+            )
         } header: {
             Text(String(localized: "Playback", bundle: .module, comment: "Settings section header."))
         } footer: {

@@ -183,23 +183,52 @@ import Testing
         // Playing on, as Up Next does, keeps the control the player came from.
         playback.play(item, zoomSource: "something-else")
         #expect(playback.zoomSource == "hero-play-1")
-        // Minimizing shrinks the player back into it.
-        playback.minimize()
-        #expect(!playback.isPlayerPresented)
-        #expect(playback.zoomSource == "hero-play-1")
-        // Reopening from the mini player grows the player out of the mini player.
+        // Coming back from Picture in Picture keeps it too.
+        playback.isPlayerPresented = false
         playback.showPlayer()
         #expect(playback.isPlayerPresented)
-        #expect(playback.zoomSource == PlaybackCoordinator.miniPlayerZoomSource)
+        #expect(playback.zoomSource == "hero-play-1")
     }
 
-    @Test func stoppingDoesntShrinkIntoTheVanishingMiniPlayer() throws {
+    @Test func puttingThePlayerAwayHandsAPlayingVideoToPictureInPictureOnlyWhenItCan() {
+        #expect(
+            PlaybackCoordinator.dismissal(
+                minimizesToPictureInPicture: true, isPlaying: true, isPictureInPicturePossible: true)
+                == .pictureInPicture)
+        // Turned off in Settings, paused, or with Picture in Picture unable to start, playback stops instead.
+        #expect(
+            PlaybackCoordinator.dismissal(
+                minimizesToPictureInPicture: false, isPlaying: true, isPictureInPicturePossible: true) == .stop)
+        #expect(
+            PlaybackCoordinator.dismissal(
+                minimizesToPictureInPicture: true, isPlaying: false, isPictureInPicturePossible: true) == .stop)
+        #expect(
+            PlaybackCoordinator.dismissal(
+                minimizesToPictureInPicture: true, isPlaying: true, isPictureInPicturePossible: false) == .stop)
+    }
+
+    @Test func pictureInPictureIsOnUntilTurnedOffInSettings() {
+        #expect(PlaybackCoordinator.minimizesToPictureInPicture(in: defaults))
+        defaults.set(false, forKey: PlaybackCoordinator.minimizesToPictureInPictureKey)
+        #expect(!PlaybackCoordinator.minimizesToPictureInPicture(in: defaults))
+    }
+
+    @Test func aFilmEndingInPictureInPictureStops() throws {
         let playback = PlaybackCoordinator(defaults: defaults, isOnExpensiveNetwork: { false })
         playback.play(try episode(positionTicks: nil))
-        playback.minimize()
-        playback.showPlayer()
-        playback.stop()
-        #expect(playback.zoomSource == nil)
+        // On the player screen, the screen itself handles the end.
+        playback.endedWithoutThePlayer()
+        #expect(playback.nowPlaying != nil)
+        // Away from it, with nothing to follow, playback stops.
+        playback.isPlayerPresented = false
+        playback.endedWithoutThePlayer()
+        #expect(playback.nowPlaying == nil)
+    }
+
+    @Test func puttingThePlayerAwayWithoutPictureInPictureStopsAndGoesBack() throws {
+        let playback = PlaybackCoordinator(defaults: defaults, isOnExpensiveNetwork: { false })
+        playback.play(try episode(positionTicks: nil))
+        playback.dismissPlayer()
         #expect(playback.nowPlaying == nil)
         #expect(!playback.isPlayerPresented)
     }

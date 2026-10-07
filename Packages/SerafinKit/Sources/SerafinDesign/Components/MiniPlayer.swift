@@ -2,6 +2,9 @@ import SwiftUI
 
 /// The compact now-playing bar for the tab bar's bottom accessory: thumbnail, title, play or pause, and close.
 ///
+/// Kept for music (PLAN-2 §6.3), where it will stay docked, as in Apple Music. Video has no mini player: put away
+/// while it plays, a video carries on in Picture in Picture.
+///
 /// Place it in `tabViewBottomAccessory`, which supplies the glass around it. Tapping the thumbnail or title opens
 /// the full player. When the tab bar minimizes and the accessory moves inline, the bar drops its subtitle and
 /// close button to fit. Play and pause give a light tap, like the full player's.
