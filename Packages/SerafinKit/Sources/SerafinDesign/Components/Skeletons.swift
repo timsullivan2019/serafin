@@ -9,7 +9,7 @@ import SwiftUI
 public struct Skeleton: View {
     /// The screen the skeleton stands in for.
     public enum Layout: Sendable {
-        /// Home: a row of thumbnails, then rows of posters.
+        /// Home: the hero, then a row of thumbnails and rows of posters rising into its fade.
         case rows
         /// A library: a grid of posters at least `columnMinimum` points wide.
         case posterGrid(columnMinimum: CGFloat)
@@ -41,14 +41,7 @@ public struct Skeleton: View {
     @ViewBuilder private var content: some View {
         switch layout {
         case .rows:
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.xLarge) {
-                    SkeletonRow(style: .landscape)
-                    SkeletonRow(style: .posters)
-                    SkeletonRow(style: .posters)
-                }
-                .padding(.vertical, Spacing.medium)
-            }
+            SkeletonHome()
         case .posterGrid(let columnMinimum):
             SkeletonGrid(columnMinimum: columnMinimum, aspectRatio: 2 / 3, spacing: Spacing.small)
         case .thumbnailGrid(let columnMinimum):
@@ -108,9 +101,11 @@ struct SkeletonText: View {
 /// A titled row of placeholder cards, laid out exactly like a ``MediaRow`` of the same style.
 struct SkeletonRow: View {
     let style: MediaRowStyle
+    /// Whether the title has a chevron, as the rows it stands in for do.
+    var hasChevron = false
 
     var body: some View {
-        MediaRow("Placeholder row title", style: style, items: SkeletonSlot.row) { _ in
+        MediaRow("Placeholder row title", style: style, items: SkeletonSlot.row, seeAll: hasChevron ? {} : nil) { _ in
             SkeletonCard(aspectRatio: style == .landscape ? 16 / 9 : 2 / 3)
         }
         .redacted(reason: .placeholder)
@@ -139,6 +134,58 @@ struct SkeletonGrid: View {
             .padding(.horizontal, Spacing.medium)
             .padding(.vertical, Spacing.small)
         }
+    }
+}
+
+/// Home's skeleton: a plain hero as tall as the real one, with a title, a line and a Play button, then rows rising
+/// into its fade.
+struct SkeletonHome: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Rectangle()
+                    .fill(.surface)
+                    .containerRelativeFrame(.vertical) { height, _ in
+                        height
+                            * HomeHeroLayout.heightFraction(
+                                isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
+                    }
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.background.opacity(0), location: 0.45),
+                                .init(color: Color.background, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        VStack(alignment: .leading, spacing: Spacing.xSmall) {
+                            SkeletonText("Placeholder", style: .largeTitle)
+                            SkeletonText("1927 · 1 hr 32 min · NR", style: .cardTitle)
+                            Capsule()
+                                .fill(.textSecondary.opacity(0.25))
+                                .frame(width: 180, height: HomeHeroLayout.actionHeight)
+                                .padding(.top, Spacing.xSmall)
+                        }
+                        .padding(.horizontal, Spacing.medium)
+                        .padding(.bottom, HomeHeroLayout.contentBottomPadding)
+                    }
+                    .modifier(SkeletonShade())
+                VStack(alignment: .leading, spacing: Spacing.large) {
+                    SkeletonRow(style: .landscape, hasChevron: true)
+                    SkeletonRow(style: .posters, hasChevron: true)
+                    SkeletonRow(style: .posters, hasChevron: true)
+                }
+                .padding(.top, -HomeHeroLayout.rowOverlap)
+                .padding(.bottom, Spacing.medium)
+            }
+        }
+        .ignoresSafeArea(edges: .top)
     }
 }
 

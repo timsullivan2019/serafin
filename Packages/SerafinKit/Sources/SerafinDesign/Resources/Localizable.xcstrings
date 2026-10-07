@@ -48,6 +48,12 @@
     "Favourite" : {
       "comment" : "Spoken state of a favourite item."
     },
+    "Featured" : {
+      "comment" : "Spoken name of Home's featured items' page dots."
+    },
+    "Featured: %@" : {
+      "comment" : "Spoken label of a featured item on Home, such as Featured: Sherlock Holmes, A Case of Identity."
+    },
     "Index" : {
       "comment" : "Spoken name of the letter index."
     },
@@ -63,6 +69,17 @@
     "Opens the player" : {
       "comment" : "Hint on the mini player's title."
     },
+    "Page %lld of %lld" : {
+      "comment" : "Which featured item on Home is showing, such as Page 2 of 4.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld"
+          }
+        }
+      }
+    },
     "Pause" : {
       "comment" : "Button that pauses playback."
     },
@@ -71,6 +88,9 @@
     },
     "Play" : {
       "comment" : "Button that starts playback."
+    },
+    "Play %@" : {
+      "comment" : "Button on Home's featured show or episode that plays an episode, such as Play S1 E1."
     },
     "Play Now" : {
       "comment" : "Button that plays the next episode."
@@ -93,6 +113,9 @@
     "Repackaged on server (no quality loss)" : {
       "comment" : "How a video plays: the server moves the original video and audio into a new container."
     },
+    "Resume" : {
+      "comment" : "Accessibility action that resumes a featured item on Home."
+    },
     "Resume · %@" : {
       "comment" : "Button that resumes playback, such as Resume · 32 min left."
     },
@@ -104,6 +127,9 @@
     },
     "Season %lld, episode %lld" : {
       "comment" : "Spoken season and episode number of an episode."
+    },
+    "Show Details" : {
+      "comment" : "Button and accessibility action that opens a featured item's detail screen on Home."
     },
     "Shows everything in this row" : {
       "comment" : "Hint on a row title."

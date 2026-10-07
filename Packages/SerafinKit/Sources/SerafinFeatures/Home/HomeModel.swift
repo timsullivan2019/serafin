@@ -18,7 +18,13 @@ import SerafinDesign
         let date: Date
     }
 
-    private(set) var phase = Phase.loading
+    private(set) var phase = Phase.loading {
+        didSet {
+            if case .loaded = phase { revision += 1 }
+        }
+    }
+    /// Goes up each time new rows show, so the hero picks again.
+    private(set) var revision = 0
     /// Set when a load fails while rows are showing, and cleared when one succeeds.
     private(set) var notice: Notice?
     /// How many loads are running. Pull to refresh can run one beside another.

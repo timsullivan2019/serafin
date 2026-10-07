@@ -371,6 +371,9 @@
     "Movies" : {
       "comment" : "Search results section."
     },
+    "Movies and episodes you start appear here until you finish them." : {
+      "comment" : "Explanation when Continue Watching's screen has nothing in it."
+    },
     "Movies and shows" : {
       "comment" : "Placeholder in the search field."
     },
@@ -401,8 +404,14 @@
     "No Matches" : {
       "comment" : "Title when filters hide everything."
     },
+    "No Next Episodes" : {
+      "comment" : "Title when Next Up's screen has nothing in it."
+    },
     "Nothing Here Yet" : {
       "comment" : "Title when the home screen is empty."
+    },
+    "Nothing Started" : {
+      "comment" : "Title when Continue Watching's screen has nothing in it."
     },
     "Nothing in This Genre" : {
       "comment" : "Title for an empty genre."
@@ -659,6 +668,9 @@
     },
     "The Code Expired" : {
       "comment" : "Title when a Quick Connect code expires."
+    },
+    "The next episode of each show you're watching appears here." : {
+      "comment" : "Explanation when Next Up's screen has nothing in it."
     },
     "The player's Audio and Subtitles sheet shows which one is happening." : {
       "comment" : "Settings footer under the ways a video can play."

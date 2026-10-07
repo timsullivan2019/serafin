@@ -10,6 +10,7 @@ public struct LandscapeCard<Menu: View>: View {
     private let card: MediaCard
     private let artwork: Image?
     private let zoomNamespace: Namespace.ID?
+    private let showsPlayedBadge: Bool
     private let menu: Menu
 
     /// Creates a landscape card with a context menu.
@@ -19,22 +20,26 @@ public struct LandscapeCard<Menu: View>: View {
     ///   - artwork: The thumbnail, or nil while it loads.
     ///   - zoomNamespace: The namespace for a zoom transition into the item's detail screen, keyed by the
     ///     card's ``MediaCard/id``. Pass nil for no zoom.
+    ///   - showsPlayedBadge: Whether a played item shows its check, which Continue Watching leaves off since its time
+    ///     left says the item isn't finished.
     ///   - menu: The context menu's items.
     public init(
         card: MediaCard,
         artwork: Image?,
         zoomNamespace: Namespace.ID? = nil,
+        showsPlayedBadge: Bool = true,
         @ViewBuilder menu: () -> Menu
     ) {
         self.card = card
         self.artwork = artwork
         self.zoomNamespace = zoomNamespace
+        self.showsPlayedBadge = showsPlayedBadge
         self.menu = menu()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xSmall) {
-            CardArtwork(card: card, image: artwork, aspectRatio: 16 / 9)
+            CardArtwork(card: card, image: artwork, aspectRatio: 16 / 9, showsPlayedBadge: showsPlayedBadge)
                 .cardZoomSource(id: card.id, in: zoomNamespace)
                 .cardHoverEffect()
             VStack(alignment: .leading, spacing: 2) {
@@ -60,7 +65,7 @@ public struct LandscapeCard<Menu: View>: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityLabel)
         .cardContextMenu(menu) {
-            CardArtwork(card: card, image: artwork, aspectRatio: 16 / 9)
+            CardArtwork(card: card, image: artwork, aspectRatio: 16 / 9, showsPlayedBadge: showsPlayedBadge)
                 .frame(width: 320)
         }
     }
@@ -73,8 +78,11 @@ extension LandscapeCard where Menu == EmptyView {
     ///   - card: The item to show.
     ///   - artwork: The thumbnail, or nil while it loads.
     ///   - zoomNamespace: The namespace for a zoom transition into the item's detail screen.
-    public init(card: MediaCard, artwork: Image?, zoomNamespace: Namespace.ID? = nil) {
-        self.init(card: card, artwork: artwork, zoomNamespace: zoomNamespace) { EmptyView() }
+    ///   - showsPlayedBadge: Whether a played item shows its check.
+    public init(card: MediaCard, artwork: Image?, zoomNamespace: Namespace.ID? = nil, showsPlayedBadge: Bool = true) {
+        self.init(card: card, artwork: artwork, zoomNamespace: zoomNamespace, showsPlayedBadge: showsPlayedBadge) {
+            EmptyView()
+        }
     }
 }
 

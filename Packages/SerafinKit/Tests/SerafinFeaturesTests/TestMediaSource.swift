@@ -32,6 +32,12 @@ struct TestMediaSource: MediaSource {
         return watching.map { MediaItem(card: $0, source: nil) }
     }
 
+    func continueWatching() async throws -> [MediaItem] { try await samples.continueWatching() }
+
+    func nextUp() async throws -> [MediaItem] { try await samples.nextUp() }
+
+    func playable(ofSeries id: String) async throws -> MediaItem? { try await samples.playable(ofSeries: id) }
+
     func item(_ id: String) async throws -> MediaItem { try await samples.item(id) }
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
