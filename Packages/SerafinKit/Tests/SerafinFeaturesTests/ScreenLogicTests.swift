@@ -75,3 +75,73 @@ import Testing
         }
     }
 }
+
+@Suite struct LicencesTests {
+    /// The packages pinned in `Package.resolved`, by identity, with their versions.
+    private func pinned() throws -> [String: String] {
+        let resolved = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Package.resolved")
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: resolved)) as? [String: Any]
+        let pins = try #require(object?["pins"] as? [[String: Any]])
+        return Dictionary(
+            uniqueKeysWithValues: pins.compactMap { pin in
+                guard let identity = pin["identity"] as? String,
+                    let version = (pin["state"] as? [String: Any])?["version"] as? String
+                else { return nil }
+                return (identity, version)
+            })
+    }
+
+    @Test func licenceTextIsReflowedIntoParagraphs() {
+        let text = "Permission is hereby granted,\r\n  free of charge.\n\n   \nTHE SOFTWARE IS PROVIDED\n\"AS IS\".\n"
+        #expect(
+            LicenceParagraph.paragraphs(of: text) == [
+                LicenceParagraph(kind: .body, text: "Permission is hereby granted, free of charge."),
+                LicenceParagraph(kind: .body, text: "THE SOFTWARE IS PROVIDED \"AS IS\"."),
+            ])
+    }
+
+    @Test func markdownHeadingsItemsAndHardBreaksKeepTheirShape() {
+        let text = """
+            Mozilla Public License Version 2.0
+            ==================================
+
+            ### 1. Definitions
+
+            **1.1. “Contributor”**  \n    means each individual
+                or legal entity.
+
+            * **(a)** that the initial
+              Contributor
+            * **(b)** that the Covered Software
+            -------------------------------
+            The end.
+            """
+        #expect(
+            LicenceParagraph.paragraphs(of: text) == [
+                LicenceParagraph(kind: .heading, text: "Mozilla Public License Version 2.0"),
+                LicenceParagraph(kind: .heading, text: "1. Definitions"),
+                LicenceParagraph(kind: .body, text: "**1.1. “Contributor”**\nmeans each individual or legal entity."),
+                LicenceParagraph(kind: .item, text: "**(a)** that the initial Contributor"),
+                LicenceParagraph(kind: .item, text: "**(b)** that the Covered Software"),
+                LicenceParagraph(kind: .body, text: "The end."),
+            ])
+    }
+
+    @Test func onlyTheJellyfinSDKLicenceIsMarkdown() {
+        #expect(LicensedPackage.bundled.filter(\.markdown).map(\.identity) == ["jellyfin-sdk-swift"])
+    }
+
+    @Test func theLicencesScreenListsEveryPackageAtItsPinnedVersion() throws {
+        let listed = Dictionary(uniqueKeysWithValues: LicensedPackage.bundled.map { ($0.identity, $0.version) })
+        // When this fails, run scripts/licences.py after changing the packages.
+        #expect(listed == (try pinned()))
+    }
+
+    @Test func everyPackageCarriesItsLicenceText() {
+        #expect(!LicensedPackage.bundled.isEmpty)
+        for package in LicensedPackage.bundled {
+            #expect(["MIT", "Apache-2.0", "MPL-2.0"].contains(package.licence))
+            #expect(package.text.count > 500)
+        }
+    }
+}

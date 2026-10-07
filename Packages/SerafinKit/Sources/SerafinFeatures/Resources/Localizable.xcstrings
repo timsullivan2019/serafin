@@ -410,6 +410,9 @@
     "Nothing in this library matches these filters." : {
       "comment" : "Explanation when filters hide everything."
     },
+    "Notice" : {
+      "comment" : "Heading of a package's notice file."
+    },
     "OK" : {
       "comment" : "Button that closes an alert."
     },
@@ -612,6 +615,9 @@
     "Something went wrong playing this. Try again, or lower the streaming quality in Settings." : {
       "comment" : "Explanation when the player can't play a stream."
     },
+    "Source Code" : {
+      "comment" : "Link to a package's source."
+    },
     "Standard" : {
       "comment" : "Subtitle size: the system caption style's own."
     },
@@ -736,7 +742,7 @@
       "comment" : "Label of the username field."
     },
     "Version" : {
-      "comment" : "Settings row showing the app version."
+      "comment" : "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
     },
     "Video" : {
       "comment" : "Detail fact: video format."

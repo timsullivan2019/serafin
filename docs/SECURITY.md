@@ -78,9 +78,23 @@ The security requirements from `AGENTS.md`, and where each is met.
 | Token in URLs | API calls and images carry the token in the `Authorization` header. Stream URLs carry it as a query parameter, since AVPlayer can't add headers to HLS segment requests, and they're never logged. | `DeviceIdentity.authorizationHeader`, `Artwork`, `PlaybackNegotiator` |
 | Token leak in logs | Every URL, name and title is logged with `privacy: .private`, tokens are never logged, and nothing logs a whole request or response. Messages are either errors or debug notes, and iOS doesn't keep debug notes unless a developer is streaming logs. | `Logger(serafinCategory:)` |
 | Stale sessions | Sign-out deletes the token, then asks the server to end the session, waiting at most 10 seconds; the device is signed out either way. Removing a server signs out every user on it. Each install has one device ID, made once and kept in the Keychain, and the client name `Serafin` with the app version. | `Accounts.signOut(_:)`, `Accounts.remove(serverID:)`, `DeviceIdentity`; tested in `AccountsTests`, `AppTests/SignOutKeychainTests` |
-| Third-party exfiltration | No analytics, ad or crash-reporting code. Dependencies are pinned to exact versions in `Packages/SerafinKit/Package.resolved`. Their network behaviour is reviewed in task 3.2. | `Package.swift`, `Package.resolved` |
+| Third-party exfiltration | No analytics, ad or crash-reporting code. Dependencies are pinned to exact versions in `Packages/SerafinKit/Package.resolved`, and none makes requests of its own; see Dependencies below. | `Package.swift`, `Package.resolved` |
 | Device shared or lost | An optional Face ID or passcode lock covers the app, the player and the app switcher, with a grace period. While it's on, Spotlight holds nothing from the library and Siri waits for the lock. Settings › Clear Cache deletes artwork and saved Homes. | `AppLock`, `LockLayer`, `SpotlightIndexer`, `Accounts.clearCaches()` |
 | Malicious server | Responses are untrusted input. Decoding is bounded: public info at 64 KB, images at 20 MB, a saved Home at 8 MB. Overviews are reduced to plain text, never rendered as HTML. Item IDs from outside the app, such as from Spotlight or a shortcut, must look like IDs Jellyfin issues before they're sent anywhere. Servers found on the network are accepted only at `http` and `https` addresses. | `ServerConnector.maximumInfoSize`, `ImagePipeline.responseLimit`, `HomeSnapshotStore.maximumFileSize`, `PlainText`, `ItemID.isPlain`, `LocalDiscovery.accept` |
+
+## Dependencies
+
+Swift packages only, pinned to exact versions in `Packages/SerafinKit/Package.resolved`, with no analytics, ads or crash reporting among them. Each was read for network code and hard-coded hosts; none has a host of its own.
+
+| Package | Licence | Network behaviour |
+| --- | --- | --- |
+| Jellyfin SDK for Swift | MPL-2.0 | Requests go only to the server address it's given. Its local discovery broadcasts on UDP port 7359 on the local network, and only while Add Server is open. Its websocket and code generator aren't used. |
+| Get | MIT | The SDK's `URLSession` wrapper. Makes no requests of its own. |
+| Nuke | MIT | Loads only the image URLs Serafin asks for, through the pinning delegate. Makes no requests of its own. |
+| SwiftNIO Transport Services, SwiftNIO | Apache-2.0 | Networking primitives the SDK's discovery runs on. No requests of their own. |
+| Swift Atomics, Swift Collections, Swift System | Apache-2.0 | No network code. |
+
+The Licences screen in Settings lists each package with its version and full licence, from `Licences.json`, which `scripts/licences.py` writes from `Package.resolved`. A test fails if the list and `Package.resolved` disagree.
 
 ## What Serafin keeps on the device
 
