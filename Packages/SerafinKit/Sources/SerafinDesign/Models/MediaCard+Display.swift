@@ -47,7 +47,7 @@ extension MediaCard {
         remainingText(locale: .current)
     }
 
-    /// A description for VoiceOver, such as "Sintel, 2010, 40% watched".
+    /// A description for VoiceOver, such as "Sintel, 2010, 40% watched, 1 hour left".
     public var accessibilityLabel: String {
         accessibilityLabel(locale: .current)
     }
@@ -88,11 +88,7 @@ extension MediaCard {
         } else if let year {
             parts.append(String(year))
         }
-        if isPlayed {
-            parts.append(
-                String(localized: "Played", bundle: .module, locale: locale, comment: "Spoken state of a played item.")
-            )
-        } else if isInProgress {
+        if isInProgress {
             let percent = progress.formatted(.percent.precision(.fractionLength(0)).locale(locale))
             parts.append(
                 String(
@@ -101,6 +97,27 @@ extension MediaCard {
                     locale: locale,
                     comment: "Spoken progress, such as 40% watched."
                 )
+            )
+        }
+        // The time the card shows: what's left of a started item, otherwise a movie's or an episode's running time.
+        if let runtime, kind == .movie || kind == .episode {
+            if isInProgress {
+                let remaining = Self.spokenDuration(runtime * (1 - progress), locale: locale)
+                parts.append(
+                    String(
+                        localized: "\(remaining) left",
+                        bundle: .module,
+                        locale: locale,
+                        comment: "Time left to watch, such as 32 min left."
+                    )
+                )
+            } else {
+                parts.append(Self.spokenDuration(runtime, locale: locale))
+            }
+        }
+        if isPlayed {
+            parts.append(
+                String(localized: "Played", bundle: .module, locale: locale, comment: "Spoken state of a played item.")
             )
         }
         if isFavourite {
@@ -121,6 +138,13 @@ extension MediaCard {
         duration.formatted(
             .units(allowed: [.hours, .minutes], width: .abbreviated, fractionalPart: .hide(rounded: .up))
                 .locale(locale)
+        )
+    }
+
+    /// A running time as VoiceOver says it, in whole words, such as "1 hour, 39 minutes".
+    static func spokenDuration(_ duration: Duration, locale: Locale) -> String {
+        duration.formatted(
+            .units(allowed: [.hours, .minutes], width: .wide, fractionalPart: .hide(rounded: .up)).locale(locale)
         )
     }
 }

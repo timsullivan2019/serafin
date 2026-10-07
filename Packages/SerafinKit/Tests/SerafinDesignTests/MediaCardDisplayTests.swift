@@ -68,8 +68,19 @@ import Testing
         #expect(played.remainingText(locale: english) == nil)
     }
 
-    @Test func voiceOverDescribesAMovieWithItsProgress() {
-        #expect(movie.accessibilityLabel(locale: english) == "Sintel, 2010, 40% watched")
+    @Test func voiceOverDescribesAMovieWithItsProgressAndTimeLeft() {
+        #expect(movie.accessibilityLabel(locale: english) == "Sintel, 2010, 40% watched, 1 hour left")
+    }
+
+    @Test func voiceOverGivesAnUnstartedMovieItsRunningTime() {
+        var unstarted = movie
+        unstarted.progress = 0
+        #expect(unstarted.accessibilityLabel(locale: english) == "Sintel, 2010, 1 hour, 39 minutes")
+    }
+
+    @Test func voiceOverLeavesAShowsRunningTimeOut() {
+        let show = MediaCard(id: "show", kind: .series, title: "Caminandes", year: 2013, runtime: .seconds(150))
+        #expect(show.accessibilityLabel(locale: english) == "Caminandes, 2013")
     }
 
     @Test func voiceOverDescribesAPlayedFavouriteEpisode() {
@@ -79,7 +90,7 @@ import Testing
         card.isFavourite = true
         #expect(
             card.accessibilityLabel(locale: english)
-                == "Gran Dillama, Caminandes, Season 1, episode 2, Played, Favourite"
+                == "Gran Dillama, Caminandes, Season 1, episode 2, 3 minutes, Played, Favourite"
         )
     }
 }
