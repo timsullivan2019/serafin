@@ -290,6 +290,9 @@
     "Get a new code and enter it within a few minutes." : {
       "comment" : "Explanation when a Quick Connect code expires."
     },
+    "Go to Show" : {
+      "comment" : "Menu item on an episode that opens the show it belongs to."
+    },
     "Home" : {
       "comment" : "Title of the home tab."
     },
