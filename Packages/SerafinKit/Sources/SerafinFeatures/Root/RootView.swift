@@ -1,16 +1,51 @@
+import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// The root of Serafin's interface: Home, Library, Search and Settings tabs, a sidebar on iPad, and the mini player
-/// in the tab bar while something plays.
+/// The root of Serafin's interface: the connect flow until someone signs in, then the tabs, browsing as the
+/// current account.
 public struct RootView: View {
-    @State private var selection = AppTab.home
-    @State private var playback = PlaybackCoordinator()
+    @Environment(AppSession.self) private var session
 
-    /// Creates the root view.
+    /// Creates the root view. It expects the app's ``AppSession`` in the environment.
     public init() {}
 
     public var body: some View {
+        Group {
+            switch session.state {
+            case .loading:
+                Color.background
+                    .ignoresSafeArea()
+            case .signedOut:
+                ConnectFlow()
+            case .signedIn(let account):
+                if let library = session.library {
+                    MainTabs()
+                        .environment(\.media, LiveMediaSource(library: library))
+                        .environment(\.artwork, session.artwork)
+                        .environment(
+                            \.signInEnded,
+                            SignInEndedAction(account: account.key) { [session] in
+                                Task { try? await session.signOut(account.key) }
+                            }
+                        )
+                        // Another account starts on fresh tabs rather than the last account's screens.
+                        .id(account.key)
+                }
+            }
+        }
+        .tint(.accentFallback)
+    }
+}
+
+/// Home, Library, Search and Settings tabs, a sidebar on iPad, and the mini player in the tab bar while something
+/// plays.
+struct MainTabs: View {
+    @State private var selection = AppTab.home
+    @State private var playback = PlaybackCoordinator()
+    @State private var actions = MediaActions()
+
+    var body: some View {
         TabView(selection: $selection) {
             Tab(
                 String(localized: "Home", bundle: .module, comment: "Title of the home tab."),
@@ -38,9 +73,17 @@ public struct RootView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
-        .tint(.accentFallback)
         .modifier(TabChrome(playback: playback))
         .environment(playback)
+        .environment(actions)
+        .alert(
+            actions.failure?.title ?? "",
+            isPresented: Binding(get: { actions.failure != nil }, set: { if !$0 { actions.failure = nil } })
+        ) {
+            Button(String(localized: "OK", bundle: .module, comment: "Button that closes an alert.")) {}
+        } message: {
+            Text(actions.failure?.message ?? "")
+        }
     }
 }
 
@@ -83,30 +126,37 @@ private struct NowPlayingAccessory: View {
     @Environment(PlaybackCoordinator.self) private var playback
 
     var body: some View {
-        if let card = playback.nowPlaying {
-            MiniPlayer(
-                title: card.title,
-                subtitle: card.eyebrowText,
-                artwork: Catalog.backdrop(for: card),
-                isPlaying: playback.isPlaying,
-                playPause: { playback.togglePlayPause() },
-                close: { playback.stop() },
-                open: { playback.showPlayer() }
-            )
+        if let item = playback.nowPlaying {
+            ItemArtwork(item, role: .landscape, width: 72) { artwork in
+                MiniPlayer(
+                    title: item.card.title,
+                    subtitle: item.card.eyebrowText,
+                    artwork: artwork,
+                    isPlaying: playback.isPlaying,
+                    playPause: { playback.togglePlayPause() },
+                    close: { playback.stop() },
+                    open: { playback.showPlayer() }
+                )
+            }
         }
     }
 }
 
 #Preview("Light") {
-    RootView()
+    MainTabs()
 }
 
 #Preview("Dark") {
-    RootView()
+    MainTabs()
         .preferredColorScheme(.dark)
 }
 
 #Preview("Largest text") {
-    RootView()
+    MainTabs()
         .dynamicTypeSize(.accessibility5)
+}
+
+#Preview("Signed out") {
+    RootView()
+        .environment(AppSession.preview())
 }

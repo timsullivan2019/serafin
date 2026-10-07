@@ -2,13 +2,16 @@ import Foundation
 import JellyfinAPI
 
 /// A server that answered and checked out, ready to be saved and signed in to.
-public struct ConnectedServer: Equatable, Sendable {
+public struct ConnectedServer: Equatable, Identifiable, Sendable {
     /// The server to save, at the address that answered.
     public let server: Server
     /// What the server reported about itself.
     public let info: PublicServerInfo
     /// Whether the connection is HTTPS or plain HTTP on a private network.
     public let security: TransportSecurity
+
+    /// The server's own ID.
+    public var id: String { server.id }
 }
 
 /// Finds a Jellyfin server at an address the user typed or discovered.

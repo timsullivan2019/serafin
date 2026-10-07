@@ -152,3 +152,24 @@ import os
         state = .signedOut
     }
 }
+
+#if DEBUG
+    extension AppSession {
+        /// A session on throwaway, in-memory stores, signed out, for previews.
+        static func preview() -> AppSession {
+            AppSession(accounts: previewAccounts())
+        }
+
+        private nonisolated static func previewAccounts() -> Accounts {
+            let suite = "app.getserafin.serafin.preview.\(UUID().uuidString)"
+            let directory = URL.temporaryDirectory.appending(path: suite)
+            return Accounts(
+                secrets: InMemorySecretStore(),
+                deviceName: "iPhone",
+                serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
+                defaults: UserDefaults(suiteName: suite) ?? UserDefaults(),
+                imageDiskCache: false
+            )
+        }
+    }
+#endif

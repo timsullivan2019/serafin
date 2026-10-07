@@ -13,6 +13,17 @@
     "%@ · %@" : {
       "comment" : "Series title and episode code above an episode title, such as Caminandes · S1 E2."
     },
+    "%@, %@" : {
+      "comment" : "VoiceOver label for a cast member: their name, then their role.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "Audio and Subtitles" : {
       "comment" : "Button that opens the audio and subtitle picker."
     },

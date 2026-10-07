@@ -1,9 +1,11 @@
 import SerafinDesign
 import SwiftUI
 
-/// The search tab: live results across movies, shows and episodes as the user types.
+/// The search tab: results across movies, shows and episodes as the user types.
 struct SearchView: View {
     @State private var model = SearchModel()
+    @Environment(\.media) private var media
+    @Environment(MediaActions.self) private var actions
 
     var body: some View {
         content
@@ -17,10 +19,12 @@ struct SearchView: View {
                     comment: "Placeholder in the search field."
                 )
             )
+            .task(id: SearchKey(term: model.term, revision: actions.revision)) { await model.search(in: media) }
     }
 
     @ViewBuilder private var content: some View {
-        if !model.hasQuery {
+        switch model.phase {
+        case .idle:
             EmptyState(
                 String(
                     localized: "Search Your Library", bundle: .module, comment: "Title before anything is searched."),
@@ -31,17 +35,27 @@ struct SearchView: View {
                 ),
                 systemImage: "magnifyingglass"
             )
-        } else if model.results.isEmpty {
-            ContentUnavailableView.search(text: model.query)
-        } else {
-            SearchResultsView(results: model.results)
+        case .searching:
+            LoadingState()
+        case .failed(let message):
+            FailureState(message: message) { Task { await model.search(in: media) } }
+        case .results(let results) where results.isEmpty:
+            ContentUnavailableView.search(text: model.term)
+        case .results(let results):
+            SearchResultsView(results: results)
         }
+    }
+
+    /// What starts a search: a new term, or a change to played marks or favourites shown in the results.
+    private struct SearchKey: Hashable {
+        let term: String
+        let revision: Int
     }
 }
 
 /// Results grouped into movies, shows and episodes.
 private struct SearchResultsView: View {
-    let results: SearchResults
+    let results: MediaSearchResults
     @ScaledMetric(relativeTo: .subheadline) private var posterWidth = 104.0
     @ScaledMetric(relativeTo: .subheadline) private var thumbnailWidth = 220.0
 
@@ -52,17 +66,17 @@ private struct SearchResultsView: View {
                     String(localized: "Movies", bundle: .module, comment: "Search results section."),
                     results.movies,
                     width: posterWidth
-                ) { PosterLink(card: $0) }
+                ) { PosterLink(item: $0) }
                 section(
                     String(localized: "Shows", bundle: .module, comment: "Search results section."),
                     results.shows,
                     width: posterWidth
-                ) { PosterLink(card: $0) }
+                ) { PosterLink(item: $0) }
                 section(
                     String(localized: "Episodes", bundle: .module, comment: "Search results section."),
                     results.episodes,
                     width: thumbnailWidth
-                ) { LandscapeLink(card: $0) }
+                ) { LandscapeLink(item: $0) }
             }
             .padding(Spacing.medium)
         }
@@ -71,11 +85,11 @@ private struct SearchResultsView: View {
 
     @ViewBuilder private func section<Card: View>(
         _ title: String,
-        _ cards: [MediaCard],
+        _ items: [MediaItem],
         width: CGFloat,
-        @ViewBuilder card: @escaping (MediaCard) -> Card
+        @ViewBuilder card: @escaping (MediaItem) -> Card
     ) -> some View {
-        if !cards.isEmpty {
+        if !items.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.small) {
                 Text(title)
                     .typography(.title)
@@ -85,7 +99,7 @@ private struct SearchResultsView: View {
                     columns: [GridItem(.adaptive(minimum: width), spacing: Spacing.small, alignment: .top)],
                     spacing: Spacing.large
                 ) {
-                    ForEach(cards) { card($0) }
+                    ForEach(items) { card($0) }
                 }
             }
         }
@@ -94,17 +108,17 @@ private struct SearchResultsView: View {
 
 #Preview("Light") {
     TabStack { SearchView() }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
 }
 
 #Preview("Dark") {
     TabStack { SearchView() }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
         .preferredColorScheme(.dark)
 }
 
 #Preview("Largest text") {
     TabStack { SearchView() }
-        .environment(PlaybackCoordinator())
+        .previewEnvironment()
         .dynamicTypeSize(.accessibility5)
 }

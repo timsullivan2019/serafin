@@ -6,6 +6,8 @@ public enum MediaRowStyle: Sendable {
     case posters
     /// Landscape thumbnails: one large card with the next peeking in on iPhone, three on iPad.
     case landscape
+    /// Cast and crew: three and a half across on iPhone, seven on iPad.
+    case people
 }
 
 /// A titled row of cards that scrolls sideways and settles on card edges, for the home screen and detail pages.
@@ -101,6 +103,8 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
             case (.posters, false): isLarge ? 1.6 : 3.3
             case (.landscape, true): isLarge ? 2.2 : 3.2
             case (.landscape, false): isLarge ? 1.05 : 1.15
+            case (.people, true): isLarge ? 3.6 : 7.3
+            case (.people, false): isLarge ? 2.1 : 3.6
             }
         let gaps = Spacing.small * across.rounded(.down)
         return (length - Spacing.medium - gaps) / across

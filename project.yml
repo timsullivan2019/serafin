@@ -87,6 +87,7 @@ schemes:
         - package: SerafinKit/SerafinCoreTests
         - package: SerafinKit/SerafinPlaybackTests
         - package: SerafinKit/SerafinDesignTests
+        - package: SerafinKit/SerafinFeaturesTests
     profile:
       config: Release
     analyze:
