@@ -69,6 +69,8 @@ private struct DetailContent: View {
     let arrivesFromHomeHero: Bool
     /// The hero's size, which decides how wide a backdrop to ask for.
     @State private var heroSize: CGSize = .zero
+    /// Whether the page has scrolled past the hero, so rows rather than artwork pass under the navigation bar.
+    @State private var isPastHero = false
     /// A trailer's web page, showing in Safari inside the app.
     @State private var webTrailer: WebPage?
     @Environment(PlaybackCoordinator.self) private var playback
@@ -135,6 +137,20 @@ private struct DetailContent: View {
         }
         // The hero runs under the navigation bar, whose glass back button floats over the artwork.
         .ignoresSafeArea(edges: .top)
+        .onScrollGeometryChange(for: CGFloat.self) { [heroHeight = heroSize.height] geometry in
+            // How far the hero's bottom is from the top of the screen, taken as far off until the hero has a size.
+            guard heroHeight > 0 else { return .infinity }
+            return heroHeight - geometry.contentOffset.y - geometry.contentInsets.top
+        } action: { _, heroBottom in
+            let isPast = HomeHeroLayout.isPastHero(heroBottom: heroBottom, wasPast: isPastHero)
+            if isPast != isPastHero {
+                isPastHero = isPast
+            }
+        }
+        // Rows scrolling up under the navigation bar soften into it, as on Home. Over the artwork there's nothing to
+        // soften, and while the screen zooms in the effect would show as a band across the top, so it stays hidden.
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectHidden(!isPastHero, for: .top)
         .sheet(item: $webTrailer) { page in
             WebPageView(url: page.url)
                 .ignoresSafeArea()

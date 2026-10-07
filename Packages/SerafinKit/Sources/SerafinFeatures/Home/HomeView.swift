@@ -151,11 +151,9 @@ struct HomeView: View {
             // How far the hero's bottom is from the top of the screen.
             geometry.containerSize.height * heroFraction - geometry.contentOffset.y - geometry.contentInsets.top
         } action: { _, heroBottom in
-            // A gap between the two thresholds, so resting near one never flips back and forth.
-            if !isPastHero, heroBottom < 100 {
-                isPastHero = true
-            } else if isPastHero, heroBottom > 140 {
-                isPastHero = false
+            let isPast = HomeHeroLayout.isPastHero(heroBottom: heroBottom, wasPast: isPastHero)
+            if isPast != isPastHero {
+                isPastHero = isPast
             }
         }
         // Rows scrolling up under the status bar soften into it, so a title is never cut off behind the clock. Over
