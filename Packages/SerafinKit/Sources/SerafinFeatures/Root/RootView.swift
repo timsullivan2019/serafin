@@ -401,21 +401,23 @@ private struct MiniPlayerZoomSource: ViewModifier {
     }
 }
 
-#Preview("Light") {
-    MainTabs()
-}
+#if DEBUG
+    #Preview("Light") {
+        MainTabs()
+    }
 
-#Preview("Dark") {
-    MainTabs()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        MainTabs()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    MainTabs()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        MainTabs()
+            .dynamicTypeSize(.accessibility5)
+    }
 
-#Preview("Signed out") {
-    RootView()
-        .environment(AppSession.preview())
-}
+    #Preview("Signed out") {
+        RootView()
+            .environment(AppSession.preview())
+    }
+#endif

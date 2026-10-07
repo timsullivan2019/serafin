@@ -382,29 +382,31 @@ extension LibraryQuery.Sort {
     }
 }
 
-#Preview("Libraries") {
-    TabStack { LibrariesView() }
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Libraries") {
+        TabStack { LibrariesView() }
+            .previewEnvironment()
+    }
 
-#Preview("Light") {
-    TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
-        .previewEnvironment()
-}
+    #Preview("Light") {
+        TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
+            .previewEnvironment()
+    }
 
-#Preview("Dark") {
-    TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { LibraryView(scope: .library(MockLibrary.libraries[1])) }
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { LibraryView(scope: .library(MockLibrary.libraries[1])) }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
 
-#Preview("Collection") {
-    TabStack { LibraryView(scope: .collection(id: "collection-blender-open-movies", title: "Blender Open Movies")) }
-        .previewEnvironment()
-}
+    #Preview("Collection") {
+        TabStack { LibraryView(scope: .collection(id: "collection-blender-open-movies", title: "Blender Open Movies")) }
+            .previewEnvironment()
+    }
+#endif

@@ -12,5 +12,6 @@ struct ConnectFlow: View {
                     SignInView(server: server)
                 }
         }
+        .onAppear { LaunchSignpost.end(showing: "Welcome") }
     }
 }

@@ -133,19 +133,21 @@ private struct SearchResultsView: View {
     }
 }
 
-#Preview("Light") {
-    TabStack { SearchView() }
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Light") {
+        TabStack { SearchView() }
+            .previewEnvironment()
+    }
 
-#Preview("Dark") {
-    TabStack { SearchView() }
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { SearchView() }
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { SearchView() }
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { SearchView() }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

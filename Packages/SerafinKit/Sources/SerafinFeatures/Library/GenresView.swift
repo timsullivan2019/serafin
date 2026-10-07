@@ -52,19 +52,21 @@ struct GenresView: View {
     }
 }
 
-#Preview("Light") {
-    TabStack { GenresView() }
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Light") {
+        TabStack { GenresView() }
+            .previewEnvironment()
+    }
 
-#Preview("Dark") {
-    TabStack { GenresView() }
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { GenresView() }
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { GenresView() }
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { GenresView() }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

@@ -11,6 +11,7 @@ struct SerafinApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
+        LaunchSignpost.begin()
         let session = AppSession.live(deviceName: UIDevice.current.model)
         let lock = AppLock()
         let requests = AppRequests()

@@ -129,6 +129,13 @@ private let bareEpisode = BaseItemDto(
         #expect(request.thumbnail == decodedSize)
     }
 
+    @Test func decodedImagesKeepAtMostEightyMegabytes() throws {
+        let pipeline = ImagePipeline.serafin(pinning: nil, diskCacheName: nil)
+        let cache = try #require(pipeline.configuration.imageCache as? ImageCache)
+        #expect(cache.costLimit == 80 * 1024 * 1024)
+        #expect(cache.costLimit < ImageCache.defaultCostLimit || ImageCache.defaultCostLimit <= 80 * 1024 * 1024)
+    }
+
     @Test func noArtMeansNoRequest() {
         let artwork = Artwork(
             urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x")

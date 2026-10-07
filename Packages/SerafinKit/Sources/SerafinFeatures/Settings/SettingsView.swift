@@ -380,19 +380,21 @@ private struct StorageSection: View {
     }
 #endif
 
-#Preview("Light") {
-    TabStack { SettingsView() }
-        .environment(AppSession.preview())
-}
+#if DEBUG
+    #Preview("Light") {
+        TabStack { SettingsView() }
+            .environment(AppSession.preview())
+    }
 
-#Preview("Dark") {
-    TabStack { SettingsView() }
-        .environment(AppSession.preview())
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { SettingsView() }
+            .environment(AppSession.preview())
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { SettingsView() }
-        .environment(AppSession.preview())
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { SettingsView() }
+            .environment(AppSession.preview())
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

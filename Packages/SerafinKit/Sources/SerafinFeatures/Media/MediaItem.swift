@@ -3,13 +3,47 @@ import JellyfinAPI
 import SerafinDesign
 
 /// An item as screens show it: the card to draw, and the server's item behind it.
+///
+/// SwiftUI copies and compares the items cards are made from every time it updates them. The server's item is about
+/// 2 KB with dozens of references, so it's kept in a box: a copy of an item copies one reference, and two copies of
+/// the same item compare equal without comparing the server's item field by field.
 struct MediaItem: Identifiable, Hashable, Sendable {
     /// What cards and headers draw.
     var card: MediaCard
+    private var box: SourceBox?
+
+    /// An item with its card and, from the server, its item. Nil for the built-in samples, which draw generated art.
+    init(card: MediaCard, source: BaseItemDto?) {
+        self.card = card
+        box = source.map(SourceBox.init)
+    }
+
     /// The server's item, for its artwork. Nil for the built-in samples, which draw generated art instead.
-    var source: BaseItemDto?
+    var source: BaseItemDto? {
+        get { box?.item }
+        set { box = newValue.map(SourceBox.init) }
+    }
 
     var id: String { card.id }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        guard lhs.card == rhs.card else { return false }
+        return lhs.box === rhs.box || lhs.box?.item == rhs.box?.item
+    }
+
+    /// Hashes the card alone, which two equal items always share.
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(card)
+    }
+
+    /// The server's item, shared by every copy of a ``MediaItem``.
+    private final class SourceBox: Sendable {
+        let item: BaseItemDto
+
+        init(_ item: BaseItemDto) {
+            self.item = item
+        }
+    }
 }
 
 extension MediaItem {

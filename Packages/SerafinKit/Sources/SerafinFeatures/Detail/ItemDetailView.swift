@@ -176,19 +176,21 @@ private struct DetailToolbar: ToolbarContent {
     }
 }
 
-#Preview("Movie") {
-    TabStack { ItemDetailView(id: "movie-the-general") }
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Movie") {
+        TabStack { ItemDetailView(id: "movie-the-general") }
+            .previewEnvironment()
+    }
 
-#Preview("Series, dark") {
-    TabStack { ItemDetailView(id: "series-sherlock-holmes") }
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Series, dark") {
+        TabStack { ItemDetailView(id: "series-sherlock-holmes") }
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Episode, largest text") {
-    TabStack { ItemDetailView(id: "series-caminandes-s1e2") }
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Episode, largest text") {
+        TabStack { ItemDetailView(id: "series-caminandes-s1e2") }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif

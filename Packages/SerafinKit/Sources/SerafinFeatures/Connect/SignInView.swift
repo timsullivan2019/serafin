@@ -209,21 +209,23 @@ extension View {
     }
 }
 
-#Preview("Quick Connect") {
-    NavigationStack {
-        SignInView(
-            server: Server(
-                id: "s", name: "Living Room", url: URL(string: "https://media.example.com") ?? .temporaryDirectory))
+#if DEBUG
+    #Preview("Quick Connect") {
+        NavigationStack {
+            SignInView(
+                server: Server(
+                    id: "s", name: "Living Room", url: URL(string: "https://media.example.com") ?? .temporaryDirectory))
+        }
+        .environment(AppSession.preview())
     }
-    .environment(AppSession.preview())
-}
 
-#Preview("Password, dark") {
-    NavigationStack {
-        SignInView(
-            server: Server(
-                id: "s", name: "Living Room", url: URL(string: "https://media.example.com") ?? .temporaryDirectory))
+    #Preview("Password, dark") {
+        NavigationStack {
+            SignInView(
+                server: Server(
+                    id: "s", name: "Living Room", url: URL(string: "https://media.example.com") ?? .temporaryDirectory))
+        }
+        .environment(AppSession.preview())
+        .preferredColorScheme(.dark)
     }
-    .environment(AppSession.preview())
-    .preferredColorScheme(.dark)
-}
+#endif

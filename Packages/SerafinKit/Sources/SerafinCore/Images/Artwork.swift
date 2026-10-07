@@ -69,6 +69,10 @@ public struct Artwork: Sendable {
 extension ImagePipeline {
     /// The most image data the disk cache keeps.
     nonisolated static let diskCacheLimit = 200 * 1024 * 1024
+    /// The most memory decoded images keep, about 80 posters. Nuke's own limit is 15% of the device's memory, up to
+    /// 768 MB, which ten minutes of browsing a large library fills. Images that drop out decode again from the disk
+    /// cache, already sized for their views.
+    nonisolated static let memoryCacheLimit = 80 * 1024 * 1024
     /// The largest image download allowed. Sized images are far smaller; this stops a server sending something huge.
     nonisolated static let responseLimit = 20 * 1024 * 1024
     /// The name of the image disk cache's folder in Caches.
@@ -89,6 +93,7 @@ extension ImagePipeline {
         let loader = DataLoader(configuration: sessionConfiguration)
         loader.delegate = pinning
         var configuration = ImagePipeline.Configuration(dataLoader: loader)
+        configuration.imageCache = ImageCache(costLimit: memoryCacheLimit)
         if let diskCacheName, let cache = try? DataCache(name: diskCacheName) {
             cache.sizeLimit = diskCacheLimit
             configuration.dataCache = cache

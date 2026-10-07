@@ -46,19 +46,21 @@ struct SeasonView: View {
     }
 }
 
-#Preview("Light") {
-    TabStack { SeasonView(id: "series-sherlock-holmes-s1", seriesID: "series-sherlock-holmes") }
-        .previewEnvironment()
-}
+#if DEBUG
+    #Preview("Light") {
+        TabStack { SeasonView(id: "series-sherlock-holmes-s1", seriesID: "series-sherlock-holmes") }
+            .previewEnvironment()
+    }
 
-#Preview("Dark") {
-    TabStack { SeasonView(id: "series-sherlock-holmes-s2", seriesID: "series-sherlock-holmes") }
-        .previewEnvironment()
-        .preferredColorScheme(.dark)
-}
+    #Preview("Dark") {
+        TabStack { SeasonView(id: "series-sherlock-holmes-s2", seriesID: "series-sherlock-holmes") }
+            .previewEnvironment()
+            .preferredColorScheme(.dark)
+    }
 
-#Preview("Largest text") {
-    TabStack { SeasonView(id: "series-alice-s1", seriesID: "series-alice") }
-        .previewEnvironment()
-        .dynamicTypeSize(.accessibility5)
-}
+    #Preview("Largest text") {
+        TabStack { SeasonView(id: "series-alice-s1", seriesID: "series-alice") }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+#endif
