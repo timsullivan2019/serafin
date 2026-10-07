@@ -73,6 +73,16 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
         #expect(pick(home) == ["started", "next-a", "movie-new", "show-new", "movie-old"])
     }
 
+    @Test func aShowRanksByWhenItsNewestEpisodeArrivedNotWhenTheShowWasAdded() {
+        var show = item("show", kind: .series, added: day(1))
+        show.source?.dateLastMediaAdded = day(9)
+        let home = HomeContent(
+            continueWatching: [], nextUp: [],
+            latest: [row([item("movie", added: day(5))]), row([show], kind: .shows)]
+        )
+        #expect(pick(home) == ["show", "movie"])
+    }
+
     @Test func atMostFiveAreFeatured() {
         let home = HomeContent(
             continueWatching: [], nextUp: [],
@@ -138,7 +148,7 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
             latest: [row([MediaItem(card: show, source: nil)], kind: .shows)]
         )
         model.update(from: home) { _ in true }
-        await model.findEpisodes(from: SampleMediaSource())
+        await model.refreshShows(from: SampleMediaSource())
         let entry = try #require(model.entry(show.id))
         #expect(entry.playable?.card.kind == .episode)
         #expect(entry.hero.playable?.episode?.seriesID == show.id)
@@ -148,7 +158,7 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
         let model = HomeHeroModel()
         let home = try await SampleMediaSource().home()
         model.update(from: home) { _ in true }
-        await model.findEpisodes(from: SampleMediaSource())
+        await model.refreshShows(from: SampleMediaSource())
         let found = model.entries.compactMap(\.playable).count
         let second = model.entries[1].id
         model.selection = second
@@ -156,9 +166,23 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
         #expect(model.entries.compactMap(\.playable).count == found)
         #expect(model.selection == second)
 
-        model.update(from: HomeContent(continueWatching: [], nextUp: [], latest: [])) { _ in true }
-        #expect(model.entries.isEmpty)
-        #expect(model.selection == nil)
+        // When the page showing is no longer featured, the first page shows.
+        model.update(from: HomeContent(continueWatching: [], nextUp: [], latest: [row(Array(home.latest[0].items))])) {
+            _ in true
+        }
+        #expect(model.selection == model.entries.first?.id)
+    }
+
+    @Test func aShowStandingInForANewSeasonGetsItsDetailsWhenLookedUp() async throws {
+        let model = HomeHeroModel()
+        let show = try #require(MockMedia.series.first { $0.id == "series-caminandes" })
+        let bare = MediaCard(id: show.id, kind: .series, title: show.title)
+        model.update(
+            from: HomeContent(continueWatching: [], nextUp: [], latest: [row([MediaItem(card: bare, source: nil)])])
+        ) { _ in true }
+        #expect(model.entries.first?.item.card.overview == nil)
+        await model.refreshShows(from: SampleMediaSource())
+        #expect(model.entries.first?.item.card.overview == show.overview)
     }
 }
 
@@ -189,6 +213,7 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
         #expect(show.parentBackdropImageTags == ["backdrop"])
         #expect(show.parentLogoImageTag == "logo")
         #expect(show.dateCreated == day(2))
+        #expect(show.dateLastMediaAdded == day(2))
     }
 }
 
@@ -210,5 +235,14 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
             return
         }
         #expect(episodes.map(\.card) == MockLibrary.nextUp)
+    }
+}
+
+@MainActor
+@Suite struct HomeHeroPageTests {
+    @Test func theBackdropIsAskedForWideEnoughToFillATallPage() {
+        #expect(HomeHeroPage.backdropWidth(for: .zero) == 0)
+        #expect(HomeHeroPage.backdropWidth(for: CGSize(width: 402, height: 542)) > 402 * 2)
+        #expect(HomeHeroPage.backdropWidth(for: CGSize(width: 1200, height: 400)) == 1200)
     }
 }

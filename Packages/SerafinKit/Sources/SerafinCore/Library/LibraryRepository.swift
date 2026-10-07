@@ -123,8 +123,9 @@ public actor LibraryRepository {
     ///   - limit: The most items to return.
     public func latest(in viewID: String, limit: Int = 16) async throws -> [BaseItemDto] {
         var parameters = Paths.GetLatestMediaParameters(userID: userID, parentID: viewID)
-        // When each was added, so Home's hero can pick the newest across libraries.
-        parameters.fields = Self.cardFields + [.dateCreated]
+        // When each was added, and for a show or season when an episode last was, so Home's hero can pick the
+        // newest across libraries.
+        parameters.fields = Self.cardFields + [.dateCreated, .dateLastMediaAdded]
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         parameters.enableUserData = true

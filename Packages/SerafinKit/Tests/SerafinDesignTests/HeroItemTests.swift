@@ -64,8 +64,13 @@ import Testing
 
     @Test func playNamesTheEpisodeForAnEpisodeOrAShow() {
         #expect(HeroItem(card: episode()).playTitle(locale: english) == "Play S1 E3")
-        // A show nobody has started plays its first episode.
-        #expect(HeroItem(card: series()).playTitle(locale: english) == "Play S1 E1")
+        // A show plays the episode found for it, the first for a show nobody has started.
+        let first = MediaCard(
+            id: "episode-scandal", kind: .episode, title: "A Scandal in Bohemia",
+            episode: MediaCard.EpisodeInfo(
+                seriesID: "series-sherlock", seriesTitle: "Sherlock Holmes", seasonNumber: 1, episodeNumber: 1))
+        #expect(HeroItem(card: series(), playable: first).playTitle(locale: english) == "Play S1 E1")
+        #expect(HeroItem(card: series()).playTitle(locale: english) == "Play")
         // A show part way through plays the episode found for it, and resumes one in progress.
         #expect(HeroItem(card: series(progress: 0.3), playable: episode()).playTitle(locale: english) == "Play S1 E3")
         #expect(
@@ -115,5 +120,13 @@ import Testing
         #expect(ids.count == Set(ids).count)
         #expect(MockLibrary.hero.first?.card.isInProgress == true)
         #expect((3...5).contains(MockLibrary.hero.count))
+    }
+
+    @Test func aCardWithoutItsPlayedCheckDoesntSayPlayed() {
+        let rewatching = MediaCard(
+            id: "movie", kind: .movie, title: "Metropolis", year: 1927, runtime: .seconds(92 * 60), progress: 0.5,
+            isPlayed: true)
+        #expect(rewatching.accessibilityLabel(locale: english).contains("Played"))
+        #expect(!rewatching.accessibilityLabel(locale: english, includesPlayed: false).contains("Played"))
     }
 }

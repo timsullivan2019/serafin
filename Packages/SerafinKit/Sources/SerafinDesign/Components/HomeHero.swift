@@ -125,7 +125,8 @@ public struct HomeHero<Page: View>: View {
 
     private func select(_ index: Int) {
         guard items.indices.contains(index) else { return }
-        withAnimation(Motion.animation(reduceMotion: reduceMotion)) {
+        // Under Reduce Motion the page changes without sliding.
+        withAnimation(reduceMotion ? nil : .serafinSnappy) {
             selection = items[index].id
         }
     }
@@ -164,6 +165,7 @@ public struct HeroPage<Menu: View>: View {
     private let menu: Menu
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
 
     /// Creates a page.
     ///
@@ -211,30 +213,37 @@ public struct HeroPage<Menu: View>: View {
             .onTapGesture(perform: showDetails)
             .modifier(HeroZoomSource(id: HomeHeroLayout.zoomID(for: item.id), namespace: zoomNamespace))
             .overlay(alignment: .bottomLeading) { details }
-            .cardContextMenu(menu) {
-                HeroPageBackdrop.preview(backdrop, kind: item.card.kind)
-            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(item.accessibilityLabel)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { showDetails() }
             .accessibilityAction(named: Text(item.playActionName), play)
             .accessibilityAction(named: Text(Self.showDetailsTitle), showDetails)
+            // After the accessibility element, so VoiceOver offers the menu too.
+            .cardContextMenu(menu) {
+                HeroPageBackdrop.preview(backdrop, kind: item.card.kind)
+            }
     }
 
     private var details: some View {
         VStack(alignment: .leading, spacing: Spacing.xSmall) {
-            heading
-            Text(item.metadata(includesSeries: logo != nil))
-                .typography(.cardTitle)
-                .foregroundStyle(.textSecondary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-            if !dynamicTypeSize.isAccessibilitySize, let overview = item.card.overview, !overview.isEmpty {
-                Text(overview)
-                    .typography(.body)
-                    .foregroundStyle(.textPrimary.opacity(0.85))
-                    .lineLimit(2)
+            VStack(alignment: .leading, spacing: Spacing.xSmall) {
+                heading
+                    .animation(.easeOut(duration: 0.3), value: logo != nil)
+                Text(item.metadata(includesSeries: logo != nil))
+                    .typography(.cardTitle)
+                    .foregroundStyle(.textSecondary)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+                if !dynamicTypeSize.isAccessibilitySize, let overview = item.card.overview, !overview.isEmpty {
+                    Text(overview)
+                        .typography(.body)
+                        .foregroundStyle(.textPrimary.opacity(contrast == .increased ? 1 : 0.85))
+                        .lineLimit(2)
+                }
             }
+            // The text is part of the artwork: tapping it opens the details too.
+            .contentShape(.rect)
+            .onTapGesture(perform: showDetails)
             HeroActions(
                 item: item,
                 tint: tint,
@@ -259,12 +268,14 @@ public struct HeroPage<Menu: View>: View {
                 // Logos are drawn for dark backgrounds; a soft shadow keeps a light one readable on a light fade.
                 .shadow(color: .black.opacity(colorScheme == .light ? 0.6 : 0.25), radius: 6, y: 1)
                 .padding(.bottom, Spacing.xxSmall)
+                .transition(.opacity)
         } else {
             Text(item.heading)
                 .typography(.largeTitle)
                 .foregroundStyle(.textPrimary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
+                .transition(.opacity)
         }
     }
 
@@ -303,7 +314,8 @@ private struct HeroActions: View {
                                 infoButton
                             }
                         }
-                        .fixedSize()
+                        // Play's title wraps rather than running off the screen.
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                     dotsLine
                 }
@@ -344,10 +356,10 @@ private struct HeroActions: View {
             playCount += 1
             play()
         } label: {
-            // At accessibility sizes the title drops the time left, which the details line and VoiceOver give.
+            // At accessibility sizes the title drops the time left, which VoiceOver still says.
             Label(dynamicTypeSize.isAccessibilitySize ? item.playActionName : item.playTitle, systemImage: "play.fill")
                 .typography(.headline)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 .padding(.horizontal, Spacing.xxSmall)
         }
         .modifier(HeroPlayZoomSource(id: HomeHeroLayout.playZoomID(for: item.id), namespace: playZoomNamespace))

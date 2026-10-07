@@ -63,7 +63,8 @@ public struct LandscapeCard<Menu: View>: View {
         // Cards always take their natural height, so a long title never squeezes the artwork in a row.
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(card.accessibilityLabel)
+        // A card without its played check doesn't say Played either.
+        .accessibilityLabel(showsPlayedBadge ? card.accessibilityLabel : card.accessibilityLabelWithoutPlayed)
         .cardContextMenu(menu) {
             CardArtwork(card: card, image: artwork, aspectRatio: 16 / 9, showsPlayedBadge: showsPlayedBadge)
                 .frame(width: 320)

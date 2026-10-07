@@ -111,6 +111,7 @@ extension MediaItem {
         series.parentLogoItemID = season.parentLogoItemID
         series.parentLogoImageTag = season.parentLogoImageTag
         series.dateCreated = season.dateCreated
+        series.dateLastMediaAdded = season.dateLastMediaAdded ?? season.dateCreated
         return series
     }
 }

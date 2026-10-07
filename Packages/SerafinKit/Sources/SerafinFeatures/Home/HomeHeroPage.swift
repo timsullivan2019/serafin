@@ -11,6 +11,8 @@ struct HomeHeroPage: View {
 
     let entry: HomeHeroModel.Entry
     @State private var tint: Color?
+    /// The page's size, which decides how wide a backdrop to ask for.
+    @State private var size: CGSize = .zero
     @Environment(\.artwork) private var artwork
     @Environment(\.media) private var media
     @Environment(\.navigate) private var navigate
@@ -20,7 +22,9 @@ struct HomeHeroPage: View {
 
     var body: some View {
         let usesPoster = !hasBackdrop
-        ItemArtwork(entry.item, role: usesPoster ? .poster : .backdrop, onLoad: setTint) { backdrop in
+        ItemArtwork(
+            entry.item, role: usesPoster ? .poster : .backdrop, width: Self.backdropWidth(for: size), onLoad: setTint
+        ) { backdrop in
             ItemArtwork(entry.item, role: .logo, width: Self.logoWidth) { logo in
                 HeroPage(
                     item: entry.hero,
@@ -37,6 +41,18 @@ struct HomeHeroPage: View {
                 }
             }
         }
+        .onGeometryChange(for: CGSize.self) {
+            $0.size
+        } action: {
+            size = $0
+        }
+    }
+
+    /// How wide a backdrop to ask for so that, filling a page of `size`, it isn't enlarged: a 16:9 image filling a
+    /// tall page is as wide as 16:9 of the page's height. Zero until the page has a size, which asks for nothing yet.
+    static func backdropWidth(for size: CGSize) -> CGFloat {
+        guard size.width > 0, size.height > 0 else { return 0 }
+        return max(size.width, size.height * 16 / 9)
     }
 
     /// Whether the item or its show has a backdrop. The samples always do.
@@ -68,6 +84,9 @@ struct HomeHeroPage: View {
         Task {
             if let episode = try? await media.playable(ofSeries: entry.id) {
                 playback.play(episode, zoomSource: zoomSource)
+            } else {
+                // Without its episode, as when the server can't be reached, the show's own screen says why.
+                navigate(.featured(id: entry.id))
             }
         }
     }

@@ -36,7 +36,7 @@ public struct HeroItem: Identifiable, Hashable, Sendable {
     }
 
     /// The Play button's title: "Resume · 9 min left" for something in progress, "Play S1 E1" for an episode or a
-    /// series, "Play" for a movie.
+    /// series whose episode is known, "Play" for a movie or a series until then.
     public var playTitle: String {
         playTitle(locale: .current)
     }
@@ -108,23 +108,15 @@ public struct HeroItem: Identifiable, Hashable, Sendable {
         return playTitle(locale: locale)
     }
 
-    /// The episode Play starts, as a code: an episode's own, a series' known episode, or the first episode of a
-    /// series nobody has started.
+    /// The episode Play starts, as a code: an episode's own, or a series' once it's known.
     private func playCode(locale: Locale) -> String? {
         switch card.kind {
         case .episode:
-            return card.episodeCode(locale: locale)
+            card.episodeCode(locale: locale)
         case .series:
-            if let playable { return playable.episodeCode(locale: locale) }
-            guard card.progress == 0, !card.isPlayed else { return nil }
-            return String(
-                localized: "S\(1) E\(1)",
-                bundle: .module,
-                locale: locale,
-                comment: "Season and episode code on cards, such as S2 E4."
-            )
+            playable?.episodeCode(locale: locale)
         case .movie, .season, .collection:
-            return nil
+            nil
         }
     }
 

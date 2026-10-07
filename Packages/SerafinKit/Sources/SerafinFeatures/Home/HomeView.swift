@@ -9,11 +9,13 @@ import SwiftUI
 /// failure it asks again when the device joins a network or Serafin comes back to the foreground.
 struct HomeView: View {
     @State private var model = HomeModel()
-    @State private var hero = HomeHeroModel()
     /// Whether the hero has scrolled up under the navigation bar, which brings the title back.
     @State private var isPastHero = false
-    /// The hero's width, for prefetching the next page's artwork at the size it's drawn.
-    @State private var heroWidth: CGFloat = 0
+    /// The hero's size, for prefetching the next page's artwork at the size it's drawn.
+    @State private var heroSize: CGSize = .zero
+    /// Whether pull to refresh is running, which the hero shows, since its stretched artwork covers the system's
+    /// spinner.
+    @State private var isRefreshing = false
     /// Changes each time Home asks again without pull to refresh, which starts a new load.
     @State private var attempt = 0
     @Environment(\.media) private var media
@@ -33,15 +35,26 @@ struct HomeView: View {
             .toolbarTitleDisplayMode(.inline)
             // Over the hero there's no bar at all, so the whole artwork takes swipes and taps.
             .navigationBarShown(showsBar)
-            .task(id: Load(revision: actions.revision, attempt: attempt)) { await model.load(from: media) }
+            .overlay(alignment: .top) {
+                if isRefreshing, !hero.entries.isEmpty {
+                    ProgressView()
+                        .padding(Spacing.xSmall)
+                        .glassEffect(.regular, in: .circle)
+                        .padding(.top, Spacing.xSmall)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: isRefreshing)
+            .task(id: Load(revision: actions.revision, attempt: attempt)) {
+                model.artwork = artwork
+                await model.load(from: media)
+            }
             .task(id: model.revision) {
-                guard case .loaded(let home) = model.phase else { return }
-                hero.update(from: home) { [artwork] in HomeHeroPage.hasArtwork($0, artwork: artwork) }
                 prefetchNextPage()
-                await hero.findEpisodes(from: media)
+                await hero.refreshShows(from: media)
             }
             .onChange(of: hero.selection) { prefetchNextPage() }
-            .onChange(of: heroWidth) { prefetchNextPage() }
+            .onChange(of: heroSize) { prefetchNextPage() }
             .onChange(of: network.connection) { _, connection in
                 if connection.isOnline { tryAgainAfterAFailure() }
             }
@@ -89,15 +102,15 @@ struct HomeView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if hasHero {
-                    HomeHero(items: hero.items, selection: $hero.selection) { item in
+                    HomeHero(items: hero.items, selection: Bindable(hero).selection) { item in
                         if let entry = hero.entry(item.id) {
                             HomeHeroPage(entry: entry)
                         }
                     }
-                    .onGeometryChange(for: CGFloat.self) {
-                        $0.size.width
+                    .onGeometryChange(for: CGSize.self) {
+                        $0.size
                     } action: {
-                        heroWidth = $0
+                        heroSize = $0
                     }
                 }
                 LazyVStack(alignment: .leading, spacing: Spacing.large) {
@@ -139,13 +152,22 @@ struct HomeView: View {
             isPastHero = isPast
         }
         .scrollEdgeEffectHidden(hasHero && !isPastHero, for: .top)
-        .refreshable { await model.refresh(from: media) }
+        .refreshable {
+            isRefreshing = true
+            await model.refresh(from: media)
+            isRefreshing = false
+        }
     }
 
-    /// Whether the navigation bar shows: always without a hero, and once the hero has scrolled away with one.
+    private var hero: HomeHeroModel { model.hero }
+
+    /// Whether the navigation bar shows: not over the hero or its skeleton, and otherwise always.
     private var showsBar: Bool {
-        guard case .loaded = model.phase, !hero.entries.isEmpty else { return true }
-        return isPastHero
+        switch model.phase {
+        case .loading: false
+        case .loaded: hero.entries.isEmpty || isPastHero
+        case .failed: true
+        }
     }
 
     private var heroFraction: CGFloat {
@@ -153,7 +175,9 @@ struct HomeView: View {
     }
 
     private func prefetchNextPage() {
-        hero.prefetchPage(after: hero.selection, width: heroWidth, scale: displayScale, artwork: artwork)
+        hero.prefetchPage(
+            after: hero.selection, width: HomeHeroPage.backdropWidth(for: heroSize), scale: displayScale,
+            artwork: artwork)
     }
 
     /// Asks the server again when the last load failed and nothing is asking already.

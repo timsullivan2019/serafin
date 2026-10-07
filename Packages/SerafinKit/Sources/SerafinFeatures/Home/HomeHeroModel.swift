@@ -37,39 +37,50 @@ import SerafinDesign
         entries.first { $0.id == id }
     }
 
-    /// Picks the featured items from Home's rows. Shows keep the episode already found for them, and the page
-    /// showing stays when its item is still featured.
+    /// Picks the featured items from Home's rows. A show keeps its details and the episode found for it until
+    /// ``refreshShows(from:)`` looks again, and the page showing stays when its item is still featured; otherwise the
+    /// first page shows.
     ///
     /// - Parameters:
     ///   - home: Home's rows.
     ///   - hasArtwork: Whether an item has a backdrop or a poster, since the hero needs one or the other.
     func update(from home: HomeContent, hasArtwork: (MediaItem) -> Bool) {
-        let known = Dictionary(entries.map { ($0.id, $0.playable) }, uniquingKeysWith: { first, _ in first })
+        let known = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         entries = Self.candidates(from: home, hasArtwork: hasArtwork).map { item in
-            Entry(item: item, playable: known[item.id] ?? nil)
+            guard item.card.kind == .series, let earlier = known[item.id] else { return Entry(item: item) }
+            return Entry(item: earlier.item, playable: earlier.playable)
         }
         if let selection, entry(selection) == nil {
-            self.selection = nil
+            self.selection = entries.first?.id
         }
     }
 
-    /// Finds the episode each featured show's Play button starts. A show whose episode can't be found plays what
-    /// its detail screen would, once tapped.
-    func findEpisodes(from media: any MediaSource) async {
-        let shows = entries.filter { $0.item.card.kind == .series && $0.playable == nil }.map(\.id)
+    /// Looks up each featured show again: its details, since a show standing in for a new season has only a name and
+    /// artwork, and the episode its Play button starts, which changes as episodes are watched. A show that can't be
+    /// looked up keeps what it had.
+    func refreshShows(from media: any MediaSource) async {
+        let shows = entries.filter { $0.item.card.kind == .series }.map(\.id)
         guard !shows.isEmpty else { return }
-        let found = await withTaskGroup(of: (String, MediaItem?).self) { group in
+        let found = await withTaskGroup(of: (String, MediaItem?, MediaItem?).self) { group in
             for id in shows {
-                group.addTask { (id, try? await media.playable(ofSeries: id)) }
+                group.addTask {
+                    async let details = try? await media.item(id)
+                    async let episode = try? await media.playable(ofSeries: id)
+                    return (id, await details, await episode)
+                }
             }
-            var found: [String: MediaItem] = [:]
-            for await (id, episode) in group {
-                if let episode { found[id] = episode }
+            var found: [String: (MediaItem?, MediaItem?)] = [:]
+            for await (id, details, episode) in group {
+                found[id] = (details, episode)
             }
             return found
         }
         for index in entries.indices {
-            if let episode = found[entries[index].id] {
+            guard let (details, episode) = found[entries[index].id] else { continue }
+            if let details, details.card.kind == .series {
+                entries[index] = Entry(item: details, playable: entries[index].playable)
+            }
+            if let episode {
                 entries[index].playable = episode
             }
         }
@@ -77,8 +88,8 @@ import SerafinDesign
 
     /// Starts loading the artwork of the page after `selection`, so swiping to it never shows it arriving.
     ///
-    /// The requests match the page's own: the backdrop, or the poster standing in for it, at the page's width, and
-    /// the logo at ``HomeHeroPage/logoWidth``.
+    /// The requests match the page's own: the backdrop, or the poster standing in for it, at
+    /// ``HomeHeroPage/backdropWidth(for:)``, and the logo at ``HomeHeroPage/logoWidth``.
     func prefetchPage(after selection: String?, width: CGFloat, scale: CGFloat, artwork: Artwork?) {
         guard let artwork, width > 0, !entries.isEmpty else { return }
         let current = entries.firstIndex { $0.id == selection } ?? 0
@@ -140,8 +151,8 @@ import SerafinDesign
             .map(\.element)
     }
 
-    /// The libraries' newest items merged, newest first by the date each was added. Items with no date take turns
-    /// from each library, in each library's order, after the dated ones.
+    /// The libraries' newest items merged, newest first by when each was added, or for a show when its newest
+    /// episode was. Items with no date take turns from each library, in each library's order, after the dated ones.
     nonisolated static func newest(_ rows: [[MediaItem]]) -> [MediaItem] {
         let turns = rows.enumerated().flatMap { row, items in
             items.enumerated().map { position, item in (item: item, turn: position * rows.count + row) }
@@ -149,10 +160,15 @@ import SerafinDesign
         return
             turns
             .sorted { first, second in
-                let firstDate = first.item.source?.dateCreated ?? .distantPast
-                let secondDate = second.item.source?.dateCreated ?? .distantPast
+                let firstDate = added(first.item) ?? .distantPast
+                let secondDate = added(second.item) ?? .distantPast
                 return firstDate != secondDate ? firstDate > secondDate : first.turn < second.turn
             }
             .map(\.item)
+    }
+
+    /// When an item was added, or for a show or season, when its newest episode was.
+    nonisolated static func added(_ item: MediaItem) -> Date? {
+        item.source?.dateLastMediaAdded ?? item.source?.dateCreated
     }
 }
