@@ -23,6 +23,18 @@ extension MediaCard {
         return year.map(String.init)
     }
 
+    /// The title under a poster: an episode's series title, since an episode's poster is its series', otherwise the
+    /// card's own title.
+    public var posterTitle: String {
+        guard let seriesTitle = episode?.seriesTitle, !seriesTitle.isEmpty else { return title }
+        return seriesTitle
+    }
+
+    /// The line under a poster's title: an episode's code, such as "S2 E4", otherwise the year.
+    public var posterCaption: String? {
+        episodeCode ?? year.map(String.init)
+    }
+
     /// The running time for display, such as "1 hr, 39 min".
     public var runtimeText: String? {
         runtimeText(locale: .current)

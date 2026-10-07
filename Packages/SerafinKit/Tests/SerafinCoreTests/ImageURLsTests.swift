@@ -49,6 +49,14 @@ private let bareEpisode = BaseItemDto(
         #expect(try #require(urls.url(.logo, of: bareEpisode, maxWidth: 400)).path() == "/Items/show1111/Images/Logo")
     }
 
+    @Test func anEpisodesPosterIsItsShowsEvenWithAStillOfItsOwn() throws {
+        var episode = bareEpisode
+        episode.imageTags = ["Primary": "still-tag"]
+        #expect(try #require(urls.url(.poster, of: episode, maxWidth: 300)).path() == "/Items/show1111/Images/Primary")
+        episode.seriesPrimaryImageTag = nil
+        #expect(try #require(urls.url(.poster, of: episode, maxWidth: 300)).path() == "/Items/bbbb2222/Images/Primary")
+    }
+
     @Test func landscapeCardsPreferAnEpisodesOwnStill() throws {
         var episode = bareEpisode
         episode.imageTags = ["Primary": "still-tag"]

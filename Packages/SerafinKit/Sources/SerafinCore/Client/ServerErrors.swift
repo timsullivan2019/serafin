@@ -31,8 +31,12 @@ extension SerafinError {
         switch error {
         case is SerafinError, is CancellationError:
             return error
-        case is URLError:
-            return Task.isCancelled ? CancellationError() : SerafinError.serverUnreachable
+        case let error as URLError:
+            if Task.isCancelled {
+                return CancellationError()
+            }
+            return error.code == .appTransportSecurityRequiresSecureConnection
+                ? SerafinError.plainHTTPBlocked : SerafinError.serverUnreachable
         default:
             if let status = HTTPStatus.of(error) {
                 return statuses[status] ?? SerafinError.unexpectedResponse(status: status)

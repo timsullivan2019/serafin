@@ -64,7 +64,8 @@ import Testing
     @Test func everyCoreErrorHasAMessage() {
         let errors: [SerafinError] = [
             .keychain(status: -25300), .keychainDataCorrupt, .serverStoreUnavailable, .invalidAddress,
-            .insecureTransport, .serverUnreachable, .notJellyfin, .unsupportedServerVersion("10.9.11"),
+            .insecureTransport, .serverUnreachable, .plainHTTPBlocked, .notJellyfin,
+            .unsupportedServerVersion("10.9.11"),
             .invalidCredentials, .quickConnectDisabled, .quickConnectExpired, .notSignedIn, .notFound,
             .unexpectedResponse(status: 500),
         ]

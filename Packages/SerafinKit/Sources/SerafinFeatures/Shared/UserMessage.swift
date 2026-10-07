@@ -73,6 +73,19 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                 ),
                 systemImage: "wifi.exclamationmark"
             )
+        case .plainHTTPBlocked:
+            self.init(
+                title: String(
+                    localized: "iOS Blocked This Connection", bundle: .module,
+                    comment: "Title when iOS refuses plain HTTP to an address."),
+                message: String(
+                    localized:
+                        "iOS doesn't allow unencrypted connections to this kind of address. For a Tailscale address, enter the server's Tailscale machine name instead, or use HTTPS.",
+                    bundle: .module,
+                    comment: "Explanation when iOS refuses plain HTTP to an address, such as a Tailscale 100.x address."
+                ),
+                systemImage: "lock.shield"
+            )
         case .notJellyfin:
             self.init(
                 title: String(

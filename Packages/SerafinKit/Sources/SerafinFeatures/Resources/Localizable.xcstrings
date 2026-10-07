@@ -370,8 +370,14 @@
     "Your Servers" : {
       "comment" : "Servers saved on this device."
     },
+    "iOS Blocked This Connection" : {
+      "comment" : "Title when iOS refuses plain HTTP to an address."
+    },
     "iOS couldn't read or save your sign-in. Restart your device and try again." : {
       "comment" : "Explanation when the Keychain fails."
+    },
+    "iOS doesn't allow unencrypted connections to this kind of address. For a Tailscale address, enter the server's Tailscale machine name instead, or use HTTPS." : {
+      "comment" : "Explanation when iOS refuses plain HTTP to an address, such as a Tailscale 100.x address."
     },
     "iOS doesn't recognize the certificate for %@. Compare this SHA-256 fingerprint with the one your server shows, and trust it only if they match." : {
       "comment" : "Explanation of the certificate check. The argument is the server's host name."

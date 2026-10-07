@@ -2,6 +2,9 @@ import SwiftUI
 
 /// A 2:3 poster with the title and year beneath, for library grids and home rows.
 ///
+/// An episode shows its series' poster, so the card names the series and gives the episode's code, such as
+/// "S2 E4", in place of the year.
+///
 /// The card fills the width it is given. Wrap it in a `Button` or `NavigationLink` with `.buttonStyle(.card)` for
 /// the press effect. Pass menu items for a context menu whose preview is a larger copy of the poster.
 public struct PosterCard<Menu: View>: View {
@@ -36,12 +39,12 @@ public struct PosterCard<Menu: View>: View {
                 .cardZoomSource(id: card.id, in: zoomNamespace)
                 .cardHoverEffect()
             VStack(alignment: .leading, spacing: 2) {
-                Text(card.title)
+                Text(card.posterTitle)
                     .typography(.cardTitle)
                     .foregroundStyle(.textPrimary)
                     .lineLimit(2)
-                if let year = card.year {
-                    Text(String(year))
+                if let caption = card.posterCaption {
+                    Text(caption)
                         .typography(.caption)
                         .foregroundStyle(.textSecondary)
                 }

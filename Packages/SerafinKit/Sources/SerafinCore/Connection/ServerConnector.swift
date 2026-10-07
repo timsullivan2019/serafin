@@ -78,6 +78,9 @@ public struct ServerConnector: Sendable {
             if error.isCertificateFailure, let presented = pinning.rejectedCertificate(for: host) {
                 throw SerafinError.untrustedCertificate(presented)
             }
+            if error.code == .appTransportSecurityRequiresSecureConnection {
+                throw SerafinError.plainHTTPBlocked
+            }
             throw SerafinError.serverUnreachable
         } catch {
             // Something answered, but not with Jellyfin's public info: an HTML page, malformed JSON, another product.

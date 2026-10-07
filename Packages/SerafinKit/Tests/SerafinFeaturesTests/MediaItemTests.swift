@@ -62,6 +62,25 @@ import Testing
         #expect(MediaItem(BaseItemDto(id: "dddd4444", name: "Something", type: kind)) == nil)
     }
 
+    @Test func aNewSeasonStandsForItsSeriesAmongWhatsNew() throws {
+        let season = BaseItemDto(
+            id: "eeee5555", name: "Season 2", seriesID: "ffff6666", seriesName: "Caminandes",
+            seriesPrimaryImageTag: "show-poster", type: .season)
+        let episode = BaseItemDto(id: "aaaa7777", name: "Pilot", seriesID: "ffff6666", type: .episode)
+        let series = BaseItemDto(id: "ffff6666", name: "Caminandes", type: .series)
+        let latest = MediaItem.latest([season, episode, series])
+        #expect(latest.map(\.id) == ["ffff6666", "aaaa7777"])
+        let card = try #require(latest.first).card
+        #expect(card.kind == .series)
+        #expect(card.title == "Caminandes")
+        #expect(latest.first?.source?.imageTags?["Primary"] == "show-poster")
+    }
+
+    @Test func aSeasonWithoutItsSeriesPosterStaysASeason() {
+        let season = BaseItemDto(id: "eeee5555", name: "Season 2", seriesID: "ffff6666", type: .season)
+        #expect(MediaItem.latest([season]).map(\.card.kind) == [.season])
+    }
+
     @Test func itemsWithoutAnIDAreLeftOut() {
         #expect(MediaItem(BaseItemDto(name: "No ID", type: .movie)) == nil)
     }
