@@ -295,6 +295,15 @@ public actor LibraryRepository {
         cache.removeAll()
     }
 
+    // MARK: - The signed-in user
+
+    /// The tag of the signed-in user's profile picture, or nil when they haven't set one.
+    public func profileImageTag() async throws -> String? {
+        let request = Paths.getCurrentUser
+        let user = try await cached(request.url, request.query) { try await client.send(request).value }
+        return user.primaryImageTag
+    }
+
     // MARK: - Language preferences
 
     /// The user's audio and subtitle language preferences, as saved on the server. Always asks the server, since

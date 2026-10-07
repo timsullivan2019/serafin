@@ -98,6 +98,9 @@
     "Accent Colour" : {
       "comment" : "Settings row for the colour of buttons, links and selections."
     },
+    "Accounts, playback, appearance and privacy" : {
+      "comment" : "Hint on the profile button, which opens Settings."
+    },
     "Add Account" : {
       "comment" : "Settings row: sign in another user."
     },
@@ -589,7 +592,7 @@
       "comment" : "Settings footer when the device has no passcode."
     },
     "Settings" : {
-      "comment" : "Title of the settings tab."
+      "comment" : "Title of the settings screen."
     },
     "Show" : {
       "comment" : "The kind of a title in Siri, Shortcuts and Spotlight."

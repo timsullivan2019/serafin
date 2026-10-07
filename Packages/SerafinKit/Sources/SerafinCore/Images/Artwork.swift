@@ -40,6 +40,12 @@ public struct Artwork: Sendable {
         return request(urls.url(itemID: id, type: .primary, tag: tag, maxWidth: pixels), pixels: pixels)
     }
 
+    /// The request for a user's profile picture, drawn `width` points wide on a screen of `scale`, or nil when the
+    /// user has none. The server sends the picture at its own size; it's decoded no larger than the view.
+    public func request(userImage userID: String, tag: String?, width: CGFloat, scale: CGFloat) -> ImageRequest? {
+        request(urls.userImageURL(userID: userID, tag: tag), pixels: Self.pixelWidth(points: width, scale: scale))
+    }
+
     private func request(_ url: URL?, pixels: Int) -> ImageRequest? {
         guard let url else { return nil }
         var urlRequest = URLRequest(url: url)

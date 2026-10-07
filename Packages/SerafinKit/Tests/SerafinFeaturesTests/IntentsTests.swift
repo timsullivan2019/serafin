@@ -135,11 +135,11 @@ import Testing
         #expect(paths.home.isEmpty)
     }
 
-    @Test func fromSettingsATitleOpensOnHome() {
+    @Test func aTitleOpensOnSearchWhenSearchIsShowing() {
         var paths = TabPaths()
-        #expect(paths.show("movie-sintel", from: .settings) == .home)
-        #expect(paths.home == [.item(id: "movie-sintel")])
-        #expect(paths.settings.isEmpty)
+        #expect(paths.show("movie-sintel", from: .search) == .search)
+        #expect(paths.search == [.item(id: "movie-sintel")])
+        #expect(paths.home.isEmpty)
     }
 
     @Test func theTitleShowingIsNotOpenedTwice() {
