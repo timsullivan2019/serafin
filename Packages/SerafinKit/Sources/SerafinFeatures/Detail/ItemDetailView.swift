@@ -88,7 +88,13 @@ private struct DetailContent: View {
     private var hero: some View {
         ItemArtwork(details.item, role: .backdrop, onLoad: { [model] in model.backdropLoaded($0) }) { backdrop in
             ItemArtwork(details.item, role: .logo, width: 280) { logo in
-                HeroHeader(card: playCard, backdrop: backdrop, logo: logo, tint: model.tint) {
+                HeroHeader(
+                    card: playCard,
+                    backdrop: backdrop,
+                    logo: logo,
+                    tint: model.tint,
+                    startOver: { playback.play(details.playable ?? details.item, from: .beginning) }
+                ) {
                     playback.play(details.playable ?? details.item)
                 }
             }

@@ -14,6 +14,11 @@ import SwiftUI
         await change { try await media.setPlayed(isPlayed, for: item) }
     }
 
+    /// Has every screen reload, as after playback changes an item's progress.
+    func reload() {
+        revision += 1
+    }
+
     /// Adds `item` to the favourites or takes it out.
     func setFavourite(_ isFavourite: Bool, for item: MediaItem, in media: any MediaSource) async {
         await change { try await media.setFavourite(isFavourite, for: item) }

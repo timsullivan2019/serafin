@@ -24,11 +24,17 @@
         }
       }
     },
+    "%@×" : {
+      "comment" : "A playback speed, such as 1.25×."
+    },
+    "Audio" : {
+      "comment" : "Heading of the audio tracks."
+    },
     "Audio and Subtitles" : {
       "comment" : "Button that opens the audio and subtitle picker."
     },
-    "Close" : {
-      "comment" : "Button that closes the player."
+    "Cancel" : {
+      "comment" : "Button that stops autoplay."
     },
     "Close Player" : {
       "comment" : "Button that stops and hides the mini player."
@@ -38,6 +44,12 @@
     },
     "Loading" : {
       "comment" : "Spoken while content loads."
+    },
+    "Minimize Player" : {
+      "comment" : "Button that shrinks the player into the mini player, which keeps playing."
+    },
+    "Off" : {
+      "comment" : "Choice that turns subtitles off."
     },
     "Opens the player" : {
       "comment" : "Hint on the mini player's title."
@@ -51,11 +63,20 @@
     "Play" : {
       "comment" : "Button that starts playback."
     },
+    "Play Now" : {
+      "comment" : "Button that plays the next episode."
+    },
+    "Playback Speed" : {
+      "comment" : "Menu that changes how fast the video plays."
+    },
     "Playback position" : {
       "comment" : "Spoken name of the player scrubber."
     },
     "Played" : {
       "comment" : "Spoken state of a played item."
+    },
+    "Plays in %@" : {
+      "comment" : "Countdown before the next episode plays, such as Plays in 7 seconds."
     },
     "Rated %@" : {
       "comment" : "Spoken age rating, such as Rated PG."
@@ -81,8 +102,17 @@
     "Skip forward 10 seconds" : {
       "comment" : "Button that jumps forward 10 seconds."
     },
+    "Start Over" : {
+      "comment" : "Menu item and action that plays an item from the beginning."
+    },
+    "Subtitles" : {
+      "comment" : "Heading of the subtitle tracks."
+    },
     "Try Again" : {
       "comment" : "Button that retries a failed load."
+    },
+    "Up Next" : {
+      "comment" : "Heading over the next episode."
     }
   },
   "version" : "1.0"

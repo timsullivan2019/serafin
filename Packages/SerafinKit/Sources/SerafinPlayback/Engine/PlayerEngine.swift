@@ -30,7 +30,8 @@ public enum PlaybackState: Equatable, Sendable {
 /// playback is.
 ///
 /// Screens read ``state``, ``elapsed``, ``duration``, ``buffered`` and ``rate``, and call the control methods.
-/// Picture in Picture, AirPlay and Now Playing hang off ``player``.
+/// AirPlay and Now Playing hang off ``player``. On iOS the engine also keeps the view showing the video, so Picture in
+/// Picture can carry on after the player screen closes.
 @Observable @MainActor public final class PlayerEngine {
     /// What the player is doing.
     public private(set) var state = PlaybackState.idle
@@ -50,6 +51,13 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var failure: (any Error)?
     /// The episode after the one playing, for autoplay. Nil for movies and last episodes.
     public private(set) var nextItem: BaseItemDto?
+    /// Whether playback is held up waiting for data.
+    public private(set) var isWaiting = false
+
+    /// Whether the player is loading or waiting for data, so a spinner should show.
+    public var isBuffering: Bool {
+        state == .loading || isWaiting
+    }
 
     /// The player, for the video layer, Picture in Picture, AirPlay and Now Playing.
     public let player = AVPlayer()
@@ -73,11 +81,33 @@ public enum PlaybackState: Equatable, Sendable {
     private var playsWhenReady = false
     /// True while a new item seeks to its start, so the brief pause there doesn't show as paused.
     private var isStarting = false
+    /// How many seeks are under way. The player reports its old position until a seek lands, so the elapsed time
+    /// holds at the target meanwhile.
+    @ObservationIgnored private var seeksInFlight = 0
+    /// Goes up with every load and stop, so a load that finishes after another has started, or after a stop, does
+    /// nothing.
+    @ObservationIgnored private var generation = 0
     #if canImport(UIKit)
         private var details: NowPlayingDetails?
         private var nowPlaying: NowPlaying?
-        /// Picture in Picture for the player screen's video layer, once the screen has shown it.
-        public private(set) var pictureInPicture: AVPictureInPictureController?
+        @ObservationIgnored private var hostedVideoView: PlayerLayerView?
+        @ObservationIgnored private var pictureInPicture: AVPictureInPictureController?
+        @ObservationIgnored private var pictureInPictureEvents: PictureInPictureEvents?
+        @ObservationIgnored private var pictureInPictureObservations: [NSKeyValueObservation] = []
+        /// Whether a player screen is showing the video.
+        @ObservationIgnored private var isSurfaceShowing = false
+        /// True from the moment Picture in Picture begins to start until it has stopped, so the video layer keeps
+        /// the player meanwhile.
+        @ObservationIgnored private var isPictureInPictureEngaged = false
+        /// Whether Picture in Picture can start now.
+        public private(set) var isPictureInPicturePossible = false
+        /// Whether the video is playing in Picture in Picture.
+        public private(set) var isPictureInPictureActive = false
+        /// Called once Picture in Picture has started, so the app can put the player screen away.
+        @ObservationIgnored public var pictureInPictureDidStart: (() -> Void)?
+        /// Called when the user returns from Picture in Picture to the app, so the app can bring back the player
+        /// screen.
+        @ObservationIgnored public var restoreFromPictureInPicture: (() -> Void)?
     #endif
 
     /// Creates an engine for the signed-in account.
@@ -109,34 +139,53 @@ public enum PlaybackState: Equatable, Sendable {
     ///
     /// Anything already playing is stopped and reported first.
     public func load(_ item: BaseItemDto, options: PlaybackOptions) async {
+        generation += 1
+        let load = generation
         await stopReporting()
+        guard load == generation else { return }
         self.item = item
         self.options = options
         nextItem = nil
         failure = nil
         elapsed = options.startPosition
         state = .loading
-        PlaybackAudioSession.activate()
+        await PlaybackAudioSession.activate()
+        guard load == generation else { return }
         do {
             guard let itemID = item.id else { throw PlaybackError.notPlayable }
             let plan = try await negotiator.plan(for: itemID, options: options)
+            guard load == generation else { return }
+            Self.logger.debug("Playing by \(String(describing: plan.method), privacy: .public)")
             install(plan, startingAt: options.startPosition, playing: true)
             reporter = ProgressReporter(client: client, plan: plan)
             await reporter?.start(at: options.startPosition, isPaused: false)
             startReporting()
         } catch is CancellationError {
-            state = .idle
+            if load == generation {
+                state = .idle
+            }
+            return
         } catch {
-            fail(error)
+            if load == generation {
+                fail(error)
+            }
+            return
         }
         if item.type == .episode {
-            nextItem = try? await nextEpisode.after(item)
+            let next = try? await nextEpisode.after(item)
+            if load == generation {
+                nextItem = next
+            }
         }
     }
 
     /// Stops playback, reports where it stopped and unloads the item.
     public func stop() async {
+        generation += 1
         player.pause()
+        #if canImport(UIKit)
+            pictureInPicture?.stopPictureInPicture()
+        #endif
         await stopReporting()
         reporter = nil
         player.replaceCurrentItem(with: nil)
@@ -145,7 +194,7 @@ public enum PlaybackState: Equatable, Sendable {
         plan = nil
         nextItem = nil
         state = .idle
-        PlaybackAudioSession.deactivate()
+        await PlaybackAudioSession.deactivate()
     }
 
     // MARK: - Lock Screen and Picture in Picture
@@ -164,12 +213,98 @@ public enum PlaybackState: Equatable, Sendable {
     }
 
     #if canImport(UIKit)
-        /// Gives Picture in Picture the layer showing the video. ``PlayerSurface`` calls this.
-        func attachPictureInPicture(to layer: AVPlayerLayer) {
-            guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
-            let controller = AVPictureInPictureController(playerLayer: layer)
-            controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        /// The view showing the video, which ``PlayerSurface`` hosts.
+        ///
+        /// The engine keeps it from one player screen to the next. Picture in Picture is tied to its layer, so it
+        /// carries on when the screen closes and returns to the next screen that shows the view.
+        public var videoView: PlayerLayerView {
+            if let hostedVideoView {
+                return hostedVideoView
+            }
+            let view = PlayerLayerView()
+            view.playerLayer.player = player
+            hostedVideoView = view
+            setUpPictureInPicture(for: view.playerLayer)
+            return view
+        }
+
+        /// Starts Picture in Picture, or stops it when it is on.
+        public func togglePictureInPicture() {
+            guard let pictureInPicture else { return }
+            if pictureInPicture.isPictureInPictureActive {
+                pictureInPicture.stopPictureInPicture()
+            } else {
+                pictureInPicture.startPictureInPicture()
+            }
+        }
+
+        /// Brings the video back from Picture in Picture, as when the player screen opens again.
+        public func stopPictureInPicture() {
+            pictureInPicture?.stopPictureInPicture()
+        }
+
+        /// A player screen started showing the video.
+        func surfaceAppeared() {
+            isSurfaceShowing = true
+            hostedVideoView?.playerLayer.player = player
+        }
+
+        /// The player screen stopped showing the video. Unless Picture in Picture has the picture, the layer lets go
+        /// of the player, because AVPlayer pauses in the background while a layer holds it, and the audio should
+        /// carry on.
+        func surfaceDisappeared() {
+            isSurfaceShowing = false
+            if !isPictureInPictureEngaged {
+                hostedVideoView?.playerLayer.player = nil
+            }
+        }
+
+        private func setUpPictureInPicture(for layer: AVPlayerLayer) {
+            guard
+                AVPictureInPictureController.isPictureInPictureSupported(),
+                let controller = AVPictureInPictureController(playerLayer: layer)
+            else {
+                Self.logger.debug("Picture in Picture isn't supported here")
+                return
+            }
+            controller.canStartPictureInPictureAutomaticallyFromInline = true
+            let events = PictureInPictureEvents(engine: self)
+            controller.delegate = events
+            pictureInPictureEvents = events
+            pictureInPictureObservations = [
+                controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) {
+                    [weak self] controller, _ in
+                    let isPossible = controller.isPictureInPicturePossible
+                    Task { @MainActor in
+                        Self.logger.debug("Picture in Picture possible: \(isPossible, privacy: .public)")
+                        self?.isPictureInPicturePossible = isPossible
+                    }
+                },
+                controller.observe(\.isPictureInPictureActive, options: [.initial, .new]) { [weak self] controller, _ in
+                    let isActive = controller.isPictureInPictureActive
+                    Task { @MainActor in self?.isPictureInPictureActive = isActive }
+                },
+            ]
             pictureInPicture = controller
+        }
+
+        fileprivate func pictureInPictureWillStart() {
+            isPictureInPictureEngaged = true
+        }
+
+        fileprivate func pictureInPictureStarted() {
+            pictureInPictureDidStart?()
+        }
+
+        fileprivate func pictureInPictureEnded() {
+            isPictureInPictureEngaged = false
+            if !isSurfaceShowing {
+                hostedVideoView?.playerLayer.player = nil
+            }
+        }
+
+        fileprivate func restoreUserInterface() {
+            restoreFromPictureInPicture?()
         }
     #endif
 
@@ -207,7 +342,9 @@ public enum PlaybackState: Equatable, Sendable {
     public func seek(to position: Duration) async {
         let target = min(max(position, .zero), duration > .zero ? duration : position)
         elapsed = target
+        seeksInFlight += 1
         await player.seek(to: CMTime(target), toleranceBefore: .zero, toleranceAfter: .zero)
+        seeksInFlight -= 1
         if state == .ended {
             state = player.timeControlStatus == .playing ? .playing : .paused
         }
@@ -305,6 +442,7 @@ public enum PlaybackState: Equatable, Sendable {
         do {
             let plan = try await negotiator.plan(for: itemID, options: options)
             self.options = options
+            Self.logger.debug("Playing again by \(String(describing: plan.method), privacy: .public)")
             install(plan, startingAt: options.startPosition, playing: wasPlaying)
             await reporter?.replace(with: plan, at: options.startPosition, isPaused: !wasPlaying)
         } catch is CancellationError {
@@ -422,11 +560,12 @@ public enum PlaybackState: Equatable, Sendable {
     }
 
     private func timeChanged(_ time: CMTime) {
-        guard state != .loading, time.isNumeric else { return }
+        guard state != .loading, seeksInFlight == 0, time.isNumeric else { return }
         elapsed = Duration(time)
     }
 
     private func statusChanged() {
+        isWaiting = player.currentItem != nil && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         guard !isStarting, state != .failed, state != .ended, player.currentItem?.status == .readyToPlay else { return }
         switch player.timeControlStatus {
         case .playing: state = .playing
@@ -488,6 +627,44 @@ public enum PlaybackState: Equatable, Sendable {
         Task { await stopReporting() }
     }
 }
+
+#if canImport(UIKit)
+    /// Hands Picture in Picture's delegate calls, which arrive on the main thread, to the engine.
+    private final class PictureInPictureEvents: NSObject, AVPictureInPictureControllerDelegate {
+        private weak var engine: PlayerEngine?
+
+        init(engine: PlayerEngine) {
+            self.engine = engine
+        }
+
+        func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureWillStart() }
+        }
+
+        func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureStarted() }
+        }
+
+        func pictureInPictureController(
+            _ controller: AVPictureInPictureController,
+            failedToStartPictureInPictureWithError error: any Error
+        ) {
+            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureEnded() }
+        }
+
+        func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+            MainActor.assumeIsolated { [engine] in engine?.pictureInPictureEnded() }
+        }
+
+        func pictureInPictureController(
+            _ controller: AVPictureInPictureController,
+            restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+        ) {
+            MainActor.assumeIsolated { [engine] in engine?.restoreUserInterface() }
+            completionHandler(true)
+        }
+    }
+#endif
 
 extension PlaybackPlan {
     /// The same plan with a different audio stream selected.
