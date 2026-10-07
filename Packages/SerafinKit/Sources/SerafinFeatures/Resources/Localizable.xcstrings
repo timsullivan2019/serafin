@@ -333,6 +333,9 @@
     "Favourites" : {
       "comment" : "Favourites: the library filter chip, and the Library tab's Browse row and grid."
     },
+    "Fills in this name" : {
+      "comment" : "Hint on a user picture on the sign-in screen, for a user with a password."
+    },
     "Find movies, shows, episodes, people and collections by name." : {
       "comment" : "Explanation before anything is searched."
     },
@@ -598,9 +601,6 @@
     "Quick Connect Is Off" : {
       "comment" : "Title when Quick Connect is disabled."
     },
-    "Quick Connect is off on this server, so sign in with your password." : {
-      "comment" : "Note when the server has Quick Connect turned off."
-    },
     "Rated" : {
       "comment" : "Detail fact: age rating."
     },
@@ -733,6 +733,9 @@
     "Sign In to %@" : {
       "comment" : "Button that opens sign-in for a saved server."
     },
+    "Sign In with Quick Connect" : {
+      "comment" : "Button that shows a Quick Connect code to approve on another device."
+    },
     "Sign In with a Password Instead" : {
       "comment" : "Button that switches to password sign-in."
     },
@@ -744,6 +747,9 @@
     },
     "Signed Out" : {
       "comment" : "Title when a sign-in has ended."
+    },
+    "Signs in" : {
+      "comment" : "Hint on a user picture on the sign-in screen, for a user without a password."
     },
     "Small" : {
       "comment" : "Subtitle size."
@@ -892,9 +898,6 @@
     "Unwatched" : {
       "comment" : "Library Browse row and grid of everything not yet watched."
     },
-    "Use Quick Connect Instead" : {
-      "comment" : "Button that switches back to Quick Connect."
-    },
     "Username" : {
       "comment" : "Label of the username field."
     },
@@ -918,6 +921,9 @@
     },
     "What do you want to watch?" : {
       "comment" : "Siri's question when Play has no title."
+    },
+    "Who's Watching?" : {
+      "comment" : "Heading over the users a server lists on its sign-in screen."
     },
     "With Serafin's lock on, Siri and Shortcuts can't look in your library. Open Serafin to find it there." : {
       "comment" : "What Siri says when the app lock is on and Siri was asked to find a title."

@@ -156,6 +156,40 @@ public actor Accounts {
 
     // MARK: - Signing in
 
+    /// The users `server` lists on its sign-in screen, for the user to pick from, in the server's order. Servers
+    /// often hide every user, so this is often empty.
+    ///
+    /// Only each user's ID, name, picture tag and whether they have a password are read, and at most
+    /// ``maximumPublicUsers`` of them, since the answer comes from a server the user hasn't signed in to yet.
+    public func publicUsers(on server: Server) async throws -> [PublicUser] {
+        let client = try await signInClient(for: server)
+        do {
+            let data = try await client.data(for: Paths.getPublicUsers).value
+            return PublicUser.list(from: data, limit: Self.maximumPublicUsers)
+        } catch {
+            throw translate(error, from: server)
+        }
+    }
+
+    /// The most users ``publicUsers(on:)`` returns.
+    public static let maximumPublicUsers = 24
+
+    /// Whether `server` has Quick Connect turned on, or nil when it couldn't be asked.
+    public func isQuickConnectEnabled(on server: Server) async -> Bool? {
+        guard let client = try? await signInClient(for: server),
+            let data = try? await client.data(for: Paths.getQuickConnectEnabled).value
+        else { return nil }
+        return try? JSONDecoder().decode(Bool.self, from: data)
+    }
+
+    /// Loads pictures from `server` before anyone has signed in, such as the users on its sign-in screen. Requests
+    /// carry the device's `Authorization` header without a token.
+    public func signInArtwork(for server: Server) async throws -> Artwork {
+        _ = try TransportPolicy.security(of: server.url)
+        let authorization = try await identity.authorizationHeader(accessToken: nil)
+        return Artwork(urls: ImageURLs(serverURL: server.url), pipeline: images, authorization: authorization)
+    }
+
     /// Asks `server` for a Quick Connect code to show the user.
     ///
     /// - Throws: ``SerafinError/quickConnectDisabled`` when the server has Quick Connect turned off, so the user

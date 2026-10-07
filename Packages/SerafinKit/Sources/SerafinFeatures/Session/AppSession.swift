@@ -97,11 +97,13 @@ import os
         try await changing { try await accounts.add(connected) }
     }
 
-    /// Signs everyone out of `server` and forgets it, with its streaming caps and its users' recent searches.
+    /// Signs everyone out of `server` and forgets it, with its streaming caps, its users' recent searches and the
+    /// name last used to sign in to it.
     public func remove(_ server: Server) async throws {
         try await changing { try await accounts.remove(serverID: server.id) }
         PlaybackQuality.forget(server: server.id, in: .standard)
         RecentSearches.forget(server: server.id)
+        LastUsername.forget(server: server.id)
     }
 
     /// Asks every saved server for its name again, so a server renamed since it was added shows its new name.
@@ -122,6 +124,21 @@ import os
 
     // MARK: - Signing in
 
+    /// The users `server` lists on its sign-in screen, often none.
+    public func publicUsers(on server: Server) async throws -> [PublicUser] {
+        try await accounts.publicUsers(on: server)
+    }
+
+    /// Whether `server` has Quick Connect turned on, or nil when it couldn't be asked.
+    public func isQuickConnectEnabled(on server: Server) async -> Bool? {
+        await accounts.isQuickConnectEnabled(on: server)
+    }
+
+    /// Loads pictures from `server` before anyone has signed in, such as its users' pictures.
+    public func signInArtwork(for server: Server) async throws -> Artwork {
+        try await accounts.signInArtwork(for: server)
+    }
+
     /// Asks `server` for a Quick Connect code to show the user.
     ///
     /// - Throws: ``SerafinError/quickConnectDisabled`` when the server has Quick Connect turned off, so the caller
@@ -132,12 +149,17 @@ import os
 
     /// Waits until the user approves the code, then signs in as them. Cancel the calling task to stop waiting.
     public func finishQuickConnect(_ request: QuickConnectRequest) async throws {
-        _ = try await changing { try await accounts.finishQuickConnect(request) }
+        let account = try await changing { try await accounts.finishQuickConnect(request) }
+        LastUsername.save(account.user.name, forServer: account.server.id)
     }
 
-    /// Signs in with a username and password. The password is sent once and kept nowhere.
+    /// Signs in with a username and password. The password is sent once and kept nowhere; the name is remembered,
+    /// so signing in to the server again starts with it.
     public func signIn(to server: Server, username: String, password: String) async throws {
-        _ = try await changing { try await accounts.signIn(to: server, username: username, password: password) }
+        let account = try await changing {
+            try await accounts.signIn(to: server, username: username, password: password)
+        }
+        LastUsername.save(account.user.name, forServer: server.id)
     }
 
     // MARK: - Switching and signing out

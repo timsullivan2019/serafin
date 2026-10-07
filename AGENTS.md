@@ -125,7 +125,7 @@ These are requirements, not preferences. A PR that violates one is not mergeable
 
 | Risk | Requirement |
 | --- | --- |
-| Password theft | Passwords are never persisted anywhere. Quick Connect is the default sign-in. Password login sends credentials once over TLS and keeps only the returned access token. |
+| Password theft | Serafin never persists a password. On iPhone and iPad, password sign-in comes first so iOS Password AutoFill can fill it from the user's own iCloud Keychain, with Quick Connect one tap away; a future tvOS target leads with Quick Connect. Password login sends credentials once over TLS and keeps only the returned access token. |
 | Token theft from device | Tokens live in the Keychain with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, one item per server and user, excluded from iCloud Keychain and backups. No tokens in UserDefaults, SwiftData, files or logs. |
 | Token leak in transit | HTTPS by default with App Transport Security on. Plain HTTP is allowed only for private addresses (10/8, 172.16/12, 192.168/16, `.local`, localhost, and Tailscale's 100.64/10, which only exists inside an encrypted tailnet) after an explicit, non-dismissable warning, and never for public hosts. The only ATS key permitted in Info.plist is `NSAllowsLocalNetworking`. |
 | Self-signed certificates | No global ATS exception. The user is shown the SHA-256 fingerprint once and pins it; the `URLSessionDelegate` accepts only that public key for that host. Pins are stored in the Keychain. |
