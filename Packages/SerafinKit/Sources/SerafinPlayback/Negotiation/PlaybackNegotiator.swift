@@ -3,22 +3,26 @@ import JellyfinAPI
 import SerafinCore
 import os
 
-/// Asks the server how to play an item, given Serafin's ``JellyfinAPI/DeviceProfile/serafin(maxBitrate:)``, and
-/// turns the answer into a ``PlaybackPlan``.
+/// Asks the server how to play an item, given Serafin's ``JellyfinAPI/DeviceProfile/serafin(maxBitrate:video:)``,
+/// and turns the answer into a ``PlaybackPlan``.
 public struct PlaybackNegotiator: Sendable {
     private static let logger = Logger(serafinCategory: "negotiation")
 
     private let client: JellyfinClient
     private let userID: String
+    private let video: VideoSupport?
 
     /// Creates a negotiator.
     ///
     /// - Parameters:
     ///   - client: The signed-in account's client.
     ///   - userID: The account's user ID.
-    public init(client: JellyfinClient, userID: String) {
+    ///   - video: The AV1 and Dolby Vision the device plays, or nil to read it from the device at the first plan,
+    ///     which takes a few hundredths of a second, away from the main thread.
+    public init(client: JellyfinClient, userID: String, video: VideoSupport? = nil) {
         self.client = client
         self.userID = userID
+        self.video = video
     }
 
     /// The plan for playing `itemID` with `options`.
@@ -30,7 +34,7 @@ public struct PlaybackNegotiator: Sendable {
             allowAudioStreamCopy: true,
             allowVideoStreamCopy: true,
             audioStreamIndex: options.audioStreamIndex,
-            deviceProfile: .serafin(maxBitrate: options.maxBitrate),
+            deviceProfile: .serafin(maxBitrate: options.maxBitrate, video: video ?? .current),
             enableDirectPlay: options.allowsDirectPlay,
             enableDirectStream: true,
             enableTranscoding: true,
