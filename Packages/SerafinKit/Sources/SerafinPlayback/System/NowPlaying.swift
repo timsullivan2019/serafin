@@ -1,0 +1,84 @@
+#if canImport(UIKit)
+    import AVFoundation
+    import MediaPlayer
+
+    /// Puts what's playing on the Lock Screen and in Control Center, and answers their buttons, AirPods presses and
+    /// the scrubber.
+    ///
+    /// The session publishes elapsed time, duration and rate on its own; the title, subtitle and artwork come from
+    /// the player item's metadata.
+    @MainActor final class NowPlaying {
+        private let session: MPNowPlayingSession
+
+        init(engine: PlayerEngine) {
+            session = MPNowPlayingSession(players: [engine.player])
+            session.automaticallyPublishesNowPlayingInfo = true
+            let commands = session.remoteCommandCenter
+            commands.playCommand.addTarget { [weak engine] _ in
+                MainActor.assumeIsolated { engine?.play() }
+                return .success
+            }
+            commands.pauseCommand.addTarget { [weak engine] _ in
+                MainActor.assumeIsolated { engine?.pause() }
+                return .success
+            }
+            commands.togglePlayPauseCommand.addTarget { [weak engine] _ in
+                MainActor.assumeIsolated { engine?.togglePlayPause() }
+                return .success
+            }
+            commands.skipForwardCommand.preferredIntervals = [10]
+            commands.skipForwardCommand.addTarget { [weak engine] _ in
+                Task { @MainActor in await engine?.skip(by: 10) }
+                return .success
+            }
+            commands.skipBackwardCommand.preferredIntervals = [10]
+            commands.skipBackwardCommand.addTarget { [weak engine] _ in
+                Task { @MainActor in await engine?.skip(by: -10) }
+                return .success
+            }
+            commands.changePlaybackPositionCommand.addTarget { [weak engine] event in
+                guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+                let position = Duration.milliseconds(Int64(event.positionTime * 1000))
+                Task { @MainActor in await engine?.seek(to: position) }
+                return .success
+            }
+        }
+
+        /// Makes this app the one the Lock Screen and Control Center show.
+        func becomeActive() {
+            session.becomeActiveIfPossible { _ in }
+        }
+    }
+
+    /// What the Lock Screen shows for an item.
+    struct NowPlayingDetails {
+        let title: String
+        let subtitle: String?
+        let artwork: Data?
+
+        /// The details as metadata on a player item, which the Now Playing session reads.
+        var metadata: [AVMetadataItem] {
+            var items = [Self.item(.commonIdentifierTitle, title)]
+            if let subtitle {
+                items.append(Self.item(.iTunesMetadataTrackSubTitle, subtitle))
+            }
+            if let artwork {
+                let item = AVMutableMetadataItem()
+                item.identifier = .commonIdentifierArtwork
+                item.value = artwork as NSData
+                item.dataType = kCMMetadataBaseDataType_JPEG as String
+                item.extendedLanguageTag = "und"
+                items.append(item)
+            }
+            return items
+        }
+
+        private static func item(_ identifier: AVMetadataIdentifier, _ value: String) -> AVMetadataItem {
+            let item = AVMutableMetadataItem()
+            item.identifier = identifier
+            item.value = value as NSString
+            item.extendedLanguageTag = "und"
+            return item
+        }
+    }
+#endif

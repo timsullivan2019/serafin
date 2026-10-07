@@ -33,7 +33,7 @@ let package = Package(
         // AVPlayer wrapper, device profile, playback negotiation, progress, Now Playing and PiP.
         .target(
             name: "SerafinPlayback",
-            dependencies: ["SerafinCore"]
+            dependencies: ["SerafinCore", jellyfinAPI]
         ),
         // Tokens, components, mock fixtures and previews. Depends on nothing in the project.
         .target(
@@ -58,7 +58,11 @@ let package = Package(
             dependencies: ["SerafinCore"],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "SerafinPlaybackTests", dependencies: ["SerafinPlayback"]),
+        .testTarget(
+            name: "SerafinPlaybackTests",
+            dependencies: ["SerafinPlayback", "SerafinCore"],
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(name: "SerafinFeaturesTests", dependencies: ["SerafinFeatures", "SerafinCore", "SerafinDesign"]),
         .testTarget(name: "SerafinDesignTests", dependencies: ["SerafinDesign"]),
     ],

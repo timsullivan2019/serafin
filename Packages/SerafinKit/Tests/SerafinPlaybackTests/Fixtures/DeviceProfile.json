@@ -1,0 +1,153 @@
+{
+  "CodecProfiles" : [
+    {
+      "Codec" : "h264",
+      "Conditions" : [
+        {
+          "Condition" : "NotEquals",
+          "IsRequired" : false,
+          "Property" : "IsAnamorphic",
+          "Value" : "true"
+        },
+        {
+          "Condition" : "EqualsAny",
+          "IsRequired" : false,
+          "Property" : "VideoProfile",
+          "Value" : "high|main|baseline|constrained baseline"
+        },
+        {
+          "Condition" : "LessThanEqual",
+          "IsRequired" : false,
+          "Property" : "VideoLevel",
+          "Value" : "52"
+        },
+        {
+          "Condition" : "LessThanEqual",
+          "IsRequired" : false,
+          "Property" : "VideoBitDepth",
+          "Value" : "8"
+        },
+        {
+          "Condition" : "NotEquals",
+          "IsRequired" : false,
+          "Property" : "IsInterlaced",
+          "Value" : "true"
+        },
+        {
+          "Condition" : "EqualsAny",
+          "IsRequired" : false,
+          "Property" : "VideoRangeType",
+          "Value" : "SDR"
+        }
+      ],
+      "Type" : "Video"
+    },
+    {
+      "Codec" : "hevc",
+      "Conditions" : [
+        {
+          "Condition" : "NotEquals",
+          "IsRequired" : false,
+          "Property" : "IsAnamorphic",
+          "Value" : "true"
+        },
+        {
+          "Condition" : "EqualsAny",
+          "IsRequired" : false,
+          "Property" : "VideoProfile",
+          "Value" : "main|main 10"
+        },
+        {
+          "Condition" : "LessThanEqual",
+          "IsRequired" : false,
+          "Property" : "VideoLevel",
+          "Value" : "156"
+        },
+        {
+          "Condition" : "LessThanEqual",
+          "IsRequired" : true,
+          "Property" : "VideoFramerate",
+          "Value" : "60"
+        },
+        {
+          "Condition" : "NotEquals",
+          "IsRequired" : false,
+          "Property" : "IsInterlaced",
+          "Value" : "true"
+        },
+        {
+          "Condition" : "EqualsAny",
+          "IsRequired" : true,
+          "Property" : "VideoCodecTag",
+          "Value" : "hvc1"
+        },
+        {
+          "Condition" : "EqualsAny",
+          "IsRequired" : false,
+          "Property" : "VideoRangeType",
+          "Value" : "SDR|HDR10|HDR10Plus|HLG"
+        }
+      ],
+      "Type" : "Video"
+    }
+  ],
+  "DirectPlayProfiles" : [
+    {
+      "AudioCodec" : "aac,mp3,ac3,eac3,alac,flac",
+      "Container" : "mp4,m4v,mov",
+      "Type" : "Video",
+      "VideoCodec" : "h264,hevc"
+    }
+  ],
+  "MaxStaticBitrate" : 8000000,
+  "MaxStreamingBitrate" : 8000000,
+  "Name" : "Serafin",
+  "SubtitleProfiles" : [
+    {
+      "Format" : "vtt",
+      "Method" : "Hls"
+    },
+    {
+      "Format" : "mov_text",
+      "Method" : "Embed"
+    },
+    {
+      "Format" : "ass",
+      "Method" : "Encode"
+    },
+    {
+      "Format" : "ssa",
+      "Method" : "Encode"
+    },
+    {
+      "Format" : "pgssub",
+      "Method" : "Encode"
+    },
+    {
+      "Format" : "dvdsub",
+      "Method" : "Encode"
+    },
+    {
+      "Format" : "dvbsub",
+      "Method" : "Encode"
+    }
+  ],
+  "TranscodingProfiles" : [
+    {
+      "AudioCodec" : "aac,eac3,ac3",
+      "BreakOnNonKeyFrames" : true,
+      "Container" : "mp4",
+      "Context" : "Streaming",
+      "CopyTimestamps" : false,
+      "EnableAudioVbrEncoding" : true,
+      "EnableMpegtsM2TsMode" : false,
+      "EnableSubtitlesInManifest" : true,
+      "EstimateContentLength" : false,
+      "MaxAudioChannels" : "8",
+      "MinSegments" : 2,
+      "Protocol" : "hls",
+      "Type" : "Video",
+      "VideoCodec" : "hevc,h264"
+    }
+  ]
+}

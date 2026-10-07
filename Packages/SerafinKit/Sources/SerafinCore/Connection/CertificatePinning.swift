@@ -118,20 +118,31 @@ public final class PinningDelegate: NSObject, URLSessionTaskDelegate, Sendable {
         _ challenge: URLAuthenticationChallenge,
         completionHandler: (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
+        let (disposition, credential) = answer(to: challenge)
+        completionHandler(disposition, credential)
+    }
+
+    /// How to answer an authentication challenge: the system's handling for anything but server trust or for a
+    /// certificate the system trusts, the pinned certificate's credential, or a refusal.
+    ///
+    /// URLSession challenges go through the delegate methods. This is for other networking stacks, such as the
+    /// resource loader that lets AVPlayer stream from a pinned server.
+    public func answer(to challenge: URLAuthenticationChallenge) -> (
+        URLSession.AuthChallengeDisposition, URLCredential?
+    ) {
         guard
             challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
             let trust = challenge.protectionSpace.serverTrust
         else {
-            completionHandler(.performDefaultHandling, nil)
-            return
+            return (.performDefaultHandling, nil)
         }
         switch evaluate(trust, host: challenge.protectionSpace.host) {
         case .systemTrusted:
-            completionHandler(.performDefaultHandling, nil)
+            return (.performDefaultHandling, nil)
         case .pinned:
-            completionHandler(.useCredential, URLCredential(trust: trust))
+            return (.useCredential, URLCredential(trust: trust))
         case .rejected:
-            completionHandler(.cancelAuthenticationChallenge, nil)
+            return (.cancelAuthenticationChallenge, nil)
         }
     }
 
