@@ -16,7 +16,11 @@ enum ItemInformation {
                 rows: facts(of: item, card: card, locale: locale)
             ),
             InformationColumns.Column(
-                title: String(localized: "Languages", bundle: .module, comment: "Detail screen column heading."),
+                title: String(
+                    localized: "Languages", bundle: .module,
+                    comment:
+                        "Languages: a detail screen's column heading, and the Settings section for preferred languages."
+                ),
                 rows: languages(in: streams, locale: locale)
             ),
             InformationColumns.Column(
@@ -102,7 +106,10 @@ enum ItemInformation {
             rows.append(
                 InformationColumns.Row(
                     label: String(
-                        localized: "Subtitles", bundle: .module, comment: "Detail fact: subtitle languages."),
+                        localized: "Subtitles", bundle: .module,
+                        comment:
+                            "Subtitles: a detail fact listing subtitle languages, and the Settings row for when subtitles show."
+                    ),
                     value: subtitles.formatted(.list(type: .and, width: .narrow).locale(locale))
                 )
             )

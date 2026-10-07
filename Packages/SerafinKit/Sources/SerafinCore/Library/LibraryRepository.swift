@@ -256,6 +256,46 @@ public actor LibraryRepository {
         cache.removeAll()
     }
 
+    // MARK: - Language preferences
+
+    /// The user's audio and subtitle language preferences, as saved on the server. Always asks the server, since
+    /// another Jellyfin app may have changed them.
+    public func languagePreferences() async throws -> LanguagePreferences {
+        LanguagePreferences(configuration: try await userConfiguration())
+    }
+
+    /// Saves the user's audio and subtitle language preferences on the server.
+    ///
+    /// The server replaces a user's settings as a whole, so the rest of them go back exactly as the server sent them,
+    /// including any this version of Serafin doesn't know about.
+    public func setLanguagePreferences(_ preferences: LanguagePreferences) async throws {
+        let configuration = preferences.applied(to: try await userConfiguration())
+        let body = try JSONEncoder().encode(AnyJSON.object(configuration))
+        // The SDK's typed settings would drop the ones it doesn't know, so the request carries the server's own.
+        let request = Paths.updateUserConfiguration(userID: userID, UserConfiguration())
+        try await sending(statuses: [:]) {
+            _ = try await client.send(request) { $0.httpBody = body }
+        }
+    }
+
+    /// The languages the server knows, for choosing preferences.
+    public func languages() async throws -> [Language] {
+        let request = Paths.getCultures
+        let cultures = try await cached(request.url, request.query) { try await client.send(request).value }
+        var seen: Set<String> = []
+        return cultures.compactMap(Language.init).filter { seen.insert($0.code).inserted }
+    }
+
+    /// The signed-in user's settings exactly as the server sends them.
+    private func userConfiguration() async throws -> [String: AnyJSON] {
+        let data = try await sending(statuses: [:]) { try await client.data(for: Paths.getCurrentUser).value }
+        guard
+            case .object(let user)? = try? JSONDecoder().decode(AnyJSON.self, from: data),
+            case .object(let configuration)? = user["Configuration"]
+        else { throw SerafinError.unexpectedResponse(status: nil) }
+        return configuration
+    }
+
     // MARK: - Helpers
 
     /// The parts of an items request that say which items a grid lists and in what order.

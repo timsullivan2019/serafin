@@ -26,6 +26,8 @@ enum Route: Hashable {
     case signIn(Server)
     /// The open-source licences, from Settings.
     case licences
+    /// Audio and subtitle languages, and how subtitles look, from Settings.
+    case audioAndSubtitles
 }
 
 /// Pushes a route onto the current tab's navigation stack, for buttons that are not navigation links.
@@ -124,6 +126,8 @@ private struct RouteDestination: View {
             SignInView(server: server)
         case .licences:
             LicencesView()
+        case .audioAndSubtitles:
+            AudioAndSubtitlesView()
         }
     }
 }

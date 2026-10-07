@@ -25,17 +25,19 @@ public struct RootView: View {
             case .signedIn(let account):
                 if let library = session.library {
                     let media = LiveMediaSource(library: library)
-                    MainTabs(engine: session.player, media: media, artwork: session.artwork)
-                        .environment(\.media, media)
-                        .environment(\.artwork, session.artwork)
-                        .environment(
-                            \.signInEnded,
-                            SignInEndedAction(account: account.key) { [session] in
-                                Task { try? await session.signOut(account.key) }
-                            }
-                        )
-                        // Another account starts on fresh tabs rather than the last account's screens.
-                        .id(account.key)
+                    MainTabs(
+                        engine: session.player, media: media, artwork: session.artwork, serverID: account.server.id
+                    )
+                    .environment(\.media, media)
+                    .environment(\.artwork, session.artwork)
+                    .environment(
+                        \.signInEnded,
+                        SignInEndedAction(account: account.key) { [session] in
+                            Task { try? await session.signOut(account.key) }
+                        }
+                    )
+                    // Another account starts on fresh tabs rather than the last account's screens.
+                    .id(account.key)
                 }
             }
         }
@@ -100,11 +102,18 @@ struct MainTabs: View {
     ///   - engine: The account's player engine, or nil to pretend to play.
     ///   - media: The library, which playback refreshes when it stops.
     ///   - artwork: Loads the artwork the Lock Screen shows.
-    init(engine: PlayerEngine? = nil, media: any MediaSource = SampleMediaSource(), artwork: Artwork? = nil) {
+    ///   - serverID: The account's server, whose streaming caps apply.
+    init(
+        engine: PlayerEngine? = nil,
+        media: any MediaSource = SampleMediaSource(),
+        artwork: Artwork? = nil,
+        serverID: String? = nil
+    ) {
         let actions = MediaActions()
         _actions = State(initialValue: actions)
         _playback = State(
-            initialValue: PlaybackCoordinator(engine: engine, media: media, actions: actions, artwork: artwork)
+            initialValue: PlaybackCoordinator(
+                engine: engine, media: media, actions: actions, artwork: artwork, serverID: serverID)
         )
     }
 

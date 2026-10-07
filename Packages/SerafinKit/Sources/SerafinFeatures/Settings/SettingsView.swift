@@ -3,38 +3,16 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// The Settings tab: servers and accounts, streaming quality, the cache, and the app's details.
+/// The Settings tab: servers and accounts, playback, the lock, the cache, and the app's details.
 struct SettingsView: View {
-    @AppStorage(PlaybackQuality.wifiKey) private var wifiQuality = PlaybackQuality.wifiDefault
-    @AppStorage(PlaybackQuality.cellularKey) private var cellularQuality = PlaybackQuality.cellularDefault
+    @Environment(AppSession.self) private var session
 
     var body: some View {
         Form {
             AccountsSection()
-            Section {
-                Picker(
-                    String(localized: "Quality on Wi-Fi", bundle: .module, comment: "Settings row."),
-                    selection: $wifiQuality
-                ) {
-                    ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
-                }
-                Picker(
-                    String(localized: "Quality on Cellular", bundle: .module, comment: "Settings row."),
-                    selection: $cellularQuality
-                ) {
-                    ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
-                }
-            } header: {
-                Text(String(localized: "Playback", bundle: .module, comment: "Settings section header."))
-            } footer: {
-                Text(
-                    String(
-                        localized: "Lower caps use less data. The server converts anything above the cap.",
-                        bundle: .module,
-                        comment: "Settings footer under the streaming quality caps."
-                    )
-                )
-            }
+            PlaybackSection(server: session.account?.server, isOneOfSeveral: session.servers.count > 1)
+                // Each server keeps its own caps, so another server's section starts afresh.
+                .id(session.account?.server.id)
             DeliverySection()
             LockSection()
             StorageSection()
@@ -64,6 +42,68 @@ struct SettingsView: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "–"
         let build = info?["CFBundleVersion"] as? String ?? "–"
         return "\(short) (\(build))"
+    }
+}
+
+/// Audio and subtitles, and the current server's streaming caps on Wi-Fi and cellular.
+private struct PlaybackSection: View {
+    let server: Server?
+    let isOneOfSeveral: Bool
+    @AppStorage private var wifiQuality: PlaybackQuality
+    @AppStorage private var cellularQuality: PlaybackQuality
+
+    /// Creates the section for `server`'s caps, or for the caps every server shares when there's no server, as in
+    /// previews.
+    init(server: Server?, isOneOfSeveral: Bool, defaults: UserDefaults = .standard) {
+        self.server = server
+        self.isOneOfSeveral = isOneOfSeveral
+        func storage(onCellular: Bool) -> AppStorage<PlaybackQuality> {
+            let saved = PlaybackQuality.saved(onCellular: onCellular, server: server?.id, in: defaults)
+            let key =
+                server.map { PlaybackQuality.key(onCellular: onCellular, server: $0.id) }
+                ?? (onCellular ? PlaybackQuality.cellularKey : PlaybackQuality.wifiKey)
+            return AppStorage(wrappedValue: saved, key, store: defaults)
+        }
+        _wifiQuality = storage(onCellular: false)
+        _cellularQuality = storage(onCellular: true)
+    }
+
+    var body: some View {
+        Section {
+            NavigationLink(value: Route.audioAndSubtitles) {
+                Text(AudioAndSubtitlesView.title)
+            }
+            Picker(
+                String(localized: "Quality on Wi-Fi", bundle: .module, comment: "Settings row."),
+                selection: $wifiQuality
+            ) {
+                ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
+            }
+            Picker(
+                String(localized: "Quality on Cellular", bundle: .module, comment: "Settings row."),
+                selection: $cellularQuality
+            ) {
+                ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
+            }
+        } header: {
+            Text(String(localized: "Playback", bundle: .module, comment: "Settings section header."))
+        } footer: {
+            Text(footer)
+        }
+    }
+
+    private var footer: String {
+        let caps = String(
+            localized: "Lower caps use less data. The server converts anything above the cap.",
+            bundle: .module,
+            comment: "Settings footer under the streaming quality caps."
+        )
+        guard isOneOfSeveral, let server else { return caps }
+        return String(
+            localized: "\(caps) These caps are for \(server.name); each server keeps its own.",
+            bundle: .module,
+            comment: "Settings footer under the streaming quality caps with more than one server: the caps, then whose."
+        )
     }
 }
 

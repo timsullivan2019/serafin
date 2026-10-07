@@ -4,6 +4,20 @@
     "%@" : {
       "comment" : "Text from the library or the app, shown as it is."
     },
+    "%@ Saved to your Jellyfin account, so your other Jellyfin apps follow them too." : {
+      "comment" : "Footer under the language settings: what the subtitle mode does, then where they're saved."
+    },
+    "%@ These caps are for %@; each server keeps its own." : {
+      "comment" : "Settings footer under the streaming quality caps with more than one server: the caps, then whose.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ These caps are for %2$@; each server keeps its own."
+          }
+        }
+      }
+    },
     "%@ uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi." : {
       "comment" : "Warning before connecting over plain HTTP. The argument is the server's name."
     },
@@ -114,11 +128,26 @@
     "All Years" : {
       "comment" : "Year filter: no filter."
     },
+    "Always" : {
+      "comment" : "Subtitle mode: always on."
+    },
+    "Any Language" : {
+      "comment" : "Subtitle language: none in particular."
+    },
     "Ascending" : {
       "comment" : "VoiceOver value of the current sort."
     },
     "Audio" : {
       "comment" : "Detail fact: the audio's languages or format."
+    },
+    "Audio Language" : {
+      "comment" : "Settings row: the preferred audio language."
+    },
+    "Audio and Subtitles" : {
+      "comment" : "Title of the audio and subtitles settings, and its row in Settings."
+    },
+    "Automatic" : {
+      "comment" : "Subtitle mode: as the video marks them."
     },
     "Browse" : {
       "comment" : "Library tab section of other ways in."
@@ -213,6 +242,9 @@
     "Everyone signed in to it on this device is signed out." : {
       "comment" : "Message in the remove server dialog."
     },
+    "Extra Large" : {
+      "comment" : "Subtitle size."
+    },
     "Favourites" : {
       "comment" : "Library filter: only favourites."
     },
@@ -225,8 +257,17 @@
     "First Aired" : {
       "comment" : "Detail fact: when a show started."
     },
+    "For Other Languages" : {
+      "comment" : "Subtitle mode: when the audio isn't in the user's language."
+    },
+    "For subtitles shown as text, on this device. Their font and background follow your caption style, in Settings > Accessibility > Subtitles & Captioning." : {
+      "comment" : "Footer under the subtitle size setting. Use the names the Settings app uses."
+    },
     "Forced" : {
       "comment" : "Subtitles shown only for foreign speech."
+    },
+    "Forced Only" : {
+      "comment" : "Subtitle mode: only forced subtitles."
     },
     "Format" : {
       "comment" : "Detail screen column heading."
@@ -265,7 +306,10 @@
       "comment" : "Settings footer under the lock while it's off."
     },
     "Languages" : {
-      "comment" : "Detail screen column heading."
+      "comment" : "Languages: a detail screen's column heading, and the Settings section for preferred languages."
+    },
+    "Large" : {
+      "comment" : "Subtitle size."
     },
     "Latest in %@" : {
       "comment" : "Home row of a library's newest items, such as Latest in Movies."
@@ -360,11 +404,17 @@
     "OK" : {
       "comment" : "Button that closes an alert."
     },
+    "Off" : {
+      "comment" : "Subtitle mode: only when turned on."
+    },
     "On This Network" : {
       "comment" : "Servers found nearby."
     },
     "On a phone, computer or TV where you're signed in to Jellyfin, open your profile, choose Quick Connect, and enter this code." : {
       "comment" : "How to approve a Quick Connect code."
+    },
+    "Only subtitles marked as forced show, such as for signs or foreign speech." : {
+      "comment" : "Explanation of the forced-only subtitle mode."
     },
     "Open Movie or Show" : {
       "comment" : "Title of the shortcut that opens a title's page."
@@ -541,6 +591,9 @@
     "Signed Out" : {
       "comment" : "Title when a sign-in has ended."
     },
+    "Small" : {
+      "comment" : "Subtitle size."
+    },
     "Something Went Wrong" : {
       "comment" : "Title for an unexpected failure."
     },
@@ -549,6 +602,9 @@
     },
     "Something went wrong playing this. Try again, or lower the streaming quality in Settings." : {
       "comment" : "Explanation when the player can't play a stream."
+    },
+    "Standard" : {
+      "comment" : "Subtitle size: the system caption style's own."
     },
     "Stereo" : {
       "comment" : "Two audio channels."
@@ -559,8 +615,29 @@
     "Studio" : {
       "comment" : "Detail fact: studio or network."
     },
+    "Subtitle Language" : {
+      "comment" : "Settings row: the preferred subtitle language."
+    },
+    "Subtitle Size" : {
+      "comment" : "Settings row: subtitle size."
+    },
+    "Subtitle Style" : {
+      "comment" : "Settings section header."
+    },
     "Subtitles" : {
-      "comment" : "Detail fact: subtitle languages."
+      "comment" : "Subtitles: a detail fact listing subtitle languages, and the Settings row for when subtitles show."
+    },
+    "Subtitles in your language always show." : {
+      "comment" : "Explanation of the always-on subtitle mode."
+    },
+    "Subtitles in your language show when the audio is in another." : {
+      "comment" : "Explanation of the subtitle mode for other languages."
+    },
+    "Subtitles show only when you turn them on." : {
+      "comment" : "Explanation of the subtitle mode that leaves them off."
+    },
+    "Subtitles show when a video marks them to." : {
+      "comment" : "Explanation of the automatic subtitle mode."
     },
     "That's Not a Jellyfin Server" : {
       "comment" : "Title when the address isn't Jellyfin."
@@ -613,6 +690,9 @@
     "Trust This Certificate" : {
       "comment" : "Button that pins a certificate."
     },
+    "Try Again" : {
+      "comment" : "Button that retries a request."
+    },
     "Turn off the lock" : {
       "comment" : "Reason the lock asks when turned off."
     },
@@ -651,6 +731,9 @@
     },
     "Video" : {
       "comment" : "Detail fact: video format."
+    },
+    "Video's Default" : {
+      "comment" : "Audio language: each video's own."
     },
     "Waiting for approval" : {
       "comment" : "Quick Connect status."
