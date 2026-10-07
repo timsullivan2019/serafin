@@ -2,7 +2,7 @@ import Observation
 import SerafinCore
 import SerafinDesign
 
-/// The Library tab's list of libraries, and whether to offer collections beside them.
+/// The Library tab's libraries, each with its tile's picture and count, and whether to offer collections.
 @Observable @MainActor final class LibrariesModel {
     enum Phase {
         case loading
@@ -10,19 +10,79 @@ import SerafinDesign
         case failed(UserMessage)
     }
 
+    /// What a library's tile shows.
+    struct Overview: Sendable {
+        /// How many movies or shows the library holds.
+        let total: Int
+        /// Its newest posters, up to four, for a collage when it has no picture.
+        let newest: [MediaItem]
+        /// Its own picture, when the server has one.
+        let cover: MediaItem?
+    }
+
+    /// How many posters a collage takes.
+    static let collageSize = 4
+
     private(set) var phase = Phase.loading
     /// Whether the server has collections, which adds a Collections row. A failed check leaves it out.
     private(set) var hasCollections = false
+    /// Each library's tile, by library ID, as they load.
+    private(set) var overviews: [String: Overview] = [:]
 
     func load(from media: any MediaSource) async {
         async let collections = try? media.hasCollections()
         do {
-            phase = .loaded(try await media.libraries())
+            let libraries = try await media.libraries()
+            phase = .loaded(libraries)
+            await loadOverviews(of: libraries, from: media)
         } catch is CancellationError {
         } catch {
             if case .loaded = phase {} else { phase = .failed(UserMessage(error)) }
         }
         hasCollections = await collections ?? hasCollections
+    }
+
+    /// Asks for every library's count, newest posters and picture at once. A library whose answer fails keeps its
+    /// last tile, or shows a plain one.
+    private func loadOverviews(of libraries: [MediaLibrary], from media: any MediaSource) async {
+        let newestFirst = GridOptions(sort: .dateAdded, ascending: false)
+        await withTaskGroup(of: (String, Overview?).self) { group in
+            for library in libraries {
+                group.addTask {
+                    async let cover = media.cover(of: library)
+                    let page = try? await media.page(
+                        of: .library(library), options: newestFirst, start: 0, limit: Self.collageSize)
+                    guard let page else { return (library.id, nil) }
+                    return (
+                        library.id,
+                        Overview(total: page.total, newest: page.items.compactMap { $0 }, cover: await cover)
+                    )
+                }
+            }
+            for await (id, overview) in group {
+                if let overview {
+                    overviews[id] = overview
+                }
+            }
+        }
+    }
+
+    /// How many titles a library holds, as its tile says it, such as "75 movies".
+    nonisolated static func caption(total: Int, kind: MediaLibrary.Kind) -> String {
+        switch kind {
+        case .movies:
+            String(
+                localized: "\(total) movies", bundle: .module,
+                comment: "How many movies a library holds, under its name on the Library tab.")
+        case .shows:
+            String(
+                localized: "\(total) shows", bundle: .module,
+                comment: "How many shows a library holds, under its name on the Library tab.")
+        case .mixed:
+            String(
+                localized: "\(total) movies and shows", bundle: .module,
+                comment: "A number of movies and shows: in Shortcuts, and under a library's name on the Library tab.")
+        }
     }
 }
 

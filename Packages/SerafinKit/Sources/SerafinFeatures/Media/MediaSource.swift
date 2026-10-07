@@ -74,6 +74,8 @@ enum GridScope: Hashable, Sendable {
     case collections
     /// The movies and shows in one collection.
     case collection(id: String, title: String)
+    /// Every movie and show, filtered or sorted one way, from the Library tab's Browse list.
+    case shortcut(LibraryShortcut)
 
     /// The grid's title.
     var title: String {
@@ -83,6 +85,7 @@ enum GridScope: Hashable, Sendable {
         case .collections:
             String(localized: "Collections", bundle: .module, comment: "Collections, as a heading or a label.")
         case .collection(_, let title): title
+        case .shortcut(let shortcut): shortcut.title
         }
     }
 
@@ -90,15 +93,65 @@ enum GridScope: Hashable, Sendable {
     /// list of collections is browsed by name.
     var offersChips: Bool {
         switch self {
-        case .library, .genre: true
+        case .library, .genre, .shortcut: true
         case .collections, .collection: false
         }
     }
 
-    /// The order the grid starts in: a collection in release order, everything else by name.
+    /// The order the grid starts in: a collection in release order, a shortcut its own way, everything else by
+    /// name.
     var initialOptions: GridOptions {
-        guard case .collection = self else { return GridOptions() }
-        return GridOptions(sort: .premiereDate, ascending: true)
+        switch self {
+        case .collection: GridOptions(sort: .premiereDate, ascending: true)
+        case .shortcut(let shortcut): shortcut.options
+        case .library, .genre, .collections: GridOptions()
+        }
+    }
+}
+
+/// A way into every movie and show at once, from the Library tab's Browse list.
+enum LibraryShortcut: String, CaseIterable, Hashable, Sendable {
+    /// Favourites, by name.
+    case favourites
+    /// Newest additions first.
+    case recentlyAdded
+    /// Everything not yet watched, by name.
+    case unwatched
+
+    /// The grid's title and the Browse row's name.
+    var title: String {
+        switch self {
+        case .favourites:
+            String(
+                localized: "Favourites", bundle: .module,
+                comment: "Favourites: the library filter chip, and the Library tab's Browse row and grid.")
+        case .recentlyAdded:
+            String(
+                localized: "Recently Added", bundle: .module,
+                comment: "Library Browse row and grid of the newest additions.")
+        case .unwatched:
+            String(
+                localized: "Unwatched", bundle: .module,
+                comment: "Library Browse row and grid of everything not yet watched.")
+        }
+    }
+
+    /// The Browse row's symbol.
+    var systemImage: String {
+        switch self {
+        case .favourites: "heart.fill"
+        case .recentlyAdded: "clock.fill"
+        case .unwatched: "circle.dashed"
+        }
+    }
+
+    /// The grid's starting sort and filters.
+    var options: GridOptions {
+        switch self {
+        case .favourites: GridOptions(favouritesOnly: true)
+        case .recentlyAdded: GridOptions(sort: .dateAdded, ascending: false)
+        case .unwatched: GridOptions(unplayedOnly: true)
+        }
     }
 }
 
@@ -170,6 +223,8 @@ protocol MediaSource: Sendable {
     func item(_ id: String) async throws -> MediaItem
     /// The user's movie and TV libraries.
     func libraries() async throws -> [MediaLibrary]
+    /// A library's own picture, when the server has one, for its tile on the Library tab.
+    func cover(of library: MediaLibrary) async -> MediaItem?
     /// One page of a grid.
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage
     /// The genres and years in a grid, for its filter menus. Only a library's grid has them.

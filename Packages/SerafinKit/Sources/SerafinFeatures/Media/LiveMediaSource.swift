@@ -51,6 +51,14 @@ struct LiveMediaSource: MediaSource {
         try await library.userViews().compactMap(MediaLibrary.init(view:))
     }
 
+    func cover(of library: MediaLibrary) async -> MediaItem? {
+        guard
+            let view = try? await self.library.userViews().first(where: { $0.id == library.id }),
+            view.imageTags?[ImageType.primary.rawValue] != nil
+        else { return nil }
+        return MediaItem(card: MediaCard(id: library.id, kind: .collection, title: library.name), source: view)
+    }
+
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
         let page = try await library.items(Self.query(for: scope, options: options), start: start, limit: limit)
         return MediaPage(items: page.items.map(MediaItem.init), total: page.total)
@@ -95,6 +103,8 @@ struct LiveMediaSource: MediaSource {
             query.types = [.boxSet]
         case .collection(let id, _):
             query.parentID = id
+        case .shortcut:
+            break
         }
         return query
     }

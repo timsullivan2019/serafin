@@ -24,6 +24,8 @@ enum Route: Hashable {
     case collections
     /// The movies and shows in one collection.
     case collection(id: String, title: String)
+    /// Every movie and show filtered or sorted one way, such as Favourites, from the Library tab.
+    case shortcut(LibraryShortcut)
     /// A season's episodes. Jellyfin lists them under the show, so the route carries both.
     case season(id: String, seriesID: String)
     /// A person's filmography. Reserved for person pages after 1.0; nothing navigates here yet.
@@ -130,6 +132,8 @@ private struct RouteDestination: View {
             LibraryView(scope: .collections)
         case .collection(let id, let title):
             LibraryView(scope: .collection(id: id, title: title))
+        case .shortcut(let shortcut):
+            LibraryView(scope: .shortcut(shortcut))
         case .season(let id, let seriesID):
             SeasonView(id: id, seriesID: seriesID)
         case .person:
