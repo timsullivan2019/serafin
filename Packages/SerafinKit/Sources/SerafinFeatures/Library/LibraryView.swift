@@ -120,11 +120,13 @@ struct LibraryView: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.leading, Spacing.medium)
-            // Room for the letter index, so it never sits on a poster.
-            .padding(.trailing, letters.isEmpty ? Spacing.medium : Spacing.large)
-            .padding(.vertical, Spacing.small)
         }
+        // Margins rather than padding, so jumping to the top or to a letter lines up with the margins. Padding sits
+        // inside the scroll content, and the jump lined the grid itself up with the edge, leaving it shifted left.
+        .contentMargins(.leading, Spacing.medium, for: .scrollContent)
+        // Room for the letter index, so it never sits on a poster.
+        .contentMargins(.trailing, letters.isEmpty ? Spacing.medium : Spacing.large, for: .scrollContent)
+        .contentMargins(.vertical, Spacing.small, for: .scrollContent)
         .scrollPosition($position)
         .overlay(alignment: .trailing) {
             if !letters.isEmpty {
