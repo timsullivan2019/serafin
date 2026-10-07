@@ -1,0 +1,34 @@
+{
+  "Items": [
+    {
+      "Name": "Night of the Living Dead", "ServerId": "c0ffee", "Id": "4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d",
+      "PremiereDate": "1968-10-01T00:00:00.0000000Z", "OfficialRating": "NR", "CommunityRating": 7.3,
+      "RunTimeTicks": 57600000000, "ProductionYear": 1968, "IsFolder": false, "Type": "Movie",
+      "Overview": "Strangers take shelter in a farmhouse.",
+      "UserData": {
+        "PlayedPercentage": 40.0, "PlaybackPositionTicks": 23040000000, "PlayCount": 0, "IsFavorite": false,
+        "LastPlayedDate": "2026-10-01T20:15:00.1234567Z", "Played": false, "Key": "4a3b2c1d", "ItemId": "4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d"
+      },
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ImageTags": { "Primary": "11aa22bb33cc44dd55ee66ff77aa88bb", "Thumb": "22bb33cc44dd55ee66ff77aa88bb99cc" },
+      "BackdropImageTags": ["33cc44dd55ee66ff77aa88bb99cc00dd"], "MediaType": "Video"
+    },
+    {
+      "Name": "The Red-Headed League", "ServerId": "c0ffee", "Id": "c2b1d0e9f8a7b6c5d4e3f2a1b0c9d8e7",
+      "RunTimeTicks": 30000000000, "ProductionYear": 1891, "IndexNumber": 2, "ParentIndexNumber": 1,
+      "IsFolder": false, "Type": "Episode", "SeriesName": "Sherlock Holmes", "SeriesId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+      "SeasonId": "a09b8c7d6e5f4a3b2c1d0e9f8a7b6c5d", "SeasonName": "Season 1",
+      "SeriesPrimaryImageTag": "44dd55ee66ff77aa88bb99cc00dd11ee",
+      "UserData": { "PlayedPercentage": 15.5, "PlaybackPositionTicks": 4650000000, "PlayCount": 0, "IsFavorite": false, "Played": false, "Key": "c2b1", "ItemId": "c2b1d0e9f8a7b6c5d4e3f2a1b0c9d8e7" },
+      "PrimaryImageAspectRatio": 1.7777777777777777,
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ParentBackdropItemId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c", "ParentBackdropImageTags": ["55ee66ff77aa88bb99cc00dd11ee22ff"],
+      "ParentThumbItemId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c", "ParentThumbImageTag": "66ff77aa88bb99cc00dd11ee22ff33aa",
+      "ParentLogoItemId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c", "ParentLogoImageTag": "77aa88bb99cc00dd11ee22ff33aa44bb",
+      "MediaType": "Video"
+    }
+  ],
+  "TotalRecordCount": 2,
+  "StartIndex": 0
+}

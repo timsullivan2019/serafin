@@ -1,0 +1,17 @@
+{
+  "Items": [
+    {
+      "Name": "A Scandal in Bohemia", "ServerId": "c0ffee", "Id": "b1a0c9d8e7f6a5b4c3d2e1f0a9b8c7d6",
+      "PremiereDate": "1891-07-25T00:00:00.0000000Z", "RunTimeTicks": 29400000000, "ProductionYear": 1891,
+      "IndexNumber": 1, "ParentIndexNumber": 1, "IsFolder": false, "Type": "Episode",
+      "SeriesName": "Sherlock Holmes", "SeriesId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+      "SeasonId": "a09b8c7d6e5f4a3b2c1d0e9f8a7b6c5d", "SeriesPrimaryImageTag": "44dd55ee66ff77aa88bb99cc00dd11ee",
+      "UserData": { "PlaybackPositionTicks": 0, "PlayCount": 0, "IsFavorite": false, "Played": false, "Key": "b1a0", "ItemId": "b1a0c9d8e7f6a5b4c3d2e1f0a9b8c7d6" },
+      "ImageTags": { "Primary": "88bb99cc00dd11ee22ff33aa44bb55cc" }, "BackdropImageTags": [],
+      "ParentBackdropItemId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c", "ParentBackdropImageTags": ["55ee66ff77aa88bb99cc00dd11ee22ff"],
+      "MediaType": "Video"
+    }
+  ],
+  "TotalRecordCount": 1,
+  "StartIndex": 0
+}

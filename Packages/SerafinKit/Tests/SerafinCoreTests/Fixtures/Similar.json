@@ -1,0 +1,10 @@
+{
+  "Items": [
+    {
+      "Name": "His Girl Friday", "ServerId": "c0ffee", "Id": "8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b", "ProductionYear": 1940,
+      "IsFolder": false, "Type": "Movie", "ImageTags": { "Primary": "bb11cc22dd33ee44ff5500aa11bb22cc" }, "BackdropImageTags": []
+    }
+  ],
+  "TotalRecordCount": 1,
+  "StartIndex": 0
+}

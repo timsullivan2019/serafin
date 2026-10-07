@@ -28,6 +28,7 @@ private struct Harness {
             version: "0.1.0",
             serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
             defaults: try #require(UserDefaults(suiteName: "serafin-tests-\(UUID().uuidString)")),
+            imageDiskCache: false,
             sessionConfiguration: { StubURLProtocol.configuration() }
         )
     }
@@ -323,6 +324,26 @@ private struct Harness {
         #expect(saved.name == "Moved")
         #expect(saved.users.map(\.id) == ["user-1"])
         #expect(try await harness.accounts.current()?.server.url == saved.url)
+    }
+
+    @Test func eachAccountHasOneLibraryUntilItSignsOut() async throws {
+        let harness = try Harness()
+        let account = try await harness.signIn(to: try harness.server(on: "library.example.com"))
+        let first = try await harness.accounts.library(for: account)
+        #expect(first === (try await harness.accounts.library(for: account)))
+        #expect(first.userID == "user-1")
+
+        try await harness.accounts.signOut(account.key)
+
+        await #expect(throws: SerafinError.notSignedIn) { try await harness.accounts.library(for: account) }
+    }
+
+    @Test func artworkCarriesTheAccountsTokenInItsHeader() async throws {
+        let harness = try Harness()
+        let account = try await harness.signIn(to: try harness.server(on: "artwork.example.com"))
+        let artwork = try await harness.accounts.artwork(for: account)
+        #expect(artwork.authorization.contains(#"Token="token-user-1""#))
+        #expect(artwork.urls.serverURL == account.server.url)
     }
 
     @Test func eachAccountHasOneClientCarryingItsToken() async throws {

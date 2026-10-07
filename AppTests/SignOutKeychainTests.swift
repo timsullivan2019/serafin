@@ -27,7 +27,8 @@ import Testing
             deviceName: "iPhone",
             version: "0.1.0",
             serverStore: store,
-            defaults: try #require(UserDefaults(suiteName: suite))
+            defaults: try #require(UserDefaults(suiteName: suite)),
+            imageDiskCache: false
         )
 
         try await accounts.signOut(SessionKey(serverID: "server", userID: "user"))

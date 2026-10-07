@@ -23,6 +23,10 @@ import os
     public private(set) var state = State.loading
     /// Every saved server with its signed-in users, in the order the servers were added.
     public private(set) var servers: [Server] = []
+    /// The current account's library, or nil when no one is signed in.
+    public private(set) var library: LibraryRepository?
+    /// Loads the current account's images, or nil when no one is signed in.
+    public private(set) var artwork: Artwork?
 
     /// The account the app is browsing as, if any.
     public var account: Account? {
@@ -122,13 +126,29 @@ import os
         }
     }
 
+    /// Re-reads the servers and the current account, and hands screens a new library and artwork loader when the
+    /// account or its server's address has changed.
     private func refresh() async {
         do {
             servers = try await accounts.servers()
-            state = try await accounts.current().map(State.signedIn) ?? .signedOut
+            guard let current = try await accounts.current() else {
+                signOutScreens()
+                return
+            }
+            if current != account || library == nil || artwork == nil {
+                library = try await accounts.library(for: current)
+                artwork = try await accounts.artwork(for: current)
+            }
+            state = .signedIn(current)
         } catch {
             Self.logger.error("Could not read the saved accounts: \(error.localizedDescription, privacy: .private)")
-            state = .signedOut
+            signOutScreens()
         }
+    }
+
+    private func signOutScreens() {
+        library = nil
+        artwork = nil
+        state = .signedOut
     }
 }

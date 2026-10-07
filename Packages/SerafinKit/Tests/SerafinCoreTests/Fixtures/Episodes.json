@@ -1,0 +1,21 @@
+{
+  "Items": [
+    {
+      "Name": "A Scandal in Bohemia", "ServerId": "c0ffee", "Id": "b1a0c9d8e7f6a5b4c3d2e1f0a9b8c7d6", "IndexNumber": 1,
+      "ParentIndexNumber": 1, "RunTimeTicks": 29400000000, "IsFolder": false, "Type": "Episode",
+      "SeriesName": "Sherlock Holmes", "SeriesId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c", "SeasonId": "a09b8c7d6e5f4a3b2c1d0e9f8a7b6c5d",
+      "Overview": "A king asks for help recovering a photograph.",
+      "UserData": { "PlaybackPositionTicks": 0, "PlayCount": 1, "IsFavorite": false, "Played": true, "Key": "b1a0", "ItemId": "b1a0c9d8e7f6a5b4c3d2e1f0a9b8c7d6" },
+      "ImageTags": { "Primary": "88bb99cc00dd11ee22ff33aa44bb55cc" }, "BackdropImageTags": []
+    },
+    {
+      "Name": "The Red-Headed League", "ServerId": "c0ffee", "Id": "c2b1d0e9f8a7b6c5d4e3f2a1b0c9d8e7", "IndexNumber": 2,
+      "ParentIndexNumber": 1, "RunTimeTicks": 30000000000, "IsFolder": false, "Type": "Episode",
+      "SeriesName": "Sherlock Holmes", "SeriesId": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c", "SeasonId": "a09b8c7d6e5f4a3b2c1d0e9f8a7b6c5d",
+      "UserData": { "PlayedPercentage": 15.5, "PlaybackPositionTicks": 4650000000, "PlayCount": 0, "IsFavorite": false, "Played": false, "Key": "c2b1", "ItemId": "c2b1d0e9f8a7b6c5d4e3f2a1b0c9d8e7" },
+      "ImageTags": {}, "BackdropImageTags": []
+    }
+  ],
+  "TotalRecordCount": 2,
+  "StartIndex": 0
+}

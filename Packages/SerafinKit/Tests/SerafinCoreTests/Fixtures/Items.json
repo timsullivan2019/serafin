@@ -1,0 +1,22 @@
+{
+  "Items": [
+    {
+      "Name": "Charade", "ServerId": "c0ffee", "Id": "7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a", "SortName": "charade",
+      "PremiereDate": "1963-12-05T00:00:00.0000000Z", "CommunityRating": 7.8, "RunTimeTicks": 68400000000,
+      "ProductionYear": 1963, "IsFolder": false, "Type": "Movie",
+      "ImageTags": { "Primary": "aa00bb11cc22dd33ee44ff5500aa11bb" }, "BackdropImageTags": [],
+      "UserData": { "PlaybackPositionTicks": 0, "PlayCount": 1, "IsFavorite": false, "Played": true, "Key": "7d6e", "ItemId": "7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a" },
+      "MediaType": "Video"
+    },
+    {
+      "Name": "His Girl Friday", "ServerId": "c0ffee", "Id": "8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b", "SortName": "his girl friday",
+      "PremiereDate": "1940-01-18T00:00:00.0000000Z", "CommunityRating": 7.8, "RunTimeTicks": 55200000000,
+      "ProductionYear": 1940, "IsFolder": false, "Type": "Movie",
+      "ImageTags": { "Primary": "bb11cc22dd33ee44ff5500aa11bb22cc" }, "BackdropImageTags": [],
+      "UserData": { "PlaybackPositionTicks": 0, "PlayCount": 0, "IsFavorite": false, "Played": false, "Key": "8e7f", "ItemId": "8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b" },
+      "MediaType": "Video"
+    }
+  ],
+  "TotalRecordCount": 122,
+  "StartIndex": 60
+}

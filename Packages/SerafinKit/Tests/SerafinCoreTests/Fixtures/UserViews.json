@@ -1,0 +1,28 @@
+{
+  "Items": [
+    {
+      "Name": "Movies", "ServerId": "c0ffee", "Id": "f137a2dd21bbc1b99aa5c0f6bf02a805", "Etag": "4d8a5b1d0c6ff1e2",
+      "DateCreated": "2026-03-14T09:26:53.5897930Z", "IsFolder": true, "Type": "CollectionFolder",
+      "CollectionType": "movies", "ImageTags": { "Primary": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6" },
+      "BackdropImageTags": [], "LocationType": "FileSystem", "MediaType": "Unknown"
+    },
+    {
+      "Name": "Shows", "ServerId": "c0ffee", "Id": "a656b907eb3a73532e40e44b968d0225", "IsFolder": true,
+      "Type": "CollectionFolder", "CollectionType": "tvshows", "ImageTags": {}, "BackdropImageTags": []
+    },
+    {
+      "Name": "Music", "ServerId": "c0ffee", "Id": "7e64e319657a9516ec78490da03edccb", "IsFolder": true,
+      "Type": "CollectionFolder", "CollectionType": "music", "ImageTags": {}, "BackdropImageTags": []
+    },
+    {
+      "Name": "Collections", "ServerId": "c0ffee", "Id": "9d7ad6afe9afa2dab1a2f6e00ad28fa6", "IsFolder": true,
+      "Type": "CollectionFolder", "CollectionType": "boxsets", "ImageTags": {}, "BackdropImageTags": []
+    },
+    {
+      "Name": "Everything", "ServerId": "c0ffee", "Id": "0c41907140d802bb58430fed7e2cd79e", "IsFolder": true,
+      "Type": "CollectionFolder", "ImageTags": {}, "BackdropImageTags": []
+    }
+  ],
+  "TotalRecordCount": 5,
+  "StartIndex": 0
+}

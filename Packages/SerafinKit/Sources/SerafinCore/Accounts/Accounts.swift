@@ -1,12 +1,13 @@
 import Foundation
 import JellyfinAPI
+import Nuke
 import os
 
 /// Every server and user on this device, and the account the app is using.
 ///
 /// This is SerafinCore's front door for adding servers, signing in with Quick Connect or a password, switching
 /// accounts, signing out and removing servers. It keeps the server list, the tokens and the certificate pins in
-/// step, and hands out one `JellyfinClient` per account.
+/// step, and hands out one `JellyfinClient`, one ``LibraryRepository`` and one ``Artwork`` per account.
 public actor Accounts {
     /// How many polls in a row may fail to reach the server before Quick Connect gives up.
     static let pollFailureTolerance = 3
@@ -16,14 +17,18 @@ public actor Accounts {
     private static let logger = Logger(serafinCategory: "accounts")
 
     private let serverStore: ServerStore
+    private let identity: DeviceIdentity
     private let sessions: SessionStore
     private let pins: PinStore
     private let pinning: PinningDelegate
     private let clients: ClientFactory
     private let connector: ServerConnector
+    private let images: ImagePipeline
 
     /// One client per signed-in account, so everything signed in as that user shares its connections.
     private var accountClients: [SessionKey: JellyfinClient] = [:]
+    /// One library per signed-in account, so every screen shares its cache.
+    private var libraries: [SessionKey: LibraryRepository] = [:]
     /// One anonymous client per server, for signing in.
     private var signInClients: [String: JellyfinClient] = [:]
 
@@ -35,6 +40,7 @@ public actor Accounts {
     ///   - version: The app version servers show.
     ///   - serverStore: Where the server list is saved.
     ///   - defaults: Where the current selection is saved. Tests pass a throwaway suite.
+    ///   - imageDiskCache: Whether images are cached on disk, up to 200 MB in Caches. Tests turn it off.
     ///   - sessionConfiguration: Makes the `URLSession` configuration for every request. Tests pass one with a stub
     ///     protocol.
     public init(
@@ -43,6 +49,7 @@ public actor Accounts {
         version: String = DeviceIdentity.bundleVersion,
         serverStore: ServerStore = ServerStore(),
         defaults: sending UserDefaults = .standard,
+        imageDiskCache: Bool = true,
         sessionConfiguration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral }
     ) {
         let identity = DeviceIdentity(secrets: secrets, deviceName: deviceName, version: version)
@@ -50,6 +57,7 @@ public actor Accounts {
         let pins = PinStore(secrets: secrets)
         let pinning = PinningDelegate(pins: pins)
         self.serverStore = serverStore
+        self.identity = identity
         self.sessions = sessions
         self.pins = pins
         self.pinning = pinning
@@ -60,6 +68,11 @@ public actor Accounts {
             sessionConfiguration: sessionConfiguration
         )
         self.connector = ServerConnector(pinning: pinning, sessionConfiguration: sessionConfiguration)
+        self.images = ImagePipeline.serafin(
+            pinning: pinning,
+            diskCacheName: imageDiskCache ? ImagePipeline.diskCacheName : nil,
+            sessionConfiguration: sessionConfiguration()
+        )
     }
 
     // MARK: - Servers
@@ -246,6 +259,32 @@ public actor Accounts {
         return client
     }
 
+    /// The library of `account`, shared by every screen that shows it.
+    ///
+    /// - Throws: ``SerafinError/notSignedIn`` when the account has no saved token.
+    public func library(for account: Account) async throws -> LibraryRepository {
+        if let cached = libraries[account.key] {
+            return cached
+        }
+        let client = try await client(for: account)
+        if let cached = libraries[account.key] {
+            return cached
+        }
+        let library = LibraryRepository(client: client, userID: account.user.id, errors: ServerErrors(pinning: pinning))
+        libraries[account.key] = library
+        return library
+    }
+
+    /// Loads `account`'s images through the app's one image pipeline.
+    ///
+    /// - Throws: ``SerafinError/notSignedIn`` when the account has no saved token.
+    public func artwork(for account: Account) async throws -> Artwork {
+        _ = try TransportPolicy.security(of: account.server.url)
+        guard let token = try await sessions.token(for: account.key) else { throw SerafinError.notSignedIn }
+        let authorization = try await identity.authorizationHeader(accessToken: token)
+        return Artwork(urls: ImageURLs(serverURL: account.server.url), pipeline: images, authorization: authorization)
+    }
+
     // MARK: - Helpers
 
     /// What it takes to end a session on its server after the device has forgotten it.
@@ -288,6 +327,7 @@ public actor Accounts {
             throw error
         }
         accountClients[account.key] = nil
+        libraries[account.key] = nil
         await sessions.setCurrent(account.key)
         return account
     }
@@ -298,6 +338,7 @@ public actor Accounts {
         let token = try await sessions.token(for: key)
         try await sessions.removeToken(for: key)
         let client = accountClients.removeValue(forKey: key)
+        libraries[key] = nil
         guard var server = try await serverStore.server(id: key.serverID) else { return nil }
         server.users.removeAll { $0.id == key.userID }
         if server.lastUserID == key.userID {
@@ -347,31 +388,11 @@ public actor Accounts {
     private func forgetClients(forServer serverID: String) {
         signInClients[serverID] = nil
         accountClients = accountClients.filter { $0.key.serverID != serverID }
+        libraries = libraries.filter { $0.key.serverID != serverID }
     }
 
     /// Turns an error from talking to `server` into a ``SerafinError``, or passes a cancellation on.
-    ///
-    /// - Parameter statuses: What particular HTTP statuses mean for this request. Any other status is an
-    ///   ``SerafinError/unexpectedResponse(status:)``.
     private func translate(_ error: any Error, from server: Server, statuses: [Int: SerafinError] = [:]) -> any Error {
-        switch error {
-        case is SerafinError, is CancellationError:
-            return error
-        case let error as URLError:
-            if Task.isCancelled {
-                return CancellationError()
-            }
-            if error.isCertificateFailure, let host = server.url.host(),
-                let presented = pinning.rejectedCertificate(for: host)
-            {
-                return SerafinError.untrustedCertificate(presented)
-            }
-            return SerafinError.serverUnreachable
-        default:
-            if let status = HTTPStatus.of(error) {
-                return statuses[status] ?? SerafinError.unexpectedResponse(status: status)
-            }
-            return SerafinError.unexpectedResponse(status: nil)
-        }
+        ServerErrors(pinning: pinning).translate(error, from: server.url, statuses: statuses)
     }
 }
