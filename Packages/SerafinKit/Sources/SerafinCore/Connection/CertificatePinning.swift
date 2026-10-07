@@ -152,3 +152,17 @@ public final class PinningDelegate: NSObject, URLSessionTaskDelegate, Sendable {
         return .rejected(presented)
     }
 }
+
+extension URLError {
+    /// Whether the request failed in the TLS handshake. A challenge the ``PinningDelegate`` refused shows up as
+    /// `cancelled`, so callers check ``PinningDelegate/rejectedCertificate(for:)`` before blaming the certificate.
+    var isCertificateFailure: Bool {
+        switch code {
+        case .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot,
+            .serverCertificateNotYetValid, .secureConnectionFailed, .cancelled:
+            true
+        default:
+            false
+        }
+    }
+}

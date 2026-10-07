@@ -1,7 +1,8 @@
 import Foundation
 import Synchronization
 
-/// Answers requests from canned responses keyed by host and port, so connection code can be tested offline.
+/// Answers requests from canned responses keyed by host and port, and optionally by path, so connection and
+/// sign-in code can be tested offline. Each test uses its own hosts, so tests can run in parallel.
 final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     enum Reply: Sendable {
         case json(Int, String)
@@ -10,17 +11,38 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         case hang
     }
 
-    private static let replies = Mutex<[String: Reply]>([:])
-    private static let requests = Mutex<[String: URLRequest]>([:])
+    /// A request the stub received, with its body read out of the stream URLSession hands to protocols.
+    struct Received: Sendable {
+        let request: URLRequest
+        let body: Data
 
-    /// Sets what requests to `host:port` get back. Each test uses its own hosts, so tests can run in parallel.
-    static func stub(_ hostAndPort: String, _ reply: Reply) {
-        replies.withLock { $0[hostAndPort] = reply }
+        /// The `Authorization` header.
+        var authorization: String? { request.value(forHTTPHeaderField: "Authorization") }
     }
 
-    /// The last request sent to `host:port`.
+    private static let replies = Mutex<[String: [Reply]]>([:])
+    private static let received = Mutex<[String: [Received]]>([:])
+
+    /// Sets what requests to `host:port`, or to one `path` on it, get back. The replies are used in order and the
+    /// last one repeats. A stub for a path wins over one for the whole host.
+    static func stub(_ hostAndPort: String, path: String? = nil, _ replies: Reply...) {
+        stubSequence(hostAndPort, path: path, replies)
+    }
+
+    /// ``stub(_:path:_:)`` with the replies in an array.
+    static func stubSequence(_ hostAndPort: String, path: String? = nil, _ replies: [Reply]) {
+        let key = path.map { hostAndPort + $0 } ?? hostAndPort
+        self.replies.withLock { $0[key] = replies }
+    }
+
+    /// Every request sent to `path` on `host:port`, oldest first.
+    static func requests(to hostAndPort: String, path: String) -> [Received] {
+        received.withLock { $0[hostAndPort + path] ?? [] }
+    }
+
+    /// The last request sent to `host:port`, on any path.
     static func lastRequest(to hostAndPort: String) -> URLRequest? {
-        requests.withLock { $0[hostAndPort] }
+        received.withLock { $0[hostAndPort]?.last?.request }
     }
 
     static func configuration() -> URLSessionConfiguration {
@@ -37,9 +59,23 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))
             return
         }
-        let key = "\(host):\(url.port ?? (url.scheme == "https" ? 443 : 80))"
-        Self.requests.withLock { $0[key] = request }
-        switch Self.replies.withLock({ $0[key] }) {
+        let hostAndPort = "\(host):\(url.port ?? (url.scheme == "https" ? 443 : 80))"
+        let pathKey = hostAndPort + url.path()
+        let received = Received(request: request, body: Self.body(of: request))
+        Self.received.withLock {
+            $0[hostAndPort, default: []].append(received)
+            $0[pathKey, default: []].append(received)
+        }
+        let reply = Self.replies.withLock { replies in
+            let key = replies[pathKey] != nil ? pathKey : hostAndPort
+            guard var queue = replies[key], let first = queue.first else { return Reply?.none }
+            if queue.count > 1 {
+                queue.removeFirst()
+                replies[key] = queue
+            }
+            return first
+        }
+        switch reply {
         case .json(let status, let body):
             let response = HTTPURLResponse(
                 url: url,
@@ -62,4 +98,21 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {}
+
+    private static func body(of request: URLRequest) -> Data {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
 }

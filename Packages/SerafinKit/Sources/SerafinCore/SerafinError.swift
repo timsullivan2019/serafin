@@ -23,4 +23,15 @@ public enum SerafinError: Error, Equatable, Sendable {
     case notJellyfin
     /// The server runs a Jellyfin version older than Serafin supports, which it carries.
     case unsupportedServerVersion(String)
+    /// The server refused the username and password.
+    case invalidCredentials
+    /// Quick Connect is turned off on this server, so the user signs in with a password instead.
+    case quickConnectDisabled
+    /// The Quick Connect code expired before anyone approved it.
+    case quickConnectExpired
+    /// There is no saved sign-in for that user on that server, so they need to sign in again.
+    case notSignedIn
+    /// The server answered in a way Serafin does not expect, such as an error status or a reply without a token.
+    /// Carries the HTTP status when there was one.
+    case unexpectedResponse(status: Int?)
 }
