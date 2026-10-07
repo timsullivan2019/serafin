@@ -10,27 +10,11 @@ struct LiveMediaSource: MediaSource {
     let library: LibraryRepository
 
     func home() async throws -> HomeContent {
-        async let resume = library.resume()
-        async let nextUp = library.nextUp()
-        let libraries = try await libraries()
-        // One library's row failing leaves the others; the whole screen fails only if Home's own rows do.
-        let latest = await withTaskGroup(of: (Int, [MediaItem]).self) { group in
-            for (index, mediaLibrary) in libraries.enumerated() {
-                group.addTask {
-                    (index, MediaItem.latest((try? await library.latest(in: mediaLibrary.id)) ?? []))
-                }
-            }
-            var rows = [[MediaItem]](repeating: [], count: libraries.count)
-            for await (index, items) in group {
-                rows[index] = items
-            }
-            return rows
-        }
-        return HomeContent(
-            continueWatching: MediaItem.from(try await resume),
-            nextUp: MediaItem.from(try await nextUp),
-            latest: zip(libraries, latest).map { HomeContent.LatestRow(library: $0, items: $1) }
-        )
+        HomeContent(try await library.home())
+    }
+
+    func savedHome() async -> HomeContent? {
+        await library.savedHome().map(HomeContent.init)
     }
 
     func nextToWatch() async throws -> [MediaItem] {
@@ -185,5 +169,18 @@ struct LiveMediaSource: MediaSource {
         default:
             nil
         }
+    }
+}
+
+extension HomeContent {
+    /// Home's rows from what the server sent, leaving out kinds of library and item Serafin doesn't show.
+    init(_ snapshot: HomeSnapshot) {
+        let libraries = snapshot.libraries.compactMap(MediaLibrary.init(view:))
+        self.init(
+            continueWatching: MediaItem.from(snapshot.resume),
+            nextUp: MediaItem.from(snapshot.nextUp),
+            latest: libraries.map { LatestRow(library: $0, items: MediaItem.latest(snapshot.latest[$0.id] ?? [])) },
+            date: snapshot.date
+        )
     }
 }

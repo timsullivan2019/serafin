@@ -18,10 +18,12 @@ private func quickConnectJSON(authenticated: Bool) -> String {
 /// Accounts on throwaway stores, talking to stubbed servers. Every test uses its own host.
 private struct Harness {
     let secrets = InMemorySecretStore()
+    let homeSnapshots: HomeSnapshotStore
     let accounts: Accounts
 
     init() throws {
         let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
+        homeSnapshots = HomeSnapshotStore(directory: directory.appending(path: "home"))
         accounts = Accounts(
             secrets: secrets,
             deviceName: "iPhone",
@@ -29,8 +31,19 @@ private struct Harness {
             serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
             defaults: try #require(UserDefaults(suiteName: "serafin-tests-\(UUID().uuidString)")),
             imageDiskCache: false,
+            homeSnapshots: homeSnapshots,
             sessionConfiguration: { StubURLProtocol.configuration() }
         )
+    }
+
+    /// Saves a Home for `key` as if it had loaded.
+    func saveHome(for key: SessionKey) async {
+        await homeSnapshots.save(
+            HomeSnapshot(date: .now, libraries: [], resume: [], nextUp: [], latest: [:]), for: key)
+    }
+
+    func hasSavedHome(_ key: SessionKey) async -> Bool {
+        await homeSnapshots.snapshot(for: key) != nil
     }
 
     func server(on host: String) throws -> Server {
@@ -344,6 +357,62 @@ private struct Harness {
         let artwork = try await harness.accounts.artwork(for: account)
         #expect(artwork.authorization.contains(#"Token="token-user-1""#))
         #expect(artwork.urls.serverURL == account.server.url)
+    }
+
+    @Test func eachAccountsLibraryKeepsItsHomeOnTheDevice() async throws {
+        let harness = try Harness()
+        let host = "kept-home.example.com"
+        let account = try await harness.signIn(to: try harness.server(on: host))
+        for path in ["/UserViews", "/UserItems/Resume", "/Shows/NextUp"] {
+            StubURLProtocol.stub("\(host):443", path: path, .json(200, #"{"Items":[]}"#))
+        }
+        let home = try await harness.accounts.library(for: account).home()
+        #expect(await harness.homeSnapshots.snapshot(for: account.key) == home)
+    }
+
+    @Test func signingOutForgetsOnlyThatAccountsSavedHome() async throws {
+        let harness = try Harness()
+        let host = "forget-home.example.com"
+        let server = try harness.server(on: host)
+        let alice = try await harness.signIn(to: server, as: "user-1", name: "Alice")
+        let bob = try await harness.signIn(to: server, as: "user-2", name: "Bob")
+        await harness.saveHome(for: alice.key)
+        await harness.saveHome(for: bob.key)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Logout", .json(204, ""))
+
+        try await harness.accounts.signOut(alice.key)
+
+        #expect(await !harness.hasSavedHome(alice.key))
+        #expect(await harness.hasSavedHome(bob.key))
+    }
+
+    @Test func removingAServerForgetsItsUsersSavedHomes() async throws {
+        let harness = try Harness()
+        let host = "removed-homes.example.com"
+        let server = try harness.server(on: host)
+        let alice = try await harness.signIn(to: server, as: "user-1", name: "Alice")
+        let bob = try await harness.signIn(to: server, as: "user-2", name: "Bob")
+        await harness.saveHome(for: alice.key)
+        await harness.saveHome(for: bob.key)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Logout", .json(204, ""))
+
+        try await harness.accounts.remove(serverID: server.id)
+
+        #expect(await !harness.hasSavedHome(alice.key))
+        #expect(await !harness.hasSavedHome(bob.key))
+    }
+
+    @Test func clearingCachesForgetsEverySavedHome() async throws {
+        let harness = try Harness()
+        let first = try await harness.signIn(to: try harness.server(on: "clear-first.example.com"))
+        let second = try await harness.signIn(to: try harness.server(on: "clear-second.example.com"))
+        await harness.saveHome(for: first.key)
+        await harness.saveHome(for: second.key)
+
+        await harness.accounts.clearCaches()
+
+        #expect(await !harness.hasSavedHome(first.key))
+        #expect(await !harness.hasSavedHome(second.key))
     }
 
     @Test func eachAccountHasOneClientCarryingItsToken() async throws {

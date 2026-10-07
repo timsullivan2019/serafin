@@ -40,11 +40,6 @@ public struct Artwork: Sendable {
         return request(urls.url(itemID: id, type: .primary, tag: tag, maxWidth: pixels), pixels: pixels)
     }
 
-    /// Empties the image caches in memory and on disk, for Clear Cache in Settings.
-    public func removeAllCachedImages() {
-        pipeline.cache.removeAll()
-    }
-
     private func request(_ url: URL?, pixels: Int) -> ImageRequest? {
         guard let url else { return nil }
         var urlRequest = URLRequest(url: url)

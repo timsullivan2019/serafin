@@ -135,6 +135,13 @@ import os
         try await changing { try await accounts.signOut(key) }
     }
 
+    // MARK: - Storage
+
+    /// Empties every cache on this device: artwork, each account's saved Home and recent answers from the server.
+    public func clearCaches() async {
+        await accounts.clearCaches()
+    }
+
     // MARK: - Helpers
 
     /// Runs a change, then re-reads the servers and the current account whether it worked or not.
@@ -201,7 +208,8 @@ import os
                 deviceName: "iPhone",
                 serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
                 defaults: UserDefaults(suiteName: suite) ?? UserDefaults(),
-                imageDiskCache: false
+                imageDiskCache: false,
+                homeSnapshots: HomeSnapshotStore(directory: directory.appending(path: "home"))
             )
         }
     }

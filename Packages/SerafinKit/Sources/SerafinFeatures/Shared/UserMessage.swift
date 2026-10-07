@@ -66,6 +66,18 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                 ),
                 systemImage: "lock.trianglebadge.exclamationmark"
             )
+        case .offline:
+            self.init(
+                title: String(
+                    localized: "You're Offline", bundle: .module,
+                    comment: "Title when the device has no network connection."),
+                message: String(
+                    localized: "Connect to Wi-Fi or turn on cellular data to reach your server.",
+                    bundle: .module,
+                    comment: "Explanation when the device has no network connection."
+                ),
+                systemImage: "wifi.slash"
+            )
         case .serverUnreachable:
             self.init(
                 title: String(

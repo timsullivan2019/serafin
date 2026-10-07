@@ -63,7 +63,8 @@ import SerafinPlayback
     ///   - artwork: Loads the artwork the Lock Screen shows.
     ///   - serverID: The account's server, whose streaming caps apply. Nil in previews.
     ///   - defaults: Where Settings keeps the streaming caps and the subtitle style.
-    ///   - isOnExpensiveNetwork: Whether the device is on cellular or a personal hotspot right now.
+    ///   - isOnExpensiveNetwork: Whether the device is on cellular or a personal hotspot right now. Nil asks the app's
+    ///     network watcher.
     init(
         engine: PlayerEngine? = nil,
         media: any MediaSource = SampleMediaSource(),
@@ -71,7 +72,7 @@ import SerafinPlayback
         artwork: Artwork? = nil,
         serverID: String? = nil,
         defaults: UserDefaults = .standard,
-        isOnExpensiveNetwork: @escaping @MainActor () -> Bool = { NetworkWatcher.shared.isExpensive }
+        isOnExpensiveNetwork: (@MainActor () -> Bool)? = nil
     ) {
         self.engine = engine
         self.media = media
@@ -79,7 +80,13 @@ import SerafinPlayback
         self.artwork = artwork
         self.serverID = serverID
         self.defaults = defaults
-        self.isOnExpensiveNetwork = isOnExpensiveNetwork
+        if let isOnExpensiveNetwork {
+            self.isOnExpensiveNetwork = isOnExpensiveNetwork
+        } else {
+            // The watcher starts now rather than at the first video, since it takes a moment to learn the network.
+            let network = NetworkWatcher.shared
+            self.isOnExpensiveNetwork = { network.isExpensive }
+        }
         subtitleStyle = SubtitleStyle.saved(in: defaults)
         engine?.subtitleStyle = subtitleStyle
     }

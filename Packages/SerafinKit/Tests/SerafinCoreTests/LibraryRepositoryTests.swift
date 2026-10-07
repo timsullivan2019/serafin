@@ -12,10 +12,12 @@ enum Fixture {
     }
 }
 
-/// A library signed in as `user-1` on a stubbed server at `host`.
-private func library(on host: String, cacheLifetime: Duration = LibraryRepository.defaultCacheLifetime) throws
-    -> LibraryRepository
-{
+/// A library signed in as `user-1` on a stubbed server at `host`, keeping its Home in `homeSnapshots` when given.
+func library(
+    on host: String,
+    cacheLifetime: Duration = LibraryRepository.defaultCacheLifetime,
+    homeSnapshots: HomeSnapshotStore.Slot? = nil
+) throws -> LibraryRepository {
     let configuration = JellyfinClient.Configuration(
         url: try #require(URL(string: "https://\(host)")),
         accessToken: "token-1",
@@ -26,10 +28,11 @@ private func library(on host: String, cacheLifetime: Duration = LibraryRepositor
     )
     let client = JellyfinClient(configuration: configuration, sessionConfiguration: StubURLProtocol.configuration())
     let errors = ServerErrors(pinning: PinningDelegate(pins: PinStore(secrets: InMemorySecretStore())))
-    return LibraryRepository(client: client, userID: "user-1", errors: errors, cacheLifetime: cacheLifetime)
+    return LibraryRepository(
+        client: client, userID: "user-1", errors: errors, cacheLifetime: cacheLifetime, homeSnapshots: homeSnapshots)
 }
 
-private let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
 
 @Suite struct LibraryHomeTests {
     @Test func userViewsKeepsMoviesShowsAndMixedLibraries() async throws {
@@ -364,7 +367,7 @@ private let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
             .json(200, try Fixture.json("NextUp"))
         )
         let library = try library(on: host)
-        await #expect(throws: SerafinError.serverUnreachable) { try await library.nextUp() }
+        await #expect(throws: SerafinError.offline) { try await library.nextUp() }
         #expect(try await library.nextUp().count == 1)
     }
 }

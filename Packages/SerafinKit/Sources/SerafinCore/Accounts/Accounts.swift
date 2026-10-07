@@ -6,8 +6,9 @@ import os
 /// Every server and user on this device, and the account the app is using.
 ///
 /// This is SerafinCore's front door for adding servers, signing in with Quick Connect or a password, switching
-/// accounts, signing out and removing servers. It keeps the server list, the tokens and the certificate pins in
-/// step, and hands out one `JellyfinClient`, one ``LibraryRepository`` and one ``Artwork`` per account.
+/// accounts, signing out and removing servers. It keeps the server list, the tokens, the certificate pins and each
+/// account's saved Home in step, and hands out one `JellyfinClient`, one ``LibraryRepository`` and one ``Artwork``
+/// per account.
 public actor Accounts {
     /// How many polls in a row may fail to reach the server before Quick Connect gives up.
     static let pollFailureTolerance = 3
@@ -25,6 +26,7 @@ public actor Accounts {
     private let clients: ClientFactory
     private let connector: ServerConnector
     private let images: ImagePipeline
+    private let homeSnapshots: HomeSnapshotStore
 
     /// One client per signed-in account, so everything signed in as that user shares its connections.
     private var accountClients: [SessionKey: JellyfinClient] = [:]
@@ -42,6 +44,7 @@ public actor Accounts {
     ///   - serverStore: Where the server list is saved.
     ///   - defaults: Where the current selection is saved. Tests pass a throwaway suite.
     ///   - imageDiskCache: Whether images are cached on disk, up to 200 MB in Caches. Tests turn it off.
+    ///   - homeSnapshots: Where each account's last Home is kept. Tests pass a throwaway folder.
     ///   - sessionConfiguration: Makes the `URLSession` configuration for every request. Tests pass one with a stub
     ///     protocol.
     public init(
@@ -51,6 +54,7 @@ public actor Accounts {
         serverStore: ServerStore = ServerStore(),
         defaults: sending UserDefaults = .standard,
         imageDiskCache: Bool = true,
+        homeSnapshots: HomeSnapshotStore = HomeSnapshotStore(),
         sessionConfiguration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral }
     ) {
         let identity = DeviceIdentity(secrets: secrets, deviceName: deviceName, version: version)
@@ -74,6 +78,7 @@ public actor Accounts {
             diskCacheName: imageDiskCache ? ImagePipeline.diskCacheName : nil,
             sessionConfiguration: sessionConfiguration()
         )
+        self.homeSnapshots = homeSnapshots
     }
 
     // MARK: - Servers
@@ -236,8 +241,8 @@ public actor Accounts {
         return account
     }
 
-    /// Signs a user out: forgets their token and removes them from the server's users on this device, then asks
-    /// the server to end the session.
+    /// Signs a user out: forgets their token and saved Home and removes them from the server's users on this device,
+    /// then asks the server to end the session.
     ///
     /// The device is signed out even when the server cannot be reached. The server gets ``logoutTimeout`` seconds
     /// to answer.
@@ -271,9 +276,24 @@ public actor Accounts {
         if let cached = libraries[account.key] {
             return cached
         }
-        let library = LibraryRepository(client: client, userID: account.user.id, errors: ServerErrors(pinning: pinning))
+        let library = LibraryRepository(
+            client: client,
+            userID: account.user.id,
+            errors: ServerErrors(pinning: pinning),
+            homeSnapshots: HomeSnapshotStore.Slot(store: homeSnapshots, account: account.key)
+        )
         libraries[account.key] = library
         return library
+    }
+
+    /// Empties every cache on this device: images in memory and on disk, each account's saved Home, and the libraries'
+    /// recent answers. Clear Cache in Settings calls this.
+    public func clearCaches() async {
+        images.cache.removeAll()
+        await homeSnapshots.removeAll()
+        for library in libraries.values {
+            await library.clearCache()
+        }
     }
 
     /// Loads `account`'s images through the app's one image pipeline.
@@ -333,11 +353,12 @@ public actor Accounts {
         return account
     }
 
-    /// Forgets a user's token, their place in the server's users and their client, and returns what is needed to
-    /// end the session on the server, or nil when the user had no token.
+    /// Forgets a user's token, their saved Home, their place in the server's users and their client, and returns what
+    /// is needed to end the session on the server, or nil when the user had no token.
     private func signOutLocally(_ key: SessionKey) async throws -> SessionEnding? {
         let token = try await sessions.token(for: key)
         try await sessions.removeToken(for: key)
+        await homeSnapshots.remove(for: key)
         let client = accountClients.removeValue(forKey: key)
         libraries[key] = nil
         guard var server = try await serverStore.server(id: key.serverID) else { return nil }

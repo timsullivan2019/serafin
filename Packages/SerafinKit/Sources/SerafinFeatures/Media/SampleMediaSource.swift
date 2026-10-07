@@ -18,6 +18,10 @@ struct SampleMediaSource: MediaSource {
         )
     }
 
+    func savedHome() async -> HomeContent? {
+        nil
+    }
+
     func nextToWatch() async throws -> [MediaItem] {
         (MockLibrary.continueWatching + MockLibrary.nextUp).map(Self.item)
     }

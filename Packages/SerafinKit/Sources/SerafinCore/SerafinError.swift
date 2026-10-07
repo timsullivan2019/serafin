@@ -17,6 +17,8 @@ public enum SerafinError: Error, Equatable, Sendable {
     /// The server's certificate is not trusted and has not been pinned. Carries what the server presented, so the
     /// user can check and pin it.
     case untrustedCertificate(CertificateFingerprint)
+    /// The device has no network connection, as in Airplane Mode, or cellular data is turned off for Serafin.
+    case offline
     /// Nothing answered at the address.
     case serverUnreachable
     /// iOS refused plain HTTP to the address before Serafin could ask. It allows HTTP only to local addresses and
