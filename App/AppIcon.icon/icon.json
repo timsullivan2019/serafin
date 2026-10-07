@@ -1,0 +1,112 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.09020,0.07451,0.16078,1.00000"
+  },
+  "groups": [
+    {
+      "name": "02 Flowing Wisps",
+      "layers": [
+        {
+          "glass": false,
+          "name": "02 Flowing Wisps",
+          "image-name": "02 Flowing Wisps.png",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": "none"
+            },
+            {
+              "appearance": "tinted",
+              "value": "system-light"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "refractivity": {
+        "enabled": false,
+        "depth": 0,
+        "strength": 0
+      }
+    },
+    {
+      "name": "01 Continuous Flow",
+      "layers": [
+        {
+          "glass": false,
+          "name": "01 Continuous Flow",
+          "image-name": "01 Continuous Flow.png",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": "none"
+            },
+            {
+              "appearance": "tinted",
+              "value": "system-light"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "refractivity": {
+        "enabled": false,
+        "depth": 0,
+        "strength": 0
+      }
+    },
+    {
+      "name": "00 Atmospheric Mist",
+      "layers": [
+        {
+          "glass": false,
+          "name": "00 Atmospheric Mist",
+          "image-name": "00 Atmospheric Mist.png",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": "none"
+            },
+            {
+              "appearance": "tinted",
+              "value": "system-light"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "refractivity": {
+        "enabled": false,
+        "depth": 0,
+        "strength": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}
