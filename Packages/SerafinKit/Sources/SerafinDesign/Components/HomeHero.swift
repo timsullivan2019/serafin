@@ -257,7 +257,7 @@ public struct HeroPage<Menu: View>: View {
                 .frame(maxHeight: 72, alignment: .bottomLeading)
                 .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in width * 0.7 }
                 // Logos are drawn for dark backgrounds; a soft shadow keeps a light one readable on a light fade.
-                .shadow(color: .black.opacity(colorScheme == .light ? 0.45 : 0.25), radius: 10, y: 2)
+                .shadow(color: .black.opacity(colorScheme == .light ? 0.6 : 0.25), radius: 6, y: 1)
                 .padding(.bottom, Spacing.xxSmall)
         } else {
             Text(item.heading)
@@ -397,7 +397,7 @@ private struct HeroMaterialButtonStyle: ButtonStyle {
     }
 }
 
-/// The backdrop: artwork that crossfades in, a faint scrim under the status bar, and a fade into the screen.
+/// The backdrop: artwork that crossfades in under a faint scrim for the status bar, then a fade into the screen.
 private struct HeroPageBackdrop: View {
     let image: Image?
     let isPoster: Bool
@@ -414,6 +414,8 @@ private struct HeroPageBackdrop: View {
                         artwork(image)
                             .transition(.opacity)
                     }
+                    // Stretches with the artwork, so it stays under the status bar when Home is pulled down.
+                    statusBarScrim
                 }
                 .animation(.easeOut(duration: 0.3), value: image != nil)
                 .visualEffect { content, proxy in
@@ -446,18 +448,21 @@ private struct HeroPageBackdrop: View {
         }
     }
 
-    /// A faint scrim under the status bar, then the artwork frosting from 30% down, behind the text, and fading into
-    /// the screen from 45% down.
+    /// A faint scrim at the top, so the status bar stays legible over bright artwork.
+    private var statusBarScrim: some View {
+        LinearGradient(
+            stops: [
+                .init(color: Color.background.opacity(0.5), location: 0),
+                .init(color: Color.background.opacity(0), location: 0.2),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// The artwork frosting from 30% down, behind the text, and fading into the screen from 45% down.
     private var fade: some View {
         ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: Color.background.opacity(0.5), location: 0),
-                    .init(color: Color.background.opacity(0), location: 0.2),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
             Rectangle()
                 .fill(.regularMaterial)
                 .mask {
