@@ -7,9 +7,16 @@ struct ItemDetailView: View {
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
+    private let zoomSource: String
 
-    init(id: String) {
+    /// Creates the screen.
+    ///
+    /// - Parameters:
+    ///   - id: The movie, series or episode.
+    ///   - zoomSource: What the screen zooms in from, when that isn't the item's card, as for Home's hero.
+    init(id: String, zoomSource: String? = nil) {
         _model = State(initialValue: ItemDetailModel(id: id))
+        self.zoomSource = zoomSource ?? id
     }
 
     var body: some View {
@@ -24,7 +31,7 @@ struct ItemDetailView: View {
             }
         }
         .background(Color.background)
-        .zoomTransition(from: model.id, in: zoom)
+        .zoomTransition(from: zoomSource, in: zoom)
         .task(id: actions.revision) { await model.load(from: media) }
         .toolbar {
             if let item = model.details?.item {

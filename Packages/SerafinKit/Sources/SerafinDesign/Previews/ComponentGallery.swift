@@ -14,6 +14,7 @@
                         backdrop: MockMedia.backdropImage(for: MockMedia.movies[1]),
                         tint: MockMedia.tint(for: MockMedia.movies[1])
                     ) {}
+                    GallerySection("HomeHero · HeroPage") { GalleryHomeHero() }
                     GallerySection("MediaRow · LandscapeCard") {
                         MediaRow(
                             "Continue Watching",
@@ -69,6 +70,24 @@
                     .textCase(.uppercase)
                     .padding(.horizontal, Spacing.medium)
                 content
+            }
+        }
+    }
+
+    private struct GalleryHomeHero: View {
+        @State private var selection: String?
+
+        var body: some View {
+            HomeHero(items: MockLibrary.hero, selection: $selection) { item in
+                HeroPage(
+                    item: item,
+                    backdrop: MockMedia.backdropImage(for: item.card),
+                    tint: MockMedia.tint(for: item.card),
+                    play: {},
+                    showDetails: {}
+                ) {
+                    PreviewMenuItems()
+                }
             }
         }
     }

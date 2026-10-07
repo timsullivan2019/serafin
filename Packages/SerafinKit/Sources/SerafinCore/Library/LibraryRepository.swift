@@ -116,14 +116,16 @@ public actor LibraryRepository {
         return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
     }
 
-    /// The newest additions to a library, with new episodes grouped under their show.
+    /// The newest additions to a library, with new episodes grouped under their show, and when each was added.
     ///
     /// - Parameters:
     ///   - viewID: The library, from ``userViews()``.
     ///   - limit: The most items to return.
     public func latest(in viewID: String, limit: Int = 16) async throws -> [BaseItemDto] {
         var parameters = Paths.GetLatestMediaParameters(userID: userID, parentID: viewID)
-        parameters.fields = Self.cardFields
+        // When each was added, and for a show or season when an episode last was, so Home's hero can pick the
+        // newest across libraries.
+        parameters.fields = Self.cardFields + [.dateCreated, .dateLastMediaAdded]
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         parameters.enableUserData = true

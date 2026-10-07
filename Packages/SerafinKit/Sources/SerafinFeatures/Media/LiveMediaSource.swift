@@ -6,6 +6,8 @@ import SerafinDesign
 struct LiveMediaSource: MediaSource {
     /// The most cast and crew a detail screen lists.
     static let castLimit = 24
+    /// The most items Continue Watching's and Next Up's own screens list.
+    static let listLimit = 100
 
     let library: LibraryRepository
 
@@ -21,6 +23,23 @@ struct LiveMediaSource: MediaSource {
         async let resume = library.resume()
         async let nextUp = library.nextUp()
         return MediaItem.from(try await resume + nextUp)
+    }
+
+    func continueWatching() async throws -> [MediaItem] {
+        MediaItem.from(try await library.resume(limit: Self.listLimit))
+    }
+
+    func nextUp() async throws -> [MediaItem] {
+        MediaItem.from(try await library.nextUp(limit: Self.listLimit))
+    }
+
+    func playable(ofSeries id: String) async throws -> MediaItem? {
+        if let next = MediaItem.from(try await library.nextUp(limit: 1, series: id)).first {
+            return next
+        }
+        // Nothing is next before a show is started or once it's watched through, so Play starts the first episode.
+        guard let first = MediaItem.from(try await library.seasons(series: id)).first else { return nil }
+        return MediaItem.from(try await library.episodes(series: id, season: first.id)).first
     }
 
     func item(_ id: String) async throws -> MediaItem {
@@ -173,9 +192,13 @@ struct LiveMediaSource: MediaSource {
 }
 
 extension HomeContent {
-    /// Home's rows from what the server sent, leaving out kinds of library and item Serafin doesn't show.
+    /// Home's rows from what the server sent, leaving out kinds of library and item Serafin doesn't show. Latest in
+    /// Movies comes first, then Latest in Shows.
     init(_ snapshot: HomeSnapshot) {
-        let libraries = snapshot.libraries.compactMap(MediaLibrary.init(view:))
+        // Movies, then shows, then mixed libraries, each kind in the server's order.
+        let libraries = snapshot.libraries.compactMap(MediaLibrary.init(view:)).enumerated()
+            .sorted { ($0.element.kind.homeOrder, $0.offset) < ($1.element.kind.homeOrder, $1.offset) }
+            .map(\.element)
         self.init(
             continueWatching: MediaItem.from(snapshot.resume),
             nextUp: MediaItem.from(snapshot.nextUp),

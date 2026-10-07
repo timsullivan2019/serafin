@@ -6,6 +6,13 @@ import SwiftUI
 enum Route: Hashable {
     /// A movie, series or episode.
     case item(id: String)
+    /// A movie, series or episode featured at the top of Home: the same screen as ``item(id:)``, zooming in from the
+    /// hero's artwork rather than from a card showing the same item.
+    case featured(id: String)
+    /// Every started movie and episode, from Continue Watching's chevron on Home.
+    case continueWatching
+    /// The next episode of every show in progress, from Next Up's chevron on Home.
+    case nextUp
     /// One library's full grid.
     case library(MediaLibrary)
     /// The genres of every library.
@@ -106,6 +113,12 @@ private struct RouteDestination: View {
         switch route {
         case .item(let id):
             ItemDetailView(id: id)
+        case .featured(let id):
+            ItemDetailView(id: id, zoomSource: HomeHeroLayout.zoomID(for: id))
+        case .continueWatching:
+            WatchListView(list: .continueWatching)
+        case .nextUp:
+            WatchListView(list: .nextUp)
         case .library(let library):
             LibraryView(scope: .library(library))
         case .genres:

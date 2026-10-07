@@ -67,7 +67,12 @@ extension MediaCard {
         )
     }
 
-    func accessibilityLabel(locale: Locale) -> String {
+    /// The description without "Played", for a card that leaves off its played check.
+    var accessibilityLabelWithoutPlayed: String {
+        accessibilityLabel(locale: .current, includesPlayed: false)
+    }
+
+    func accessibilityLabel(locale: Locale, includesPlayed: Bool = true) -> String {
         var parts = [title]
         if let episode {
             parts.append(episode.seriesTitle)
@@ -115,7 +120,7 @@ extension MediaCard {
                 parts.append(Self.spokenDuration(runtime, locale: locale))
             }
         }
-        if isPlayed {
+        if isPlayed, includesPlayed {
             parts.append(
                 String(localized: "Played", bundle: .module, locale: locale, comment: "Spoken state of a played item.")
             )

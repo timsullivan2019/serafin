@@ -1,24 +1,60 @@
+import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// The first tab: Continue Watching, Next Up and the newest items in each library.
+/// The first tab: featured items at the top, then Continue Watching, Next Up and the newest items in each library.
 ///
-/// When the server can't be reached, Home shows the rows it last had, under a banner saying so. After a failure it
-/// asks again when the device joins a network or Serafin comes back to the foreground.
+/// The hero is the top of the screen, under the status bar, with no navigation bar over it; the top edge blurs once
+/// the hero has scrolled away. When the server can't be reached, Home shows the rows it last had, under a banner saying so. After a
+/// failure it asks again when the device joins a network or Serafin comes back to the foreground.
 struct HomeView: View {
     @State private var model = HomeModel()
+    /// Whether the hero has scrolled away under the status bar, which brings back the top edge's blur.
+    @State private var isPastHero = false
+    /// The hero's size, for prefetching the next page's artwork at the size it's drawn.
+    @State private var heroSize: CGSize = .zero
+    /// Whether pull to refresh is running, which the hero shows, since its stretched artwork covers the system's
+    /// spinner.
+    @State private var isRefreshing = false
     /// Changes each time Home asks again without pull to refresh, which starts a new load.
     @State private var attempt = 0
     @Environment(\.media) private var media
+    @Environment(\.artwork) private var artwork
     @Environment(MediaActions.self) private var actions
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.navigate) private var navigate
     private let network = NetworkWatcher.shared
 
     var body: some View {
         content
             .background(Color.background)
             .navigationTitle(String(localized: "Home", bundle: .module, comment: "Title of the home tab."))
-            .task(id: Load(revision: actions.revision, attempt: attempt)) { await model.load(from: media) }
+            .toolbarTitleDisplayMode(.inline)
+            // Over the hero there's no bar at all, so the whole artwork takes swipes and taps.
+            .navigationBarShown(showsBar)
+            .overlay(alignment: .top) {
+                if isRefreshing, !hero.entries.isEmpty {
+                    ProgressView()
+                        .padding(Spacing.xSmall)
+                        .glassEffect(.regular, in: .circle)
+                        .padding(.top, Spacing.xSmall)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: isRefreshing)
+            .task(id: Load(revision: actions.revision, attempt: attempt)) {
+                model.artwork = artwork
+                await model.load(from: media)
+            }
+            .task(id: model.revision) {
+                prefetchNextPage()
+                await hero.refreshShows(from: media)
+            }
+            .onChange(of: hero.selection) { prefetchNextPage() }
+            .onChange(of: heroSize) { prefetchNextPage() }
             .onChange(of: network.connection) { _, connection in
                 if connection.isOnline { tryAgainAfterAFailure() }
             }
@@ -62,37 +98,92 @@ struct HomeView: View {
     }
 
     private func rows(_ home: HomeContent) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.xLarge) {
-                if let notice = model.notice {
-                    HomeNoticeBanner(notice: notice, isRetrying: model.isLoading) { attempt += 1 }
-                        .padding(.horizontal, Spacing.medium)
+        let hasHero = !hero.entries.isEmpty
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if hasHero {
+                    HomeHero(items: hero.items, selection: Bindable(hero).selection) { item in
+                        if let entry = hero.entry(item.id) {
+                            HomeHeroPage(entry: entry)
+                        }
+                    }
+                    .onGeometryChange(for: CGSize.self) {
+                        $0.size
+                    } action: {
+                        heroSize = $0
+                    }
                 }
-                if !home.continueWatching.isEmpty {
-                    MediaRow(
-                        String(
-                            localized: "Continue Watching", bundle: .module,
-                            comment:
-                                "Started movies and episodes: the Home row, and the shortcut that plays the latest of them."
-                        ),
-                        style: .landscape,
-                        items: home.continueWatching
-                    ) { LandscapeLink(item: $0) }
+                LazyVStack(alignment: .leading, spacing: Spacing.large) {
+                    if let notice = model.notice {
+                        HomeNoticeBanner(notice: notice, isRetrying: model.isLoading) { attempt += 1 }
+                            .padding(.horizontal, Spacing.medium)
+                    }
+                    if !home.continueWatching.isEmpty {
+                        MediaRow(
+                            WatchList.continueWatching.title,
+                            style: .landscape,
+                            items: home.continueWatching,
+                            seeAll: { navigate(.continueWatching) }
+                        ) { LandscapeLink(item: $0, showsPlayedBadge: false) }
+                    }
+                    if !home.nextUp.isEmpty {
+                        MediaRow(
+                            WatchList.nextUp.title,
+                            style: .landscape,
+                            items: home.nextUp,
+                            seeAll: { navigate(.nextUp) }
+                        ) { LandscapeLink(item: $0) }
+                    }
+                    ForEach(home.latest.filter { !$0.items.isEmpty }) { row in
+                        LatestRowView(row: row)
+                    }
                 }
-                if !home.nextUp.isEmpty {
-                    MediaRow(
-                        String(localized: "Next Up", bundle: .module, comment: "Home row of next episodes."),
-                        style: .landscape,
-                        items: home.nextUp
-                    ) { LandscapeLink(item: $0) }
-                }
-                ForEach(home.latest.filter { !$0.items.isEmpty }) { row in
-                    LatestRowView(row: row)
-                }
+                // The first row rises into the hero's fade, so the page reads as one piece.
+                .padding(.top, hasHero ? -HomeHeroLayout.rowOverlap : Spacing.medium)
+                .padding(.bottom, Spacing.medium)
             }
-            .padding(.vertical, Spacing.medium)
         }
-        .refreshable { await model.refresh(from: media) }
+        // The hero runs under the status bar; without one, the rows start under the bar as usual.
+        .ignoresSafeArea(edges: hasHero ? .top : [])
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            // How far the hero's bottom is from the top of the screen.
+            geometry.containerSize.height * heroFraction - geometry.contentOffset.y - geometry.contentInsets.top
+        } action: { _, heroBottom in
+            // A gap between the two thresholds, so resting near one never flips back and forth.
+            if !isPastHero, heroBottom < 100 {
+                isPastHero = true
+            } else if isPastHero, heroBottom > 140 {
+                isPastHero = false
+            }
+        }
+        .scrollEdgeEffectHidden(hasHero && !isPastHero, for: .top)
+        .refreshable {
+            isRefreshing = true
+            await model.refresh(from: media)
+            isRefreshing = false
+        }
+    }
+
+    private var hero: HomeHeroModel { model.hero }
+
+    /// Whether the navigation bar shows: never with the hero or its skeleton, since Home has no buttons in it, so
+    /// the whole artwork takes swipes and nothing about the bar changes while scrolling.
+    private var showsBar: Bool {
+        switch model.phase {
+        case .loading: false
+        case .loaded: hero.entries.isEmpty
+        case .failed: true
+        }
+    }
+
+    private var heroFraction: CGFloat {
+        HomeHeroLayout.heightFraction(isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
+    }
+
+    private func prefetchNextPage() {
+        hero.prefetchPage(
+            after: hero.selection, width: HomeHeroPage.backdropWidth(for: heroSize), scale: displayScale,
+            artwork: artwork)
     }
 
     /// Asks the server again when the last load failed and nothing is asking already.
@@ -165,6 +256,17 @@ extension Date {
             }
         }
         return formatted(style)
+    }
+}
+
+extension View {
+    /// Shows or hides the navigation bar. iOS only.
+    fileprivate func navigationBarShown(_ isShown: Bool) -> some View {
+        #if os(iOS)
+            toolbarVisibility(isShown ? .visible : .hidden, for: .navigationBar)
+        #else
+            self
+        #endif
     }
 }
 

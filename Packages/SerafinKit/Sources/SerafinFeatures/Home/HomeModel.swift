@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SerafinCore
 import SerafinDesign
 
 /// The rows of the home screen.
@@ -18,7 +19,20 @@ import SerafinDesign
         let date: Date
     }
 
-    private(set) var phase = Phase.loading
+    private(set) var phase = Phase.loading {
+        didSet {
+            // The hero picks in the same change as the rows, so they never show without it.
+            guard case .loaded(let home) = phase else { return }
+            hero.update(from: home) { [artwork] in HomeHeroPage.hasArtwork($0, artwork: artwork) }
+            revision += 1
+        }
+    }
+    /// Goes up each time new rows show, so the hero's shows look up their episodes again.
+    private(set) var revision = 0
+    /// The featured items at the top.
+    let hero = HomeHeroModel()
+    /// Where artwork loads from, for skipping items the hero can't draw. Nil with the samples.
+    var artwork: Artwork?
     /// Set when a load fails while rows are showing, and cleared when one succeeds.
     private(set) var notice: Notice?
     /// How many loads are running. Pull to refresh can run one beside another.
