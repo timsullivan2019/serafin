@@ -180,6 +180,12 @@ struct ItemDetails: Sendable {
     var playable: MediaItem?
     /// The facts listed under Information.
     var information: [InformationColumns.Column] = []
+    /// The media badges under the hero's details, such as 4K and Dolby Atmos.
+    var badges: [String] = []
+    /// Trailers, stored with the item or linked on the web.
+    var trailers: [Trailer] = []
+    /// A movie's or an episode's chapters.
+    var chapters: [Chapter] = []
 }
 
 /// A season's episodes, with the titles its screen shows.
@@ -242,6 +248,10 @@ protocol MediaSource: Sendable {
     func season(_ id: String, of seriesID: String) async throws -> SeasonContent
     /// Movies, shows and episodes matching `term`.
     func search(_ term: String) async throws -> MediaSearchResults
+    /// Whether the signed-in user may ask the server to refresh an item's metadata, which administrators can.
+    func canRefreshMetadata() async -> Bool
+    /// Asks the server to look up an item's metadata again.
+    func refreshMetadata(of item: MediaItem) async throws
     /// Marks an item played or not.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws
     /// Adds an item to the favourites or takes it out.

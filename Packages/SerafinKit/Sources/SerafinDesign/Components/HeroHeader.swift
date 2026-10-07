@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// The full-bleed top of a detail screen: the backdrop, the logo or title, a metadata line and a glass play pill.
+/// The full-bleed top of a detail screen: the backdrop, the logo or title, a metadata line, the media badges and a
+/// glass play pill.
 ///
 /// The backdrop darkens toward the bottom so white text stays readable, then fades into the screen background so
-/// the page continues seamlessly below. The pill reads "Play", or "Resume · 32 min left" when the item is in
-/// progress, and is tinted with the screen's accent, typically ``ArtworkTint`` of the backdrop. While the item is in
-/// progress, touching and holding the pill offers Start Over.
+/// the page continues seamlessly below. The pill reads "Play", "Play S2 E4" for an episode or a show's next one, or
+/// "Resume · 32 min left" with a thin progress line when the item is in progress, and is tinted with the screen's
+/// accent, typically ``ArtworkTint`` of the backdrop. While the item is in progress, touching and holding the pill
+/// offers Play from Beginning.
 public struct HeroHeader: View {
     private let card: MediaCard
     private let backdrop: Image?
@@ -15,6 +17,8 @@ public struct HeroHeader: View {
     private let startOver: (() -> Void)?
     private let play: () -> Void
     private let arrivesFromHomeHero: Bool
+    private let badges: [String]
+    private let nextEpisode: MediaCard?
     @State private var playCount = 0
     /// How much of Home's hero fade still shows, from 1 as the screen zooms in from the hero to 0 once it has.
     @State private var arrivalFade: Double
@@ -31,9 +35,12 @@ public struct HeroHeader: View {
     ///   - tint: The glass tint for the play pill.
     ///   - playZoomNamespace: The namespace in which the play pill is the source of a zoom transition, keyed by
     ///     ``playZoomID(for:)``, so the player can grow out of it. Pass nil for no zoom.
-    ///   - startOver: Called when Start Over is chosen from the pill's menu, offered while the item is in progress.
+    ///   - startOver: Called when Play from Beginning is chosen from the pill's menu, offered while the item is in
+    ///     progress.
     ///   - arrivesFromHomeHero: Whether the screen zooms in from Home's hero. The hero's fade then starts over the
     ///     backdrop and fades away as the screen opens, and returns as it closes, so the two read as one movement.
+    ///   - badges: The media badges, such as 4K and Dolby Atmos, in the order ``MediaBadgeRow`` shows them.
+    ///   - nextEpisode: For a show, the episode Play starts, named under the metadata line and on the pill.
     ///   - play: Called when the play pill is tapped.
     public init(
         card: MediaCard,
@@ -43,6 +50,8 @@ public struct HeroHeader: View {
         playZoomNamespace: Namespace.ID? = nil,
         startOver: (() -> Void)? = nil,
         arrivesFromHomeHero: Bool = false,
+        badges: [String] = [],
+        nextEpisode: MediaCard? = nil,
         play: @escaping () -> Void
     ) {
         self.card = card
@@ -53,6 +62,8 @@ public struct HeroHeader: View {
         self.startOver = startOver
         self.play = play
         self.arrivesFromHomeHero = arrivesFromHomeHero
+        self.badges = badges
+        self.nextEpisode = nextEpisode
         _arrivalFade = State(initialValue: arrivesFromHomeHero ? 1 : 0)
     }
 
@@ -81,7 +92,26 @@ public struct HeroHeader: View {
             .overlay(alignment: .bottom) {
                 VStack(spacing: Spacing.medium) {
                     titleOrLogo
-                    HeroMetadata(card: card)
+                    VStack(spacing: Spacing.xSmall) {
+                        HeroMetadata(card: card)
+                        if let nextEpisode, let code = nextEpisode.episodeCode {
+                            Text(
+                                String(
+                                    localized: "\(code) · \(nextEpisode.title)", bundle: .module,
+                                    comment:
+                                        "Two parts of a line joined by a dot: a series title and episode code above an episode title (Caminandes · S1 E2), or a show's next episode under its details (S2 E4 · The Final Problem)."
+                                )
+                            )
+                            .typography(.cardTitle)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+                        }
+                        if !badges.isEmpty {
+                            MediaBadgeRow(badges: badges)
+                        }
+                    }
                     pill
                 }
                 .padding(.horizontal, Spacing.large)
@@ -115,11 +145,11 @@ public struct HeroHeader: View {
         "hero-play-\(cardID)"
     }
 
-    /// The play pill, with Start Over in its menu while the item is in progress.
+    /// The play pill, with Play from Beginning in its menu while the item is in progress.
     @ViewBuilder private var pill: some View {
         if card.isInProgress, let startOver {
             let title = String(
-                localized: "Start Over",
+                localized: "Play from Beginning",
                 bundle: .module,
                 comment: "Menu item and action that plays an item from the beginning."
             )
@@ -154,6 +184,22 @@ public struct HeroHeader: View {
             .padding(.horizontal, Spacing.large)
             .padding(.vertical, Spacing.small)
             .frame(minHeight: 50)
+            .overlay(alignment: .bottom) {
+                if card.isInProgress {
+                    // How far in, as a thin line inside the pill.
+                    Capsule()
+                        .fill(.white.opacity(0.3))
+                        .overlay(alignment: .leading) {
+                            GeometryReader { proxy in
+                                Capsule().fill(.white).frame(width: proxy.size.width * card.progress)
+                            }
+                        }
+                        .frame(height: 3)
+                        .padding(.horizontal, Spacing.large)
+                        .padding(.bottom, 7)
+                        .accessibilityHidden(true)
+                }
+            }
             .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
             .contentShape(.capsule)
         }
@@ -165,6 +211,13 @@ public struct HeroHeader: View {
 
     private var playTitle: String {
         guard let remaining = card.remainingText else {
+            if let code = (nextEpisode ?? card).episodeCode {
+                return String(
+                    localized: "Play \(code)", bundle: .module,
+                    comment:
+                        "Button that plays an episode, such as Play S1 E1: on Home's featured item and on a detail screen."
+                )
+            }
             return String(localized: "Play", bundle: .module, comment: "Button that starts playback.")
         }
         return String(

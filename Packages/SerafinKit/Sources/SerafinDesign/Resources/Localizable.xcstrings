@@ -11,7 +11,7 @@
       "comment" : "Spoken progress, such as 40% watched."
     },
     "%@ · %@" : {
-      "comment" : "Series title and episode code above an episode title, such as Caminandes · S1 E2."
+      "comment" : "Two parts of a line joined by a dot: a series title and episode code above an episode title (Caminandes · S1 E2), or a show's next episode under its details (S2 E4 · The Final Problem)."
     },
     "%@, %@" : {
       "comment" : "VoiceOver label for a cast member: their name, then their role.",
@@ -132,10 +132,13 @@
       "comment" : "Button that starts playback."
     },
     "Play %@" : {
-      "comment" : "Button on Home's featured show or episode that plays an episode, such as Play S1 E1."
+      "comment" : "Button that plays an episode, such as Play S1 E1: on Home's featured item and on a detail screen."
     },
     "Play Now" : {
       "comment" : "Button that plays the next episode."
+    },
+    "Play from Beginning" : {
+      "comment" : "Menu item and action that plays an item from the beginning."
     },
     "Playback Speed" : {
       "comment" : "Menu that changes how fast the video plays."
@@ -205,9 +208,6 @@
     },
     "Sky" : {
       "comment" : "Accent colour: a light, sky blue."
-    },
-    "Start Over" : {
-      "comment" : "Menu item and action that plays an item from the beginning."
     },
     "Subtitles" : {
       "comment" : "Heading of the subtitle tracks."

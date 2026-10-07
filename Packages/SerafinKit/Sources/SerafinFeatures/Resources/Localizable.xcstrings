@@ -234,6 +234,12 @@
     "Cast & Crew" : {
       "comment" : "Row of an item's cast and crew."
     },
+    "Chapter %lld" : {
+      "comment" : "The name of a chapter the file doesn't name, such as Chapter 3."
+    },
+    "Chapters" : {
+      "comment" : "Row of a movie's or episode's chapters."
+    },
     "Check This Server's Certificate" : {
       "comment" : "Title of the certificate check."
     },
@@ -420,6 +426,9 @@
     "Mono" : {
       "comment" : "One audio channel."
     },
+    "More" : {
+      "comment" : "Menu of more things to do with an item."
+    },
     "More Episodes" : {
       "comment" : "Row of other episodes."
     },
@@ -538,6 +547,9 @@
     "Plays a movie or episode in Serafin from where you left off, or a show from its next episode." : {
       "comment" : "Description of the Play shortcut."
     },
+    "Plays from this chapter" : {
+      "comment" : "Hint on a chapter card, which plays the movie or episode from the chapter's start."
+    },
     "Plays the movie or episode you were last watching in Serafin, or the next episode of a show you're watching." : {
       "comment" : "Description of the Continue Watching shortcut."
     },
@@ -570,6 +582,12 @@
     },
     "Recently Added" : {
       "comment" : "Library Browse row and grid of the newest additions."
+    },
+    "Refresh Metadata" : {
+      "comment" : "Menu item that asks the server to look up an item's details again."
+    },
+    "Refreshing metadata" : {
+      "comment" : "Spoken once the server has been asked to refresh an item's metadata."
     },
     "Release Date" : {
       "comment" : "Library sort option: newest releases first."
@@ -660,6 +678,9 @@
     },
     "Settings" : {
       "comment" : "Title of the settings screen."
+    },
+    "Share" : {
+      "comment" : "Menu item that shares a link."
     },
     "Show" : {
       "comment" : "The kind of a title in Siri, Shortcuts and Spotlight."
@@ -792,6 +813,12 @@
     },
     "Track %lld" : {
       "comment" : "A track with no language or name."
+    },
+    "Trailer" : {
+      "comment" : "The name of a trailer with none."
+    },
+    "Trailers" : {
+      "comment" : "Row of an item's trailers."
     },
     "Trust This Certificate" : {
       "comment" : "Button that pins a certificate."

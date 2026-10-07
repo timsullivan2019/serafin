@@ -51,6 +51,14 @@ struct LiveMediaSource: MediaSource {
         try await library.userViews().compactMap(MediaLibrary.init(view:))
     }
 
+    func canRefreshMetadata() async -> Bool {
+        (try? await library.isAdministrator()) ?? false
+    }
+
+    func refreshMetadata(of item: MediaItem) async throws {
+        try await library.refreshMetadata(of: item.id)
+    }
+
     func cover(of library: MediaLibrary) async -> MediaItem? {
         guard
             let view = try? await self.library.userViews().first(where: { $0.id == library.id }),
@@ -114,6 +122,12 @@ struct LiveMediaSource: MediaSource {
         guard let item = MediaItem(source) else { throw SerafinError.notFound }
         var details = ItemDetails(item: item, cast: cast(of: source), playable: item)
         details.information = ItemInformation.columns(for: source, card: item.card)
+        details.badges = MediaBadges.badges(for: source)
+        let localTrailers = (source.localTrailerCount ?? 0) > 0 ? (try? await library.localTrailers(of: id)) ?? [] : []
+        details.trailers = Trailer.trailers(for: source, local: localTrailers)
+        if item.card.kind == .movie || item.card.kind == .episode {
+            details.chapters = Chapter.chapters(of: source)
+        }
         switch item.card.kind {
         case .series:
             async let seasons = library.seasons(series: id)

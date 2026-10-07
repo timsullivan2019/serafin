@@ -187,3 +187,11 @@ private let bareEpisode = BaseItemDto(
         #expect(request.url?.query?.contains("api_key") == false)
     }
 }
+
+@Suite struct ChapterImageTests {
+    @Test func aChaptersPictureIsTheItemsChapterImageAtItsIndex() throws {
+        let url = try #require(urls.url(itemID: "aaaa1111", type: .chapter, tag: "c3", index: 3, maxWidth: 400))
+        #expect(url.path() == "/Items/aaaa1111/Images/Chapter/3")
+        #expect(urls.url(itemID: "aaaa1111", type: .chapter, tag: "c3", index: -1, maxWidth: 400) == nil)
+    }
+}

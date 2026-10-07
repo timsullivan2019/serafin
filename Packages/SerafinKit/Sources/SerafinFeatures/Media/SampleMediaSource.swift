@@ -51,6 +51,12 @@ struct SampleMediaSource: MediaSource {
         MockLibrary.libraries
     }
 
+    func canRefreshMetadata() async -> Bool {
+        false
+    }
+
+    func refreshMetadata(of item: MediaItem) async throws {}
+
     func cover(of library: MediaLibrary) async -> MediaItem? {
         nil
     }
@@ -147,6 +153,13 @@ struct SampleMediaSource: MediaSource {
         guard let card = all.first(where: { $0.id == id }) else { throw SerafinError.notFound }
         var details = ItemDetails(item: Self.item(card), playable: Self.item(card))
         details.information = ItemInformation.columns(for: Self.sampleFile(of: card), card: card)
+        details.badges = MediaBadges.badges(for: Self.sampleFile(of: card))
+        if card.kind == .movie || card.kind == .episode {
+            let names = ["Opening", "The Middle", "The End"]
+            details.chapters = names.enumerated().map { index, name in
+                Chapter(index: index, name: name, start: .seconds(index * 180), imageTag: nil)
+            }
+        }
         switch card.kind {
         case .series:
             let seasons = MockMedia.seasons(of: card)
