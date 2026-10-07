@@ -112,12 +112,14 @@ private struct PlaybackSection: View {
             ) {
                 ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
             }
+            .rebuiltForAccent()
             Picker(
                 String(localized: "Quality on Cellular", bundle: .module, comment: "Settings row."),
                 selection: $cellularQuality
             ) {
                 ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
             }
+            .rebuiltForAccent()
         } header: {
             Text(String(localized: "Playback", bundle: .module, comment: "Settings section header."))
         } footer: {
@@ -162,6 +164,7 @@ private struct LockSection: View {
                     ) {
                         ForEach(LockGrace.allCases) { Text($0.title).tag($0) }
                     }
+                    .rebuiltForAccent()
                 }
             } header: {
                 Text(String(localized: "Privacy", bundle: .module, comment: "Settings section header."))

@@ -68,3 +68,21 @@ extension EnvironmentValues {
     /// screen's.
     @Entry public var accent: Color = .accentFallback
 }
+
+extension View {
+    /// Builds this view afresh when the accent colour changes.
+    ///
+    /// Menu pickers and menus keep the tint they were first drawn with, so on a screen already showing, as Settings
+    /// is while the colour is chosen, they need building again to take the new one.
+    public func rebuiltForAccent() -> some View {
+        modifier(AccentIdentity())
+    }
+}
+
+private struct AccentIdentity: ViewModifier {
+    @Environment(\.accent) private var accent
+
+    func body(content: Content) -> some View {
+        content.id(accent)
+    }
+}
