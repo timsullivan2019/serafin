@@ -16,7 +16,7 @@ struct ItemDetailView: View {
         Group {
             switch model.phase {
             case .loading:
-                LoadingState()
+                Skeleton(.detail)
             case .failed(let message):
                 FailureState(message: message) { Task { await model.load(from: media) } }
             case .loaded(let details):
@@ -40,6 +40,7 @@ private struct DetailContent: View {
     let details: ItemDetails
     let model: ItemDetailModel
     @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(\.playerZoomNamespace) private var playerZoom
 
     var body: some View {
         ScrollView {
@@ -93,12 +94,20 @@ private struct DetailContent: View {
                     backdrop: backdrop,
                     logo: logo,
                     tint: model.tint,
-                    startOver: { playback.play(details.playable ?? details.item, from: .beginning) }
+                    playZoomNamespace: playerZoom,
+                    startOver: {
+                        playback.play(details.playable ?? details.item, from: .beginning, zoomSource: pillZoom)
+                    }
                 ) {
-                    playback.play(details.playable ?? details.item)
+                    playback.play(details.playable ?? details.item, zoomSource: pillZoom)
                 }
             }
         }
+    }
+
+    /// The play pill's zoom source, so the player grows out of it.
+    private var pillZoom: String {
+        HeroHeader.playZoomID(for: playCard.id)
     }
 
     /// The card the hero describes. A show's pill resumes or starts the episode Play opens, so it shows that

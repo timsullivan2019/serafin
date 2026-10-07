@@ -25,12 +25,20 @@ import SerafinPlayback
     private(set) var nowPlaying: MediaItem?
     /// Whether the full-screen player is showing. The mini player shows instead while something plays.
     var isPlayerPresented = false
+    /// The control the full-screen player zooms out of and back into, such as the hero's play pill, or nil for the
+    /// standard slide up.
+    private(set) var zoomSource: String?
+
+    /// The zoom source of the mini player.
+    static let miniPlayerZoomSource = "mini-player"
     /// The engine playing for the signed-in account. Nil in previews.
     let engine: PlayerEngine?
 
     /// Whether a preview is pretending to play.
     private var isPretending = false
     @ObservationIgnored private var loading: Task<Void, Never>?
+    /// Closes the full-screen player once the interface has turned upright.
+    @ObservationIgnored private var closing: Task<Void, Never>?
     @ObservationIgnored private let media: any MediaSource
     @ObservationIgnored private let actions: MediaActions
     @ObservationIgnored private let artwork: Artwork?
@@ -75,9 +83,14 @@ import SerafinPlayback
 
     /// Starts `item` and shows the full-screen player. Only movies and episodes play; a show or season plays from
     /// its page, which knows the episode to start.
-    func play(_ item: MediaItem, from start: Start = .resume) {
+    ///
+    /// - Parameter zoomSource: The control the player grows out of, or nil to slide up as usual.
+    func play(_ item: MediaItem, from start: Start = .resume, zoomSource: String? = nil) {
         guard item.card.kind == .movie || item.card.kind == .episode else { return }
         nowPlaying = item
+        if !isPlayerPresented {
+            self.zoomSource = zoomSource
+        }
         isPlayerPresented = true
         guard let engine, let source = item.source else {
             isPretending = true
@@ -86,8 +99,8 @@ import SerafinPlayback
         let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: Self.startPosition(of: item, from: start))
         #if canImport(UIKit)
             // Picture in Picture puts the player screen away when it starts, and brings it back on the way out.
-            engine.pictureInPictureDidStart = { [weak self] in self?.isPlayerPresented = false }
-            engine.restoreFromPictureInPicture = { [weak self] in self?.isPlayerPresented = true }
+            engine.pictureInPictureDidStart = { [weak self] in self?.closePlayer() }
+            engine.restoreFromPictureInPicture = { [weak self] in self?.showPlayer() }
         #endif
         let card = item.card
         let subtitle = card.episode == nil ? nil : card.eyebrowText
@@ -124,22 +137,68 @@ import SerafinPlayback
         engine.togglePlayPause()
     }
 
-    /// Brings back the full-screen player for what is playing, out of Picture in Picture if need be.
+    /// Brings back the full-screen player for what is playing, out of Picture in Picture if need be. It grows out of
+    /// the mini player.
     func showPlayer() {
         guard nowPlaying != nil else { return }
+        if closing != nil {
+            // Changed course while the interface was turning upright to close: keep the player.
+            closing?.cancel()
+            closing = nil
+            #if os(iOS)
+                InterfaceOrientations.playerAppeared()
+            #endif
+        }
+        zoomSource = Self.miniPlayerZoomSource
         isPlayerPresented = true
         #if canImport(UIKit)
             engine?.stopPictureInPicture()
         #endif
     }
 
+    /// Puts the full-screen player away while playback carries on. It shrinks back into the control it came from.
+    func minimize() {
+        closePlayer()
+    }
+
+    /// Hides the full-screen player, then runs `closed`. On iPhone the interface first turns upright, so the player
+    /// shrinks away in the same orientation as the screen behind it rather than over a sideways one.
+    private func closePlayer(then closed: @escaping @MainActor () -> Void = {}) {
+        #if os(iOS)
+            if InterfaceOrientations.playerWillClose() {
+                closing?.cancel()
+                closing = Task { [weak self] in
+                    try? await Task.sleep(for: Self.turnDuration)
+                    guard !Task.isCancelled, let self else { return }
+                    closing = nil
+                    isPlayerPresented = false
+                    closed()
+                }
+                return
+            }
+        #endif
+        isPlayerPresented = false
+        closed()
+    }
+
+    /// How long the interface takes to turn upright.
+    private static let turnDuration = Duration.milliseconds(400)
+
     /// Stops playback, hides both players, and has the screens reload to show the new progress.
     func stop() {
         loading?.cancel()
         loading = nil
-        isPlayerPresented = false
-        nowPlaying = nil
         isPretending = false
+        if isPlayerPresented {
+            // The mini player is going away too, so there's nothing to shrink into but the original control.
+            if zoomSource == Self.miniPlayerZoomSource {
+                zoomSource = nil
+            }
+            // The title stays until the player has gone, so the screen doesn't empty while it turns upright.
+            closePlayer { [weak self] in self?.nowPlaying = nil }
+        } else {
+            nowPlaying = nil
+        }
         guard let engine else { return }
         Task { [media, actions] in
             await engine.stop()

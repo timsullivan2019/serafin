@@ -17,7 +17,7 @@ struct HomeView: View {
     @ViewBuilder private var content: some View {
         switch model.phase {
         case .loading:
-            LoadingState()
+            Skeleton(.rows)
         case .failed(let message):
             FailureState(message: message) { Task { await model.load(from: media) } }
         case .loaded(let home) where home.isEmpty:

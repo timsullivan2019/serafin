@@ -128,7 +128,7 @@ struct PlayerView: View {
                 ),
                 showsPictureInPicture: engine.isPictureInPicturePossible,
                 actions: PlayerControlActions(
-                    minimize: { playback.isPlayerPresented = false },
+                    minimize: { playback.minimize() },
                     playPause: {
                         screen.touched()
                         playback.togglePlayPause()
@@ -201,7 +201,7 @@ struct PlayerView: View {
                         .onEnded { value in
                             let down = value.translation.height
                             if down > 120, abs(value.translation.width) < down {
-                                playback.isPlayerPresented = false
+                                playback.minimize()
                             }
                         }
                 )
@@ -302,7 +302,7 @@ private struct PretendPlayer: View {
                 duration: card.runtime ?? .zero
             ),
             actions: PlayerControlActions(
-                minimize: { playback.isPlayerPresented = false },
+                minimize: { playback.minimize() },
                 playPause: { playback.togglePlayPause() }
             )
         )
