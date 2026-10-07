@@ -65,6 +65,7 @@ public struct MiniPlayer: View {
                 }
                 .contentShape(.rect)
             }
+            .modifier(PointerHighlight())
             .accessibilityElement(children: .combine)
             .accessibilityHint(
                 String(localized: "Opens the player", bundle: .module, comment: "Hint on the mini player's title.")
@@ -76,6 +77,7 @@ public struct MiniPlayer: View {
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
+            .modifier(PointerHighlight())
             .accessibilityLabel(
                 isPlaying
                     ? String(localized: "Pause", bundle: .module, comment: "Button that pauses playback.")
@@ -88,6 +90,7 @@ public struct MiniPlayer: View {
                         .frame(width: 44, height: 44)
                         .contentShape(.rect)
                 }
+                .modifier(PointerHighlight())
                 .accessibilityLabel(
                     String(
                         localized: "Close Player", bundle: .module,

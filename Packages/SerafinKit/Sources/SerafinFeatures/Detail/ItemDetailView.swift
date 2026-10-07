@@ -79,6 +79,8 @@ private struct DetailContent: View {
                         items: details.similar
                     ) { PosterLink(item: $0) }
                 }
+                InformationColumns(columns: details.information)
+                    .padding(.horizontal, Spacing.medium)
             }
             .padding(.bottom, Spacing.xLarge)
         }
@@ -121,22 +123,15 @@ private struct DetailContent: View {
         return card
     }
 
+    /// The overview, kept to a readable line length on wide screens. Genres are listed under Information.
     @ViewBuilder private var about: some View {
-        if details.item.card.overview != nil || !details.genres.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.small) {
-                if let overview = details.item.card.overview {
-                    Text(overview)
-                        .typography(.body)
-                        .foregroundStyle(.textPrimary)
-                        .textSelection(.enabled)
-                }
-                if !details.genres.isEmpty {
-                    Text(details.genres.formatted(.list(type: .and, width: .narrow)))
-                        .typography(.caption)
-                        .foregroundStyle(.textSecondary)
-                }
-            }
-            .padding(.horizontal, Spacing.medium)
+        if let overview = details.item.card.overview {
+            Text(overview)
+                .typography(.body)
+                .foregroundStyle(.textPrimary)
+                .textSelection(.enabled)
+                .frame(maxWidth: 680, alignment: .leading)
+                .padding(.horizontal, Spacing.medium)
         }
     }
 }

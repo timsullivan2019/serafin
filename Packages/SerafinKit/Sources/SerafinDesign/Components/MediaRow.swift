@@ -1,12 +1,15 @@
 import SwiftUI
 
 /// How wide the cards in a ``MediaRow`` are.
+///
+/// A row shows as many whole cards as fit at about the style's comfortable width, with the next one peeking in, so a
+/// resized iPad window gains or loses cards instead of stretching or squeezing them.
 public enum MediaRowStyle: Sendable {
-    /// Posters: a little over three across on iPhone, six on iPad.
+    /// Posters: a little over three across on iPhone, six on an 11-inch iPad in portrait.
     case posters
-    /// Landscape thumbnails: one large card with the next peeking in on iPhone, three on iPad.
+    /// Landscape thumbnails: one large card with the next peeking in on iPhone, three on an 11-inch iPad in portrait.
     case landscape
-    /// Cast and crew: three and a half across on iPhone, seven on iPad.
+    /// Cast and crew: three and a half across on iPhone, seven on an 11-inch iPad in portrait.
     case people
 }
 
@@ -81,6 +84,7 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .modifier(PointerHighlight())
             .accessibilityAddTraits(.isHeader)
             .accessibilityHint(
                 String(localized: "Shows everything in this row", bundle: .module, comment: "Hint on a row title.")
@@ -93,19 +97,51 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
         }
     }
 
-    /// The width that shows the style's number of cards across, the last one peeking in. Accessibility text
-    /// sizes get fewer, wider cards so titles wrap at word breaks instead of mid-word.
     private func cardWidth(in length: CGFloat) -> CGFloat {
-        let isLarge = dynamicTypeSize.isAccessibilitySize
-        let across: CGFloat =
-            switch (style, sizeClass == .regular) {
-            case (.posters, true): isLarge ? 3.3 : 6.3
-            case (.posters, false): isLarge ? 1.6 : 3.3
-            case (.landscape, true): isLarge ? 2.2 : 3.2
-            case (.landscape, false): isLarge ? 1.05 : 1.15
-            case (.people, true): isLarge ? 3.6 : 7.3
-            case (.people, false): isLarge ? 2.1 : 3.6
+        RowSizing(style: style, isRegular: sizeClass == .regular, isLarge: dynamicTypeSize.isAccessibilitySize)
+            .cardWidth(in: length)
+    }
+}
+
+/// How many cards a ``MediaRow`` fits across: as many whole cards as fit at about a comfortable width, at least one,
+/// plus a slice of the next so the row reads as scrollable.
+///
+/// The comfortable widths keep the familiar counts on iPhone and on an 11-inch iPad in portrait, and let every other window
+/// size, such as a Stage Manager window, follow from its width. Accessibility text sizes get fewer, wider cards so
+/// titles wrap at word breaks instead of mid-word.
+struct RowSizing: Equatable {
+    /// The card width the row aims for, in points.
+    let comfortableWidth: CGFloat
+    /// How much of the next card shows, as a fraction of a card.
+    let peek: CGFloat
+
+    init(style: MediaRowStyle, isRegular: Bool, isLarge: Bool) {
+        (comfortableWidth, peek) =
+            switch (style, isRegular, isLarge) {
+            case (.posters, false, false): (92, 0.3)
+            case (.posters, false, true): (200, 0.6)
+            case (.posters, true, false): (116, 0.3)
+            case (.posters, true, true): (220, 0.3)
+            case (.landscape, false, false): (240, 0.15)
+            case (.landscape, false, true): (240, 0.05)
+            case (.landscape, true, false): (230, 0.2)
+            case (.landscape, true, true): (320, 0.2)
+            case (.people, false, false): (92, 0.6)
+            case (.people, false, true): (140, 0.1)
+            case (.people, true, false): (96, 0.3)
+            case (.people, true, true): (200, 0.6)
             }
+    }
+
+    /// The number of cards across `length`, the row's visible width, counting the slice of the next card.
+    func across(in length: CGFloat) -> CGFloat {
+        let whole = ((length - Spacing.medium) / (comfortableWidth + Spacing.small)).rounded(.down)
+        return max(whole, 1) + peek
+    }
+
+    /// The card width that fits ``across(in:)`` cards, and the gaps between them, in `length`.
+    func cardWidth(in length: CGFloat) -> CGFloat {
+        let across = across(in: length)
         let gaps = Spacing.small * across.rounded(.down)
         return (length - Spacing.medium - gaps) / across
     }

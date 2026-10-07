@@ -103,6 +103,9 @@ public enum PlaybackSpeed {
 /// All controls share one glass container and always render in dark appearance. The darkening behind them lets
 /// taps through, so a tap on the video still reaches the screen underneath. The AirPlay control is a slot, because
 /// the real route picker is a UIKit view that SerafinPlayback provides.
+///
+/// With a hardware keyboard, Space plays and pauses, the left and right arrows skip 10 seconds, and F leaves the
+/// full-screen player, as in other video players.
 public struct PlayerControls<RoutePicker: View>: View {
     private let title: String
     private let subtitle: String?
@@ -180,6 +183,7 @@ public struct PlayerControls<RoutePicker: View>: View {
                 ),
                 action: actions.minimize
             )
+            .keyboardShortcut("f", modifiers: [])
             VStack(spacing: 2) {
                 Text(title)
                     .typography(.headline)
@@ -223,6 +227,7 @@ public struct PlayerControls<RoutePicker: View>: View {
                 ),
                 action: actions.skipBackward
             )
+            .keyboardShortcut(.leftArrow, modifiers: [])
             GlassIconButton(
                 systemImage: status.isPlaying ? "pause.fill" : "play.fill",
                 size: 80,
@@ -232,6 +237,7 @@ public struct PlayerControls<RoutePicker: View>: View {
                 isBusy: status.isBuffering,
                 action: actions.playPause
             )
+            .keyboardShortcut(.space, modifiers: [])
             .contentTransition(.symbolEffect(.replace))
             GlassIconButton(
                 systemImage: "goforward.10",
@@ -243,6 +249,7 @@ public struct PlayerControls<RoutePicker: View>: View {
                 ),
                 action: actions.skipForward
             )
+            .keyboardShortcut(.rightArrow, modifiers: [])
         }
     }
 

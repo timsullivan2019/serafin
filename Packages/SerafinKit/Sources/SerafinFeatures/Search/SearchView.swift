@@ -6,6 +6,9 @@ struct SearchView: View {
     @State private var model = SearchModel()
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
+    @Environment(\.searchFocusRequest) private var focusRequest
+    @State private var answeredFocusRequest = 0
+    @State private var isSearchPresented = false
 
     var body: some View {
         content
@@ -13,13 +16,31 @@ struct SearchView: View {
             .navigationTitle(String(localized: "Search", bundle: .module, comment: "Title of the search tab."))
             .searchable(
                 text: $model.query,
+                isPresented: $isSearchPresented,
+                placement: Self.fieldPlacement,
                 prompt: String(
                     localized: "Movies, shows and episodes",
                     bundle: .module,
                     comment: "Placeholder in the search field."
                 )
             )
+            // A task rather than onChange, so the Command-F that first opens this tab isn't missed.
+            .task(id: focusRequest) {
+                guard focusRequest != answeredFocusRequest else { return }
+                answeredFocusRequest = focusRequest
+                isSearchPresented = true
+            }
             .task(id: SearchKey(term: model.term, revision: actions.revision)) { await model.search(in: media) }
+    }
+
+    /// Under the title at every width. On iPad the default folds the field into a toolbar button, which takes a
+    /// second tap after choosing Search and which Command-F can't open.
+    private static var fieldPlacement: SearchFieldPlacement {
+        #if os(iOS)
+            .navigationBarDrawer(displayMode: .always)
+        #else
+            .automatic
+        #endif
     }
 
     @ViewBuilder private var content: some View {

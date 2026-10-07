@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 import SerafinCore
 import SerafinDesign
 
@@ -51,6 +52,7 @@ struct SampleMediaSource: MediaSource {
         let all = MockMedia.movies + MockMedia.series + MockMedia.episodes
         guard let card = all.first(where: { $0.id == id }) else { throw SerafinError.notFound }
         var details = ItemDetails(item: Self.item(card), playable: Self.item(card))
+        details.information = ItemInformation.columns(for: Self.sampleFile(of: card), card: card)
         switch card.kind {
         case .series:
             let seasons = MockMedia.seasons(of: card)
@@ -68,6 +70,20 @@ struct SampleMediaSource: MediaSource {
             details.cast = Self.cast
         }
         return details
+    }
+
+    /// A made-up file for a sample, so previews show every Information column.
+    private static func sampleFile(of card: MediaCard) -> BaseItemDto {
+        let streams = [
+            MediaStream(height: 1080, index: 0, type: .video, videoRangeType: .sdr, width: 1920),
+            MediaStream(channelLayout: "stereo", codec: "aac", index: 1, language: "eng", type: .audio),
+            MediaStream(codec: "subrip", index: 2, language: "eng", type: .subtitle),
+        ]
+        return BaseItemDto(
+            genres: card.kind == .movie ? ["Drama"] : ["Animation"],
+            mediaSources: card.kind == .series ? nil : [MediaSourceInfo(mediaStreams: streams)],
+            officialRating: card.rating
+        )
     }
 
     func season(_ id: String, of seriesID: String) async throws -> SeasonContent {
