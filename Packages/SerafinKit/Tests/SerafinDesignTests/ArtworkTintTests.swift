@@ -32,6 +32,14 @@ import Testing
         #expect(tint.contrastRatio(with: white) >= 5.5)
     }
 
+    @Test func theNeutralTintIsAGreyThatKeepsWhiteTextLegible() {
+        let grey = ArtworkTint.neutralRGB
+        #expect(grey.red == grey.green && grey.green == grey.blue)
+        #expect(grey.relativeLuminance >= ArtworkTint.minimumLuminance)
+        #expect(grey.relativeLuminance <= ArtworkTint.maximumLuminance + 0.0001)
+        #expect(grey.contrastRatio(with: white) >= 5.5)
+    }
+
     @Test func greyPixelsDoNotDiluteTheTint() throws {
         let blue = RGB(red: 0.10, green: 0.30, blue: 0.80)
         let artwork = try ArtworkImage.split(left: RGB(red: 0.5, green: 0.5, blue: 0.5), right: blue)

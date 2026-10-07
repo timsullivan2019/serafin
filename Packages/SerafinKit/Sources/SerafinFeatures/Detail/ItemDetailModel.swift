@@ -12,22 +12,22 @@ import SwiftUI
 
     let id: String
     private(set) var phase = Phase.loading
-    /// The screen's accent, taken from its backdrop once that loads, or nil until then.
+    /// The screen's accent, taken from its backdrop, or nil until that loads. An item whose backdrop was measured
+    /// moments ago, as in Home's hero, starts with its tint.
     var tint: Color?
     /// Whether the user can ask the server to refresh the item's metadata, which administrators can.
     private(set) var canRefreshMetadata = false
 
     init(id: String) {
         self.id = id
+        tint = ArtworkMemory.tint(for: id)
     }
 
     /// Starts with `item` showing, and for a show the episode its Play button starts, while the full details load.
     init(showing item: MediaItem, playable: MediaItem?) {
         id = item.id
         phase = .loaded(ItemDetails(item: item, playable: playable ?? item))
-        if item.source == nil {
-            tint = MockMedia.tint(for: item.card)
-        }
+        tint = item.source == nil ? MockMedia.tint(for: item.card) : ArtworkMemory.tint(for: item.id)
     }
 
     /// The details once they have loaded.
@@ -52,8 +52,14 @@ import SwiftUI
         canRefreshMetadata = await canRefresh
     }
 
-    /// Takes the tint from the loaded backdrop.
+    /// Takes the tint from the loaded backdrop, fading to it from the neutral tint the screen starts with when it
+    /// didn't know the colour yet.
     func backdropLoaded(_ image: CGImage) {
-        tint = ArtworkTint.color(for: image)
+        let measured = ArtworkTint.color(for: image)
+        ArtworkMemory.remember(measured, for: id)
+        guard measured != tint else { return }
+        withAnimation(.easeInOut(duration: 0.3)) {
+            tint = measured
+        }
     }
 }

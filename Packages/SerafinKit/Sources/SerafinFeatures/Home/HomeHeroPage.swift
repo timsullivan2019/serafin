@@ -6,7 +6,8 @@ import SwiftUI
 /// One featured item's page in Home's hero: its artwork loaded from the server, Play, the detail screen and the
 /// item's context menu.
 struct HomeHeroPage: View {
-    /// The width the logo is asked for, in points, which the next page's prefetch matches.
+    /// The width the logo is asked for, in points, which the next page's prefetch and the detail screen match, so
+    /// both find it already loaded.
     static let logoWidth: CGFloat = 320
 
     let entry: HomeHeroModel.Entry
@@ -18,13 +19,13 @@ struct HomeHeroPage: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.playerZoomNamespace) private var playerZoom
-    @Environment(\.accent) private var accent
     @Environment(PlaybackCoordinator.self) private var playback
 
     var body: some View {
         let usesPoster = !hasBackdrop
         ItemArtwork(
-            entry.item, role: usesPoster ? .poster : .backdrop, width: Self.backdropWidth(for: size), onLoad: setTint
+            entry.item, role: usesPoster ? .poster : .backdrop,
+            width: ArtworkMemory.backdropWidth(for: entry.item.id, filling: size), onLoad: setTint
         ) { backdrop in
             ItemArtwork(entry.item, role: .logo, width: Self.logoWidth) { logo in
                 HeroPage(
@@ -32,7 +33,7 @@ struct HomeHeroPage: View {
                     backdrop: backdrop,
                     backdropIsPoster: usesPoster,
                     logo: logo,
-                    tint: tint ?? sampleTint,
+                    tint: tint ?? startingTint,
                     zoomNamespace: zoom,
                     playZoomNamespace: playerZoom,
                     play: play,
@@ -63,13 +64,22 @@ struct HomeHeroPage: View {
         return Self.hasBackdrop(source, artwork: artwork)
     }
 
-    /// The samples' tint, which have no artwork to measure; the accent for a server's item until its artwork loads.
-    private var sampleTint: Color {
-        entry.item.source == nil ? MockMedia.tint(for: entry.item.card) : accent
+    /// The tint before this page has measured its artwork: the samples' own, which have no artwork to measure, or
+    /// for a server's item the tint last measured for it, otherwise neutral.
+    private var startingTint: Color {
+        guard entry.item.source != nil else { return MockMedia.tint(for: entry.item.card) }
+        return ArtworkMemory.tint(for: entry.item.id) ?? ArtworkTint.neutral
     }
 
+    /// Takes the tint from the loaded artwork, and remembers it for the item's detail screen.
     private func setTint(_ image: CGImage) {
-        tint = ArtworkTint.color(for: image)
+        let measured = ArtworkTint.color(for: image)
+        ArtworkMemory.remember(measured, for: entry.item.id)
+        // Fading from neutral, or from an older measurement; nothing to fade when the colour was already right.
+        let animation: Animation? = measured == (tint ?? startingTint) ? nil : .easeInOut(duration: 0.3)
+        withAnimation(animation) {
+            tint = measured
+        }
     }
 
     /// Plays the item, or for a show the episode found for it, finding it first when it isn't known yet.

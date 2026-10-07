@@ -185,9 +185,7 @@ struct HomeView: View {
     }
 
     private func prefetchNextPage() {
-        hero.prefetchPage(
-            after: hero.selection, width: HomeHeroPage.backdropWidth(for: heroSize), scale: displayScale,
-            artwork: artwork)
+        hero.prefetchPage(after: hero.selection, size: heroSize, scale: displayScale, artwork: artwork)
     }
 
     /// Asks the server again when the last load failed and nothing is asking already.
