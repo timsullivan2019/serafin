@@ -147,6 +147,7 @@ struct HomeView: View {
                 .padding(.top, hasHero ? -HomeHeroLayout.rowOverlap : Spacing.medium)
                 .padding(.bottom, Spacing.medium)
             }
+            .heroScrollContent()
         }
         // The hero runs under the status bar; without one, the rows start under the bar as usual.
         .ignoresSafeArea(edges: hasHero ? .top : [])

@@ -138,6 +138,7 @@ private struct DetailContent: View {
                     .padding(.horizontal, Spacing.medium)
             }
             .padding(.bottom, Spacing.xLarge)
+            .heroScrollContent()
         }
         // The hero runs under the navigation bar, whose glass back button floats over the artwork.
         .ignoresSafeArea(edges: .top)

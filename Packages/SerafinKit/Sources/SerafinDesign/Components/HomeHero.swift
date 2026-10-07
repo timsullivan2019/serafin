@@ -28,14 +28,28 @@ public enum HomeHeroLayout {
     /// they reach it, so nothing sits under the status bar or the navigation bar.
     public static let topFadeDistance: CGFloat = 80
 
-    /// How visible a hero's text or button is when its top edge is `top` points from the top of the window: fully
-    /// shown ``topFadeDistance`` below the top safe area, fading to nothing as it reaches it.
+    /// The shortest distance a hero's text or button fades over, for one that rests too near the top for the whole
+    /// ``topFadeDistance``, as in a short iPad window.
+    static let shortestTopFade: CGFloat = 24
+
+    /// The name of the coordinate space of a hero screen's scrolling content, which tells the hero's text and buttons
+    /// where they rest. A screen gives it to its content with `heroScrollContent()`.
+    static let scrollContentSpace = "serafin.hero.scroll-content"
+
+    /// How visible a hero's text or button is when its top edge is `top` points from the top of the window.
+    ///
+    /// It's fully shown at rest and anywhere ``topFadeDistance`` or more below the top safe area, and fades to
+    /// nothing as it reaches the safe area. One that rests nearer the top than that, as in a short iPad window,
+    /// fades over the room it has, and one that rests under the bars fades over its first few points of travel.
     ///
     /// - Parameters:
     ///   - top: Where the view's top edge is, in the window's coordinates.
+    ///   - restingTop: Where the view's top edge is with the page at rest.
     ///   - safeAreaTop: Where the top safe area ends, below the status bar and any navigation bar.
-    public static func topFadeOpacity(top: CGFloat, safeAreaTop: CGFloat) -> Double {
-        Double(min(max((top - safeAreaTop) / topFadeDistance, 0), 1))
+    public static func topFadeOpacity(top: CGFloat, restingTop: CGFloat, safeAreaTop: CGFloat) -> Double {
+        let start = min(safeAreaTop + topFadeDistance, restingTop)
+        let end = min(safeAreaTop, start - shortestTopFade)
+        return Double(min(max((top - end) / (start - end), 0), 1))
     }
 
     /// Whether a page with a hero at its top has been scrolled at all, so the top edge effect should cover what
@@ -654,19 +668,32 @@ extension EnvironmentValues {
 
 extension EnvironmentValues {
     /// Where the top safe area ends on the screen showing a hero, measured by that screen: below the status bar and
-    /// any navigation bar. A hero's text and buttons fade out before they reach it. Zero, as in previews, fades them
-    /// at the top of the screen.
+    /// any navigation bar. A hero's text and buttons fade out before they reach it.
     @Entry public var heroSafeAreaTop: CGFloat = 0
 }
 
 extension View {
-    /// Fades the view out over the last ``HomeHeroLayout/topFadeDistance`` points before its top edge reaches
-    /// `safeAreaTop`, so scrolling never leaves it under the status bar. Drawn by the renderer as the page scrolls,
-    /// with no state.
+    /// Marks the content of a scroll view that starts with a hero, so the hero's text and buttons know where they
+    /// rest and fade only as the page scrolls. Put it on the content inside the `ScrollView`, which ignores the top
+    /// safe area so the content starts at the top of the window.
+    public func heroScrollContent() -> some View {
+        coordinateSpace(.named(HomeHeroLayout.scrollContentSpace))
+    }
+
+    /// Fades the view out as scrolling takes its top edge up to `safeAreaTop`, over the last
+    /// ``HomeHeroLayout/topFadeDistance`` points or what room it has, so it never sits under the status bar. Drawn by
+    /// the renderer as the page scrolls, with no state.
     func fadesBeforeTopSafeArea(_ safeAreaTop: CGFloat) -> some View {
         visualEffect { [safeAreaTop] content, proxy in
             content.opacity(
-                HomeHeroLayout.topFadeOpacity(top: proxy.frame(in: .global).minY, safeAreaTop: safeAreaTop))
+                HomeHeroLayout.topFadeOpacity(
+                    top: proxy.frame(in: .global).minY,
+                    // Outside a hero screen's scroll content, as in a preview, this is where the view is, so it
+                    // never fades.
+                    restingTop: proxy.frame(in: .named(HomeHeroLayout.scrollContentSpace)).minY,
+                    safeAreaTop: safeAreaTop
+                )
+            )
         }
     }
 }

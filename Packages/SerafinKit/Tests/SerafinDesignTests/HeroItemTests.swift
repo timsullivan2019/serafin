@@ -141,11 +141,32 @@ import Testing
     }
 
     @Test func theForegroundFadesOverTheEightyPointsBeforeTheSafeArea() {
-        let safeAreaTop: CGFloat = 116
-        #expect(HomeHeroLayout.topFadeOpacity(top: 400, safeAreaTop: safeAreaTop) == 1)
-        #expect(HomeHeroLayout.topFadeOpacity(top: safeAreaTop + 80, safeAreaTop: safeAreaTop) == 1)
-        #expect(HomeHeroLayout.topFadeOpacity(top: safeAreaTop + 40, safeAreaTop: safeAreaTop) == 0.5)
-        #expect(HomeHeroLayout.topFadeOpacity(top: safeAreaTop, safeAreaTop: safeAreaTop) == 0)
-        #expect(HomeHeroLayout.topFadeOpacity(top: 20, safeAreaTop: safeAreaTop) == 0)
+        func opacity(_ top: CGFloat) -> Double {
+            HomeHeroLayout.topFadeOpacity(top: top, restingTop: 400, safeAreaTop: 116)
+        }
+        #expect(opacity(400) == 1)
+        #expect(opacity(116 + 80) == 1)
+        #expect(opacity(116 + 40) == 0.5)
+        #expect(opacity(116) == 0)
+        #expect(opacity(20) == 0)
+    }
+
+    @Test func aForegroundRestingNearTheTopIsWholeAtRestAndFadesOverTheRoomItHas() {
+        // As in a short iPad window: resting 40 points below the safe area, it fades over those 40.
+        func nearer(_ top: CGFloat) -> Double {
+            HomeHeroLayout.topFadeOpacity(top: top, restingTop: 120, safeAreaTop: 80)
+        }
+        #expect(nearer(120) == 1)
+        #expect(nearer(100) == 0.5)
+        #expect(nearer(80) == 0)
+        // Resting under the bars, it fades over its first 24 points of travel.
+        func under(_ top: CGFloat) -> Double {
+            HomeHeroLayout.topFadeOpacity(top: top, restingTop: 50, safeAreaTop: 80)
+        }
+        #expect(under(50) == 1)
+        #expect(under(38) == 0.5)
+        #expect(under(26) == 0)
+        // Pulled down past rest, it stays whole.
+        #expect(under(90) == 1)
     }
 }
