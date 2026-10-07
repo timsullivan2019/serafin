@@ -248,8 +248,8 @@ public actor LibraryRepository {
         return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
     }
 
-    /// Movies, shows and episodes whose names match `term`, grouped by kind, closest titles first. An empty term finds
-    /// nothing without asking the server.
+    /// Movies, shows, episodes, people and collections whose names match `term`, grouped by kind, closest names
+    /// first. An empty term finds nothing without asking the server.
     ///
     /// - Parameters:
     ///   - term: What the user typed.
@@ -260,7 +260,27 @@ public actor LibraryRepository {
         async let movies = search(term, kind: .movie, limit: limit)
         async let series = search(term, kind: .series, limit: limit)
         async let episodes = search(term, kind: .episode, limit: limit)
-        return try await SearchResults(movies: movies, series: series, episodes: episodes)
+        async let people = searchPeople(term, limit: limit)
+        async let collections = search(term, kind: .boxSet, limit: limit)
+        return try await SearchResults(
+            movies: movies, series: series, episodes: episodes, people: people, collections: collections)
+    }
+
+    /// A few movies and shows the user hasn't watched, picked at random by the server, for the search tab to suggest
+    /// before anything is typed. The pick stays the same until the cache is cleared, as by pull to refresh.
+    public func suggestions(limit: Int = 6) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetItemsParameters(userID: userID)
+        parameters.includeItemTypes = [.movie, .series]
+        parameters.isRecursive = true
+        parameters.filters = [.isUnplayed]
+        parameters.sortBy = [.random]
+        parameters.limit = limit
+        parameters.fields = Self.cardFields
+        parameters.enableUserData = true
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        let request = Paths.getItems(parameters: parameters)
+        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
     }
 
     // MARK: - Played and favourites
@@ -408,6 +428,7 @@ public actor LibraryRepository {
         parameters.filters = filters.isEmpty ? nil : filters
         parameters.genres = query.genres.isEmpty ? nil : query.genres
         parameters.years = query.years.isEmpty ? nil : query.years
+        parameters.personIDs = query.personIDs.isEmpty ? nil : query.personIDs
         parameters.enableTotalRecordCount = true
         return parameters
     }
@@ -425,6 +446,16 @@ public actor LibraryRepository {
         let request = Paths.getItems(parameters: parameters)
         let items = try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
         return SearchRanking.ranked(items, for: term)
+    }
+
+    private func searchPeople(_ term: String, limit: Int) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetPersonsParameters(searchTerm: term, userID: userID)
+        parameters.limit = limit
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = [.primary]
+        let request = Paths.getPersons(parameters: parameters)
+        let people = try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return SearchRanking.ranked(people, for: term)
     }
 
     /// Answers a read from the cache, or sends it and caches the answer.

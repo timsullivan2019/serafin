@@ -76,6 +76,7 @@ struct TestMediaSource: MediaSource {
     }
 
     func search(_ term: String) async throws -> MediaSearchResults { try await samples.search(term) }
+    func suggestions() async throws -> [MediaItem] { try await samples.suggestions() }
 
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws {
         if refusesChanges { throw URLError(.badServerResponse) }

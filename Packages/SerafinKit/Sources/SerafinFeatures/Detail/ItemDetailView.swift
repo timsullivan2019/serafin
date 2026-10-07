@@ -105,9 +105,7 @@ private struct DetailContent: View {
                         style: .people,
                         items: details.cast
                     ) { person in
-                        PersonPhoto(person: person) { photo in
-                            PersonCard(name: person.name, role: person.role, photo: photo)
-                        }
+                        PersonLink(person: person)
                     }
                 }
                 if !details.seasons.isEmpty {

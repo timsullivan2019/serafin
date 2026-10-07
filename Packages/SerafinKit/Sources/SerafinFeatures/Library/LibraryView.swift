@@ -233,15 +233,20 @@ struct LibraryView: View {
     private var grid: some View {
         let letters = model.indexLetters
         return ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: columnWidth), spacing: Spacing.small, alignment: .top)],
-                spacing: Spacing.large
-            ) {
-                ForEach(0..<model.total, id: \.self) { index in
-                    GridPlace(model: model, index: index)
+            VStack(alignment: .leading, spacing: Spacing.large) {
+                if case .person(let person) = model.scope {
+                    PersonHeader(person: person, total: model.total)
                 }
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: columnWidth), spacing: Spacing.small, alignment: .top)],
+                    spacing: Spacing.large
+                ) {
+                    ForEach(0..<model.total, id: \.self) { index in
+                        GridPlace(model: model, index: index)
+                    }
+                }
+                .scrollTargetLayout()
             }
-            .scrollTargetLayout()
         }
         // Margins rather than padding, so jumping to the top or to a letter lines up with the margins. Padding sits
         // inside the scroll content, and the jump lined the grid itself up with the edge, leaving it shifted left.
@@ -337,6 +342,18 @@ struct LibraryView: View {
                 )
             case .shortcut(let shortcut):
                 ShortcutEmptyState(shortcut: shortcut)
+            case .person(let person):
+                EmptyState(
+                    String(
+                        localized: "Nothing to Watch", bundle: .module,
+                        comment: "Title on a person's page when nothing on the server features them."),
+                    message: String(
+                        localized: "Movies and shows with \(person.name) appear here once they're on your server.",
+                        bundle: .module,
+                        comment: "Explanation on a person's page when nothing on the server features them."
+                    ),
+                    systemImage: "person.crop.circle"
+                )
             }
         }
     }
@@ -345,6 +362,27 @@ struct LibraryView: View {
     private struct ReloadKey: Hashable {
         let options: GridOptions
         let revision: Int
+    }
+}
+
+/// The top of a person's page: their photo beside how many of their movies and shows are on the server.
+private struct PersonHeader: View {
+    let person: CastMember
+    let total: Int
+    @ScaledMetric(relativeTo: .title) private var size = 88.0
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            PersonPhoto(person: person) { photo in
+                PersonPortrait(name: person.name, photo: photo)
+            }
+            .frame(width: size)
+            Text(LibrariesModel.caption(total: total, kind: .mixed))
+                .typography(.body)
+                .foregroundStyle(.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

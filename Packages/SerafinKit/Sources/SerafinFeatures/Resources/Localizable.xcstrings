@@ -255,11 +255,17 @@
     "Check them and try again." : {
       "comment" : "Explanation when sign-in is refused."
     },
+    "Clear" : {
+      "comment" : "Button that forgets recent searches."
+    },
     "Clear Cache" : {
       "comment" : "Settings button."
     },
     "Clear Filters" : {
       "comment" : "Button that turns off all filters."
+    },
+    "Clear Recent Searches" : {
+      "comment" : "Spoken label of the button that forgets recent searches."
     },
     "Cleared" : {
       "comment" : "Shown after clearing the cache."
@@ -327,7 +333,7 @@
     "Favourites" : {
       "comment" : "Favourites: the library filter chip, and the Library tab's Browse row and grid."
     },
-    "Find movies, shows and episodes by title." : {
+    "Find movies, shows, episodes, people and collections by name." : {
       "comment" : "Explanation before anything is searched."
     },
     "Fingerprint" : {
@@ -456,11 +462,11 @@
     "Movies and episodes you start appear here until you finish them." : {
       "comment" : "Explanation when Continue Watching's screen has nothing in it."
     },
-    "Movies and shows" : {
-      "comment" : "Placeholder in the search field."
-    },
     "Movies and shows added to your server appear here, newest first." : {
       "comment" : "Explanation when no movies or shows have been added."
+    },
+    "Movies and shows with %@ appear here once they're on your server." : {
+      "comment" : "Explanation on a person's page when nothing on the server features them."
     },
     "Movies and shows you add to it on your server appear here." : {
       "comment" : "Explanation for an empty library or collection."
@@ -473,6 +479,9 @@
     },
     "Movies and shows your server matches to this genre appear here." : {
       "comment" : "Explanation for an empty genre."
+    },
+    "Movies, shows and people" : {
+      "comment" : "Placeholder in the search field."
     },
     "Name" : {
       "comment" : "Library sort option: alphabetical."
@@ -513,6 +522,9 @@
     "Nothing in this library matches these filters." : {
       "comment" : "Explanation when filters hide everything."
     },
+    "Nothing to Watch" : {
+      "comment" : "Title on a person's page when nothing on the server features them."
+    },
     "Notice" : {
       "comment" : "Heading of a package's notice file."
     },
@@ -536,6 +548,9 @@
     },
     "Password" : {
       "comment" : "Label of the password field."
+    },
+    "People" : {
+      "comment" : "Search results section."
     },
     "Play" : {
       "comment" : "Starts playback: a menu item, and a sample button in the accent colour preview."
@@ -591,6 +606,9 @@
     },
     "Rating" : {
       "comment" : "Library sort option: highest rated first."
+    },
+    "Recent" : {
+      "comment" : "Heading over recent searches."
     },
     "Recently Added" : {
       "comment" : "Library Browse row and grid of the newest additions."
@@ -657,6 +675,9 @@
     },
     "Search Your Library" : {
       "comment" : "Title before anything is searched."
+    },
+    "Searches for this again" : {
+      "comment" : "Hint on a recent search."
     },
     "Searches your movies, shows and episodes in Serafin." : {
       "comment" : "Description of the Search shortcut."
@@ -774,6 +795,9 @@
     },
     "Subtitles show when a video marks them to." : {
       "comment" : "Explanation of the automatic subtitle mode."
+    },
+    "Suggested" : {
+      "comment" : "Heading over titles the user hasn't watched, on the search tab before anything is typed."
     },
     "That's Not a Jellyfin Server" : {
       "comment" : "Title when the address isn't Jellyfin."

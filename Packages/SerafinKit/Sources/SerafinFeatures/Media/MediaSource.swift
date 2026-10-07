@@ -76,6 +76,8 @@ enum GridScope: Hashable, Sendable {
     case collection(id: String, title: String)
     /// Every movie and show, filtered or sorted one way, from the Library tab's Browse list.
     case shortcut(LibraryShortcut)
+    /// The movies and shows a person is in or worked on, from search or a cast row.
+    case person(CastMember)
 
     /// The grid's title.
     var title: String {
@@ -86,6 +88,7 @@ enum GridScope: Hashable, Sendable {
             String(localized: "Collections", bundle: .module, comment: "Collections, as a heading or a label.")
         case .collection(_, let title): title
         case .shortcut(let shortcut): shortcut.title
+        case .person(let person): person.name
         }
     }
 
@@ -94,7 +97,7 @@ enum GridScope: Hashable, Sendable {
     var offersChips: Bool {
         switch self {
         case .library, .genre, .shortcut: true
-        case .collections, .collection: false
+        case .collections, .collection, .person: false
         }
     }
 
@@ -104,6 +107,8 @@ enum GridScope: Hashable, Sendable {
         switch self {
         case .collection: GridOptions(sort: .premiereDate, ascending: true)
         case .shortcut(let shortcut): shortcut.options
+        // Newest work first, as filmographies read.
+        case .person: GridOptions(sort: .premiereDate, ascending: false)
         case .library, .genre, .collections: GridOptions()
         }
     }
@@ -162,6 +167,13 @@ struct CastMember: Identifiable, Hashable, Sendable {
     let role: String?
     /// The server's person, for their photo. Nil for the samples.
     let source: BaseItemPerson?
+
+    /// The person's ID on the server, for their page, or nil when the server didn't give one. A sample's own ID
+    /// stands in for it.
+    var personID: String? {
+        guard let source else { return id }
+        return source.id.flatMap { $0.isEmpty ? nil : $0 }
+    }
 }
 
 /// Everything a detail screen shows about a movie, show or episode.
@@ -203,8 +215,12 @@ struct MediaSearchResults: Sendable {
     var movies: [MediaItem] = []
     var shows: [MediaItem] = []
     var episodes: [MediaItem] = []
+    var people: [CastMember] = []
+    var collections: [MediaItem] = []
 
-    var isEmpty: Bool { movies.isEmpty && shows.isEmpty && episodes.isEmpty }
+    var isEmpty: Bool {
+        movies.isEmpty && shows.isEmpty && episodes.isEmpty && people.isEmpty && collections.isEmpty
+    }
 }
 
 /// Where the screens get their media: the signed-in library in the app, the built-in samples in previews.
@@ -246,8 +262,10 @@ protocol MediaSource: Sendable {
     func details(of id: String) async throws -> ItemDetails
     /// A season's episodes.
     func season(_ id: String, of seriesID: String) async throws -> SeasonContent
-    /// Movies, shows and episodes matching `term`.
+    /// Movies, shows, episodes, people and collections matching `term`.
     func search(_ term: String) async throws -> MediaSearchResults
+    /// A few movies and shows the user hasn't watched, for the search tab to suggest before anything is typed.
+    func suggestions() async throws -> [MediaItem]
     /// Whether the signed-in user may ask the server to refresh an item's metadata, which administrators can.
     func canRefreshMetadata() async -> Bool
     /// Asks the server to look up an item's metadata again.

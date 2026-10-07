@@ -98,6 +98,8 @@ struct SampleMediaSource: MediaSource {
             case .collections: MockMedia.collections
             case .collection(let id, _): MockMedia.collections.first { $0.id == id }.map(MockMedia.members) ?? []
             case .shortcut: MockMedia.movies + MockMedia.series
+            // The samples don't say who is in what, so a person's page shows a few of the films.
+            case .person: Array(MockMedia.movies.prefix(4))
             }
         var cards = all.filter { card in
             (!options.unplayedOnly || !card.isPlayed) && (!options.favouritesOnly || card.isFavourite)
@@ -210,8 +212,16 @@ struct SampleMediaSource: MediaSource {
         return MediaSearchResults(
             movies: MockMedia.movies.filter(matches).map(Self.item),
             shows: MockMedia.series.filter(matches).map(Self.item),
-            episodes: MockMedia.episodes.filter(matches).map(Self.item)
+            episodes: MockMedia.episodes.filter(matches).map(Self.item),
+            people: Self.cast.filter { $0.name.localizedStandardContains(term) }.map {
+                CastMember(id: $0.id, name: $0.name, role: nil, source: nil)
+            },
+            collections: MockMedia.collections.filter(matches).map(Self.item)
         )
+    }
+
+    func suggestions() async throws -> [MediaItem] {
+        (MockMedia.movies + MockMedia.series).filter { !$0.isPlayed }.prefix(6).map(Self.item)
     }
 
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws {}
