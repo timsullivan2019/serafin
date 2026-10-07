@@ -158,7 +158,6 @@ private struct DetailToolbar: ToolbarContent {
                     systemImage: item.card.isPlayed ? "checkmark.circle.fill" : "checkmark.circle"
                 )
             }
-            .sensoryFeedback(.success, trigger: item.card.isPlayed)
             Button {
                 Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
             } label: {
@@ -173,7 +172,6 @@ private struct DetailToolbar: ToolbarContent {
                     systemImage: item.card.isFavourite ? "heart.fill" : "heart"
                 )
             }
-            .sensoryFeedback(.selection, trigger: item.card.isFavourite)
         }
     }
 }

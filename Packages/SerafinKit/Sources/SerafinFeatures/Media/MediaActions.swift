@@ -4,14 +4,33 @@ import SwiftUI
 
 /// Marks items played and favourite from any screen, then has every screen showing them reload.
 @Observable @MainActor final class MediaActions {
+    /// A change a person made that the server accepted, for the haptic that confirms it.
+    struct Confirmation: Equatable {
+        /// What changed.
+        enum Kind: Equatable {
+            case played, unplayed, favourite, notFavourite
+        }
+
+        let kind: Kind
+        /// Tells two confirmations of the same kind apart.
+        let number: Int
+
+        /// Success for marking played, as the design rules ask, and a light tick for the rest.
+        var feedback: SensoryFeedback {
+            kind == .played ? .success : .selection
+        }
+    }
+
     /// Goes up by one after every change, so screens showing played marks and favourites reload.
     private(set) var revision = 0
+    /// The last change a person made that went through. Playback marking an item played doesn't count.
+    private(set) var confirmation: Confirmation?
     /// The last change that failed, shown as an alert.
     var failure: UserMessage?
 
     /// Marks `item` played or not.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem, in media: any MediaSource) async {
-        await change { try await media.setPlayed(isPlayed, for: item) }
+        await change(isPlayed ? .played : .unplayed) { try await media.setPlayed(isPlayed, for: item) }
     }
 
     /// Has every screen reload, as after playback changes an item's progress.
@@ -21,13 +40,14 @@ import SwiftUI
 
     /// Adds `item` to the favourites or takes it out.
     func setFavourite(_ isFavourite: Bool, for item: MediaItem, in media: any MediaSource) async {
-        await change { try await media.setFavourite(isFavourite, for: item) }
+        await change(isFavourite ? .favourite : .notFavourite) { try await media.setFavourite(isFavourite, for: item) }
     }
 
-    private func change(_ send: () async throws -> Void) async {
+    private func change(_ kind: Confirmation.Kind, _ send: () async throws -> Void) async {
         do {
             try await send()
             revision += 1
+            confirmation = Confirmation(kind: kind, number: revision)
         } catch is CancellationError {
         } catch {
             failure = UserMessage(error)

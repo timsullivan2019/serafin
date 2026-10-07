@@ -93,13 +93,17 @@ public struct HeroHeader: View {
                 bundle: .module,
                 comment: "Menu item and action that plays an item from the beginning."
             )
+            let playFromStart = {
+                playCount += 1
+                startOver()
+            }
             playPill
                 .contextMenu {
-                    Button(action: startOver) {
+                    Button(action: playFromStart) {
                         Label(title, systemImage: "arrow.counterclockwise")
                     }
                 }
-                .accessibilityAction(named: title, startOver)
+                .accessibilityAction(named: title, playFromStart)
         } else {
             playPill
         }

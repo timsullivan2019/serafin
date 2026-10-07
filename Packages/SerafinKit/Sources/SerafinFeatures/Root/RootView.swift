@@ -99,6 +99,8 @@ struct MainTabs: View {
         .environment(\.playerZoomNamespace, playerZoom)
         .environment(playback)
         .environment(actions)
+        // One place for the tap that confirms Mark as Played and Favourite, from a detail screen or a card's menu.
+        .sensoryFeedback(trigger: actions.confirmation) { _, confirmation in confirmation?.feedback }
         .alert(
             actions.failure?.title ?? "",
             isPresented: Binding(get: { actions.failure != nil }, set: { if !$0 { actions.failure = nil } })

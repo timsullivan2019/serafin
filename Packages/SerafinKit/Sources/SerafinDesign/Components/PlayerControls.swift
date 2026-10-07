@@ -106,6 +106,9 @@ public enum PlaybackSpeed {
 ///
 /// With a hardware keyboard, Space plays and pauses, the left and right arrows skip 10 seconds, and F leaves the
 /// full-screen player, as in other video players.
+///
+/// Play and pause give a light tap, and dragging the scrubber ticks at each tenth of the way through and where the
+/// drag began.
 public struct PlayerControls<RoutePicker: View>: View {
     private let title: String
     private let subtitle: String?
@@ -113,6 +116,7 @@ public struct PlayerControls<RoutePicker: View>: View {
     private let showsPictureInPicture: Bool
     private let actions: PlayerControlActions
     private let routePicker: RoutePicker
+    @State private var playPauseTaps = 0
 
     /// Creates the player controls.
     ///
@@ -234,11 +238,14 @@ public struct PlayerControls<RoutePicker: View>: View {
                 label: status.isPlaying
                     ? String(localized: "Pause", bundle: .module, comment: "Button that pauses playback.")
                     : String(localized: "Play", bundle: .module, comment: "Button that starts playback."),
-                isBusy: status.isBuffering,
-                action: actions.playPause
-            )
+                isBusy: status.isBuffering
+            ) {
+                playPauseTaps += 1
+                actions.playPause()
+            }
             .keyboardShortcut(.space, modifiers: [])
             .contentTransition(.symbolEffect(.replace))
+            .sensoryFeedback(.impact(weight: .light), trigger: playPauseTaps)
             GlassIconButton(
                 systemImage: "goforward.10",
                 size: 60,
@@ -370,6 +377,8 @@ private struct Scrubber: View {
     let seek: (Duration) -> Void
     let scrubbingChanged: (Bool) -> Void
     @State private var scrubbedFraction: Double?
+    @State private var scrubStart: Double = 0
+    @State private var detentsPassed = 0
     @State private var trackWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -442,10 +451,16 @@ private struct Scrubber: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard trackWidth > 0 else { return }
+                        let previous = scrubbedFraction ?? ScrubberMath.fraction(of: elapsed, in: duration)
                         if scrubbedFraction == nil {
+                            scrubStart = previous
                             scrubbingChanged(true)
                         }
-                        scrubbedFraction = min(max(value.location.x / trackWidth, 0), 1)
+                        let fraction = min(max(value.location.x / trackWidth, 0), 1)
+                        if ScrubberMath.passesDetent(from: previous, to: fraction, start: scrubStart) {
+                            detentsPassed += 1
+                        }
+                        scrubbedFraction = fraction
                     }
                     .onEnded { _ in
                         if let scrubbedFraction {
@@ -470,6 +485,7 @@ private struct Scrubber: View {
                 }
             }
             .animation(Motion.animation(reduceMotion: reduceMotion), value: isScrubbing)
+            .sensoryFeedback(.selection, trigger: detentsPassed)
     }
 }
 
@@ -488,6 +504,16 @@ enum ScrubberMath {
             Double(duration.components.seconds) * 1000
             + Double(duration.components.attoseconds) / 1e15
         return .milliseconds(Int64((milliseconds * clamped).rounded()))
+    }
+
+    /// Whether a drag from `old` to `new`, both fractions of the way through, passes a detent: a tenth of the way, the
+    /// very start or end, or `start`, where the drag began, so a person can feel their way back to it.
+    static func passesDetent(from old: Double, to new: Double, start: Double) -> Bool {
+        guard old != new else { return false }
+        // The very start is a section of its own, so arriving at it ticks like arriving at the end does.
+        func section(_ fraction: Double) -> Int { fraction <= 0 ? -1 : Int((fraction * 10).rounded(.down)) }
+        let crossesStart = (old - start) * (new - start) < 0 || (new == start && old != start)
+        return section(old) != section(new) || crossesStart
     }
 
     /// A time as the scrubber shows it, such as "12:34" or "1:39:00".
