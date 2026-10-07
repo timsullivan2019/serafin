@@ -248,14 +248,50 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
             query: ["includeItemTypes": "Episode"],
             .json(200, #"{"Items":[],"TotalRecordCount":0}"#)
         )
+        let collections =
+            #"{"Items":[{"Name":"Nosferatu Restorations","Id":"1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d","Type":"BoxSet"}]}"#
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items", query: ["includeItemTypes": "BoxSet"], .json(200, collections))
+        let people =
+            #"{"Items":[{"Name":"Max Schreck","Id":"2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e","Type":"Person","ImageTags":{"Primary":"p1"}}]}"#
+        StubURLProtocol.stub("\(host):443", path: "/Persons", .json(200, people))
         let results = try await library(on: host).search(term: "  no  ")
 
         #expect(results.movies.map(\.name) == ["Nosferatu"])
         #expect(results.series.map(\.name) == ["Sherlock Holmes"])
         #expect(results.episodes.isEmpty)
+        #expect(results.collections.map(\.name) == ["Nosferatu Restorations"])
+        #expect(results.people.map(\.name) == ["Max Schreck"])
         let requests = StubURLProtocol.requests(to: "\(host):443", path: "/Items")
-        #expect(requests.count == 3)
+        #expect(requests.count == 4)
         #expect(requests.allSatisfy { $0.query("searchTerm") == "no" })
+        let person = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Persons").first)
+        #expect(person.query("searchTerm") == "no")
+        #expect(person.query("userId") == "user-1")
+    }
+
+    @Test func suggestionsAreAFewUnwatchedTitlesAtRandom() async throws {
+        let host = "suggestions.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
+        _ = try await library(on: host).suggestions()
+
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items").first)
+        #expect(request.queryValues("includeItemTypes") == ["Movie", "Series"])
+        #expect(request.queryValues("filters") == ["IsUnplayed"])
+        #expect(request.queryValues("sortBy") == ["Random"])
+        #expect(request.query("limit") == "6")
+        #expect(request.query("recursive") == "true")
+    }
+
+    @Test func aPersonsGridAsksForTheirTitles() async throws {
+        let host = "person-grid.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
+        let query = LibraryQuery(parentID: nil, types: [.movie, .series], personIDs: ["person-1"])
+        _ = try await library(on: host).items(query)
+
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items").first)
+        #expect(request.queryValues("personIds") == ["person-1"])
+        #expect(request.query("parentId") == nil)
     }
 
     @Test func anEmptySearchAsksNothing() async throws {

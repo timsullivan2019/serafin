@@ -40,6 +40,8 @@ public struct LibraryQuery: Hashable, Sendable {
     public var genres: [String]
     /// The years an item must come from one of, or empty for any.
     public var years: [Int]
+    /// The people an item must feature, in front of or behind the camera, or empty for anyone.
+    public var personIDs: [String]
 
     /// Creates a query.
     public init(
@@ -50,7 +52,8 @@ public struct LibraryQuery: Hashable, Sendable {
         unplayedOnly: Bool = false,
         favouritesOnly: Bool = false,
         genres: [String] = [],
-        years: [Int] = []
+        years: [Int] = [],
+        personIDs: [String] = []
     ) {
         self.parentID = parentID
         self.types = types
@@ -60,6 +63,7 @@ public struct LibraryQuery: Hashable, Sendable {
         self.favouritesOnly = favouritesOnly
         self.genres = genres
         self.years = years
+        self.personIDs = personIDs
     }
 }
 
@@ -86,10 +90,29 @@ public struct SearchResults: Sendable {
     public let series: [BaseItemDto]
     /// Matching episodes.
     public let episodes: [BaseItemDto]
+    /// Matching cast and crew.
+    public let people: [BaseItemDto]
+    /// Matching collections.
+    public let collections: [BaseItemDto]
+
+    /// Creates a set of results.
+    public init(
+        movies: [BaseItemDto],
+        series: [BaseItemDto],
+        episodes: [BaseItemDto],
+        people: [BaseItemDto] = [],
+        collections: [BaseItemDto] = []
+    ) {
+        self.movies = movies
+        self.series = series
+        self.episodes = episodes
+        self.people = people
+        self.collections = collections
+    }
 
     /// Whether nothing matched.
     public var isEmpty: Bool {
-        movies.isEmpty && series.isEmpty && episodes.isEmpty
+        movies.isEmpty && series.isEmpty && episodes.isEmpty && people.isEmpty && collections.isEmpty
     }
 
     /// No results, for an empty search.

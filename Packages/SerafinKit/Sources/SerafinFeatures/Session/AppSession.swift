@@ -97,10 +97,11 @@ import os
         try await changing { try await accounts.add(connected) }
     }
 
-    /// Signs everyone out of `server` and forgets it, with its streaming caps.
+    /// Signs everyone out of `server` and forgets it, with its streaming caps and its users' recent searches.
     public func remove(_ server: Server) async throws {
         try await changing { try await accounts.remove(serverID: server.id) }
         PlaybackQuality.forget(server: server.id, in: .standard)
+        RecentSearches.forget(server: server.id)
     }
 
     /// Asks every saved server for its name again, so a server renamed since it was added shows its new name.
@@ -146,9 +147,10 @@ import os
         _ = try await changing { try await accounts.switchTo(key) }
     }
 
-    /// Signs a user out on this device and ends their session on the server.
+    /// Signs a user out on this device and ends their session on the server, and forgets their recent searches.
     public func signOut(_ key: SessionKey) async throws {
         try await changing { try await accounts.signOut(key) }
+        RecentSearches.forget(key)
     }
 
     // MARK: - Storage

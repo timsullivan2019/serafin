@@ -22,18 +22,7 @@ public struct PersonCard: View {
 
     public var body: some View {
         VStack(spacing: Spacing.xSmall) {
-            Color.clear
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if let photo {
-                        photo
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Initials(name: name)
-                    }
-                }
-                .clipShape(.circle)
+            PersonPortrait(name: name, photo: photo)
             VStack(spacing: 2) {
                 Text(name)
                     .typography(.cardTitle)
@@ -60,6 +49,38 @@ public struct PersonCard: View {
             bundle: .module,
             comment: "VoiceOver label for a cast member: their name, then their role."
         )
+    }
+}
+
+/// A person's photo in a circle, or their initials when there is none. It fills the width it is given.
+public struct PersonPortrait: View {
+    private let name: String
+    private let photo: Image?
+
+    /// Creates a portrait.
+    ///
+    /// - Parameters:
+    ///   - name: The person's name, whose initials stand in for a photo.
+    ///   - photo: Their photo, or nil while it loads or when there is none.
+    public init(name: String, photo: Image?) {
+        self.name = name
+        self.photo = photo
+    }
+
+    public var body: some View {
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if let photo {
+                    photo
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Initials(name: name)
+                }
+            }
+            .clipShape(.circle)
+            .accessibilityHidden(true)
     }
 }
 
@@ -97,19 +118,25 @@ private struct Initials: View {
         ]
 
         var body: some View {
-            HStack(alignment: .top, spacing: Spacing.small) {
-                ForEach(people, id: \.name) { person in
-                    PersonCard(
-                        name: person.name,
-                        role: person.role,
-                        photo: person.seed.flatMap { PlaceholderArt.poster(seed: $0) }.map {
-                            Image(decorative: $0, scale: 1)
-                        }
-                    )
+            VStack(alignment: .leading, spacing: Spacing.large) {
+                HStack(alignment: .top, spacing: Spacing.small) {
+                    ForEach(people, id: \.name) { person in
+                        PersonCard(name: person.name, role: person.role, photo: photo(person.seed))
+                    }
+                }
+                HStack(spacing: Spacing.medium) {
+                    PersonPortrait(name: "Buster Keaton", photo: photo(3))
+                        .frame(width: 88)
+                    PersonPortrait(name: "Marion Mack", photo: nil)
+                        .frame(width: 88)
                 }
             }
             .padding(Spacing.medium)
             .background(Color.background)
+        }
+
+        private func photo(_ seed: Int?) -> Image? {
+            seed.flatMap { PlaceholderArt.poster(seed: $0) }.map { Image(decorative: $0, scale: 1) }
         }
     }
 

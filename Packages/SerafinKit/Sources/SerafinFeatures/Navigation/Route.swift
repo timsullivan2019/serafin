@@ -28,8 +28,8 @@ enum Route: Hashable {
     case shortcut(LibraryShortcut)
     /// A season's episodes. Jellyfin lists them under the show, so the route carries both.
     case season(id: String, seriesID: String)
-    /// A person's filmography. Reserved for person pages after 1.0; nothing navigates here yet.
-    case person(id: String)
+    /// A person's page: the movies and shows they're in or worked on, from search or a cast row.
+    case person(CastMember)
     /// Adding another server, from Settings.
     case addServer
     /// Signing in to a saved server, from Settings or after adding one.
@@ -138,8 +138,8 @@ private struct RouteDestination: View {
             LibraryView(scope: .shortcut(shortcut))
         case .season(let id, let seriesID):
             SeasonView(id: id, seriesID: seriesID)
-        case .person:
-            EmptyView()
+        case .person(let person):
+            LibraryView(scope: .person(person))
         case .addServer:
             AddServerView { server in navigate(.signIn(server)) }
         case .signIn(let server):

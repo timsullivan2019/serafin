@@ -113,6 +113,8 @@ struct LiveMediaSource: MediaSource {
             query.parentID = id
         case .shortcut:
             break
+        case .person(let person):
+            query.personIDs = person.personID.map { [$0] } ?? []
         }
         return query
     }
@@ -170,8 +172,21 @@ struct LiveMediaSource: MediaSource {
         return MediaSearchResults(
             movies: MediaItem.from(results.movies),
             shows: MediaItem.from(results.series),
-            episodes: MediaItem.from(results.episodes)
+            episodes: MediaItem.from(results.episodes),
+            people: results.people.compactMap(Self.person),
+            collections: MediaItem.from(results.collections)
         )
+    }
+
+    func suggestions() async throws -> [MediaItem] {
+        MediaItem.from(try await library.suggestions())
+    }
+
+    /// A person the search found, as a card that opens their page.
+    static func person(_ item: BaseItemDto) -> CastMember? {
+        guard let id = item.id, let name = item.name, !name.isEmpty else { return nil }
+        let source = BaseItemPerson(id: id, name: name, primaryImageTag: item.imageTags?["Primary"])
+        return CastMember(id: id, name: name, role: nil, source: source)
     }
 
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws {

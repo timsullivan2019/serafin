@@ -44,6 +44,29 @@ struct LandscapeLink: View {
     }
 }
 
+/// A cast or crew member, or a person search found, that opens their page. A person the server gave no ID for
+/// can't have a page, so their card stays still.
+struct PersonLink: View {
+    let person: CastMember
+
+    var body: some View {
+        if person.personID != nil {
+            NavigationLink(value: Route.person(person)) {
+                card
+            }
+            .buttonStyle(.card)
+        } else {
+            card
+        }
+    }
+
+    private var card: some View {
+        PersonPhoto(person: person) { photo in
+            PersonCard(name: person.name, role: person.role, photo: photo)
+        }
+    }
+}
+
 extension MediaItem {
     /// The page of the show an episode belongs to, for Go to Show, or nil for anything else.
     var showRoute: Route? {
