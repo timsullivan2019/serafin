@@ -493,6 +493,10 @@ private struct HeroPageBackdrop: View {
                     statusBarScrim
                 }
                 .animation(.easeOut(duration: 0.3), value: image != nil)
+                // The artwork spills past the page's sides, over the pages beside it, and would take their touches:
+                // after swiping back, the next page's artwork lay over this one's info button. The page's own taps
+                // belong to the clear layer over it.
+                .allowsHitTesting(false)
             }
             .visualEffect { content, proxy in
                 let minY = proxy.frame(in: .scrollView(axis: .vertical)).minY
