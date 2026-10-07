@@ -88,13 +88,16 @@ import SerafinDesign
 
     /// Starts loading the artwork of the page after `selection`, so swiping to it never shows it arriving.
     ///
-    /// The requests match the page's own: the backdrop, or the poster standing in for it, at
-    /// ``HomeHeroPage/backdropWidth(for:)``, and the logo at ``HomeHeroPage/logoWidth``.
-    func prefetchPage(after selection: String?, width: CGFloat, scale: CGFloat, artwork: Artwork?) {
-        guard let artwork, width > 0, !entries.isEmpty else { return }
+    /// The requests match the page's own: the backdrop, or the poster standing in for it, at the width
+    /// ``ArtworkMemory/backdropWidth(for:filling:)`` gives for a page of `size`, and the logo at
+    /// ``HomeHeroPage/logoWidth``.
+    func prefetchPage(after selection: String?, size: CGSize, scale: CGFloat, artwork: Artwork?) {
+        guard let artwork, !entries.isEmpty else { return }
         let current = entries.firstIndex { $0.id == selection } ?? 0
         let next = current + 1
         guard entries.indices.contains(next), let source = entries[next].item.source else { return }
+        let width = ArtworkMemory.backdropWidth(for: entries[next].item.id, filling: size)
+        guard width > 0 else { return }
         let backdropRole: ImageRole = HomeHeroPage.hasBackdrop(source, artwork: artwork) ? .backdrop : .poster
         let requests = [
             artwork.request(backdropRole, of: source, width: width, scale: scale),

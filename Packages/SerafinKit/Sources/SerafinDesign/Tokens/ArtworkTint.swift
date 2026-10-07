@@ -30,6 +30,21 @@ public enum ArtworkTint {
         return Color(.sRGB, red: tint.red, green: tint.green, blue: tint.blue)
     }
 
+    /// The tint for a screen whose artwork hasn't loaded yet: the graphite grey that colourless artwork gets.
+    ///
+    /// A screen starts neutral and takes on its artwork's colour once that loads, rather than starting in another
+    /// colour, such as the chosen accent, and visibly changing to the artwork's. Like every tint, it is dark enough for
+    /// white text.
+    public static var neutral: Color {
+        let grey = neutralRGB
+        return Color(.sRGB, red: grey.red, green: grey.green, blue: grey.blue)
+    }
+
+    /// Mid grey with its luminance clamped like every tint's.
+    static var neutralRGB: RGB {
+        RGB(red: 0.5, green: 0.5, blue: 0.5).clampingLuminance(to: minimumLuminance...maximumLuminance)
+    }
+
     /// The side of the square, in pixels, that artwork is scaled down to before sampling.
     static let sampleSide = 40
 
