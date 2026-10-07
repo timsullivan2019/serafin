@@ -14,6 +14,9 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
+    # The owner's Apple Developer team, for signing on devices and for App Store Connect.
+    DEVELOPMENT_TEAM: GZW73G7ZF7
+    CODE_SIGN_STYLE: Automatic
 
 packages:
   SerafinKit:
@@ -58,6 +61,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.getserafin.serafin
+        # The layered Icon Composer icon in App/AppIcon.icon.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         # The shortcuts' titles go into Localizable.xcstrings, as SerafinKit's strings do.
         SWIFT_EMIT_LOC_STRINGS: YES
