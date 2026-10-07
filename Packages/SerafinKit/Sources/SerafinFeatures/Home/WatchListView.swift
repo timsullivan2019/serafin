@@ -39,7 +39,7 @@ struct WatchListView: View {
                     spacing: Spacing.large
                 ) {
                     ForEach(items) { item in
-                        LandscapeLink(item: item, showsPlayedBadge: model.list != .continueWatching)
+                        LandscapeLink(item: item, showsPlayedBadge: model.list != .continueWatching, role: .watching)
                     }
                 }
                 .padding(Spacing.medium)

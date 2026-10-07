@@ -10,6 +10,9 @@ public enum ImageRole: Hashable, Sendable, CaseIterable {
     case landscape
     /// The full-bleed art behind a detail screen: the item's backdrop, otherwise its show's.
     case backdrop
+    /// A 16:9 card in Continue Watching or Next Up: a thumb, otherwise a backdrop, otherwise the show's backdrop, and
+    /// only then an episode's still. Never a movie's or a show's poster, which is 2:3.
+    case watching
     /// The title logo: the item's own, otherwise its show's.
     case logo
 }
@@ -110,6 +113,15 @@ public struct ImageURLs: Hashable, Sendable {
             candidates = [
                 ownBackdrop(of: item),
                 source(item.parentBackdropItemID, .backdrop, item.parentBackdropImageTags?.first),
+            ]
+        case .watching:
+            candidates = [
+                own(.thumb, of: item),
+                source(item.parentThumbItemID, .thumb, item.parentThumbImageTag),
+                source(item.seriesID, .thumb, item.seriesThumbImageTag),
+                ownBackdrop(of: item),
+                source(item.parentBackdropItemID, .backdrop, item.parentBackdropImageTags?.first),
+                item.type == .episode ? own(.primary, of: item) : nil,
             ]
         case .logo:
             candidates = [

@@ -25,11 +25,14 @@ struct LandscapeLink: View {
     let item: MediaItem
     /// Whether a played item shows its check, which Continue Watching leaves off.
     var showsPlayedBadge = true
+    /// Which picture the card shows: an episode's own still in a season, or the show's art in Continue Watching and
+    /// Next Up, following the artwork rules in docs/PLAN-2.md.
+    var role = ImageRole.landscape
     @Environment(\.zoomNamespace) private var zoom
 
     var body: some View {
         NavigationLink(value: item.route) {
-            ItemArtwork(item, role: .landscape) { image in
+            ItemArtwork(item, role: role) { image in
                 LandscapeCard(
                     card: item.card, artwork: image, zoomNamespace: zoom, showsPlayedBadge: showsPlayedBadge
                 ) {

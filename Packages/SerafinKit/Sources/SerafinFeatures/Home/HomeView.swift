@@ -126,7 +126,7 @@ struct HomeView: View {
                             style: .landscape,
                             items: home.continueWatching,
                             seeAll: { navigate(.continueWatching) }
-                        ) { LandscapeLink(item: $0, showsPlayedBadge: false) }
+                        ) { LandscapeLink(item: $0, showsPlayedBadge: false, role: .watching) }
                     }
                     if !home.nextUp.isEmpty {
                         MediaRow(
@@ -134,7 +134,7 @@ struct HomeView: View {
                             style: .landscape,
                             items: home.nextUp,
                             seeAll: { navigate(.nextUp) }
-                        ) { LandscapeLink(item: $0) }
+                        ) { LandscapeLink(item: $0, role: .watching) }
                     }
                     ForEach(home.latest.filter { !$0.items.isEmpty }) { row in
                         LatestRowView(row: row)
@@ -158,6 +158,9 @@ struct HomeView: View {
                 isPastHero = false
             }
         }
+        // Rows scrolling up under the status bar soften into it, so a title is never cut off behind the clock. Over
+        // the hero at rest there's nothing to soften, so the artwork stays clear.
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollEdgeEffectHidden(hasHero && !isPastHero, for: .top)
         .refreshable {
             isRefreshing = true

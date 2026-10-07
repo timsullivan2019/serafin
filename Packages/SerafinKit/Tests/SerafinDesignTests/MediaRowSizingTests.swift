@@ -14,11 +14,20 @@ import Testing
     @Test(arguments: [375.0, 390, 402, 440])
     func phonesKeepTheirCardCounts(window: CGFloat) {
         #expect(abs(across(.posters, regular: false, window: window) - 3.3) < 0.001)
-        #expect(abs(across(.landscape, regular: false, window: window) - 1.15) < 0.001)
-        #expect(abs(across(.people, regular: false, window: window) - 3.6) < 0.001)
+        #expect(abs(across(.landscape, regular: false, window: window) - 1.3) < 0.001)
+        #expect(abs(across(.people, regular: false, window: window) - 3.3) < 0.001)
         #expect(abs(across(.posters, regular: false, large: true, window: window) - 1.6) < 0.001)
         #expect(abs(across(.landscape, regular: false, large: true, window: window) - 1.05) < 0.001)
         #expect(abs(across(.people, regular: false, large: true, window: window) - 2.1) < 0.001)
+    }
+
+    @Test(arguments: [375.0, 390, 402, 440])
+    func everyRowOnAPhoneShowsTheSameSliceOfItsNextCard(window: CGFloat) {
+        let slices = [MediaRowStyle.posters, .landscape, .people].map { style in
+            let across = across(style, regular: false, window: window)
+            return across - across.rounded(.down)
+        }
+        #expect(Set(slices.map { ($0 * 1000).rounded() }).count == 1)
     }
 
     @Test(arguments: [820.0, 834])

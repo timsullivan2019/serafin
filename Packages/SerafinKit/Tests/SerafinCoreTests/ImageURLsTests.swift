@@ -74,6 +74,27 @@ private let bareEpisode = BaseItemDto(
                 == "/Items/aaaa1111/Images/Backdrop")
     }
 
+    @Test func continueWatchingPrefersThumbThenBackdropThenTheShowsBackdropThenTheStill() throws {
+        var episode = bareEpisode
+        episode.imageTags = ["Primary": "still-tag"]
+        episode.parentThumbImageTag = nil
+        episode.parentThumbItemID = nil
+        // With its show's backdrop, an episode in Continue Watching shows that rather than its still.
+        #expect(
+            try #require(urls.url(.watching, of: episode, maxWidth: 600)).path() == "/Items/show1111/Images/Backdrop")
+        episode.parentBackdropImageTags = nil
+        #expect(
+            try #require(urls.url(.watching, of: episode, maxWidth: 600)).path() == "/Items/bbbb2222/Images/Primary")
+        #expect(try #require(urls.url(.watching, of: movie, maxWidth: 600)).path() == "/Items/aaaa1111/Images/Thumb")
+    }
+
+    @Test func continueWatchingNeverShowsAMoviesPoster() {
+        var withoutLandscapeArt = movie
+        withoutLandscapeArt.imageTags = ["Primary": "poster-tag"]
+        withoutLandscapeArt.backdropImageTags = []
+        #expect(urls.url(.watching, of: withoutLandscapeArt, maxWidth: 600) == nil)
+    }
+
     @Test func aMoviesPosterIsNeverAStill() {
         // Only episodes use their primary image as a 16:9 still.
         var withoutLandscapeArt = movie
