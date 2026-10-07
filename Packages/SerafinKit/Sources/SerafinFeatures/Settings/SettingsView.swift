@@ -107,12 +107,14 @@ extension LockSection {
                 comment: "Settings footer when the device has no passcode.")
         } else if lock.isEnabled {
             String(
-                localized: "Serafin locks when it opens, and again once it has been in the background for this long.",
+                localized:
+                    "Serafin locks when it opens, and again once it has been in the background for this long. Spotlight and Siri don't show your library while the lock is on.",
                 bundle: .module, comment: "Settings footer under the lock while it's on.")
         } else {
             String(
-                localized: "Keeps your library private when someone else picks up this device.", bundle: .module,
-                comment: "Settings footer under the lock while it's off.")
+                localized:
+                    "Keeps your library private when someone else picks up this device, and out of Spotlight and Siri.",
+                bundle: .module, comment: "Settings footer under the lock while it's off.")
         }
     }
 }

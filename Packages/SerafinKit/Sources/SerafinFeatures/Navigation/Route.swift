@@ -46,32 +46,52 @@ extension EnvironmentValues {
     /// the mini player.
     @Entry var playerZoomNamespace: Namespace.ID?
 
-    /// Goes up each time Command-F asks for the search field.
-    @Entry var searchFocusRequest = 0
+    /// The latest request for the search tab: Command-F asking for the field, or Siri for a term's results.
+    @Entry var searchRequest = SearchRequest()
 
     /// Pushes a route onto the current tab's navigation stack.
     @Entry var navigate = NavigateAction { _ in }
 }
 
+/// A request for the search tab.
+struct SearchRequest: Equatable {
+    /// Goes up with each request, so asking twice still asks.
+    var number = 0
+    /// The term to show results for, or nil to put the cursor in the search field.
+    var term: String?
+}
+
 /// One tab's navigation stack, with every route registered and its own zoom namespace.
 struct TabStack<Root: View>: View {
     @Namespace private var zoom
-    @State private var path: [Route] = []
+    @State private var ownPath: [Route] = []
+    private let sharedPath: Binding<[Route]>?
     private let root: Root
 
-    init(@ViewBuilder root: () -> Root) {
+    /// Creates a stack.
+    ///
+    /// - Parameters:
+    ///   - path: The screens pushed onto the root, which the tabs also push onto for Siri and Spotlight. Without it
+    ///     the stack keeps its own, as in previews.
+    ///   - root: The tab's first screen.
+    init(path: Binding<[Route]>? = nil, @ViewBuilder root: () -> Root) {
+        sharedPath = path
         self.root = root()
     }
 
+    private var path: Binding<[Route]> {
+        sharedPath ?? $ownPath
+    }
+
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: path) {
             root
                 .navigationDestination(for: Route.self) { route in
                     RouteDestination(route: route)
                 }
         }
         .environment(\.zoomNamespace, zoom)
-        .environment(\.navigate, NavigateAction { [$path] route in $path.wrappedValue.append(route) })
+        .environment(\.navigate, NavigateAction { [path] route in path.wrappedValue.append(route) })
     }
 }
 

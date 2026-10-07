@@ -11,9 +11,18 @@ struct TestMediaSource: MediaSource {
     var titles: [String]?
     /// Whether marking played or favourite fails.
     var refusesChanges = false
+    /// What Continue Watching and Next Up hold instead of the samples, or nil for the samples.
+    var watching: [MediaCard]?
     private let samples = SampleMediaSource()
 
     func home() async throws -> HomeContent { try await samples.home() }
+
+    func nextToWatch() async throws -> [MediaItem] {
+        guard let watching else { return try await samples.nextToWatch() }
+        return watching.map { MediaItem(card: $0, source: nil) }
+    }
+
+    func item(_ id: String) async throws -> MediaItem { try await samples.item(id) }
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
 

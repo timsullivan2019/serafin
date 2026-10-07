@@ -150,6 +150,11 @@ struct MediaSearchResults: Sendable {
 protocol MediaSource: Sendable {
     /// Continue Watching, Next Up and the newest items in each library.
     func home() async throws -> HomeContent
+    /// What to watch next, as Home lists it: started movies and episodes, most recent first, then the next episode of
+    /// each show in progress.
+    func nextToWatch() async throws -> [MediaItem]
+    /// One movie, show or episode.
+    func item(_ id: String) async throws -> MediaItem
     /// The user's movie and TV libraries.
     func libraries() async throws -> [MediaLibrary]
     /// One page of a grid.

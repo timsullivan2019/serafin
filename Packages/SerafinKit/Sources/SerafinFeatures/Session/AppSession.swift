@@ -36,25 +36,44 @@ import os
         if case .signedIn(let account) = state { account } else { nil }
     }
 
+    /// Keeps the current account's library in Spotlight, or nil in previews and tests.
+    let spotlight: SpotlightIndexer?
+
     private static let logger = Logger(serafinCategory: "session")
     private let accounts: Accounts
+    /// The first read of the saved servers and account.
+    @ObservationIgnored private var loading: Task<Void, Never>?
 
     /// Creates a session over `accounts`.
-    public init(accounts: Accounts) {
-        self.accounts = accounts
+    public convenience init(accounts: Accounts) {
+        self.init(accounts: accounts, spotlight: nil)
     }
 
-    /// The session the app runs with: tokens, certificate pins and the device ID in the Keychain, and the server
-    /// list in Application Support.
+    init(accounts: Accounts, spotlight: SpotlightIndexer?) {
+        self.accounts = accounts
+        self.spotlight = spotlight
+    }
+
+    /// The session the app runs with: tokens, certificate pins and the device ID in the Keychain, the server list
+    /// in Application Support, and the current account's movies and shows in Spotlight.
     ///
     /// - Parameter deviceName: The device name servers show, such as "iPhone".
     public static func live(deviceName: String) -> AppSession {
-        AppSession(accounts: Accounts(secrets: KeychainSecretStore(), deviceName: deviceName))
+        AppSession(
+            accounts: Accounts(secrets: KeychainSecretStore(), deviceName: deviceName),
+            spotlight: .shared
+        )
     }
 
-    /// Reads the saved servers and the current account. The app calls this once at launch.
+    /// Reads the saved servers and the current account, once. The app calls this at launch, and Siri or Shortcuts
+    /// may call it first when they start the app in the background. Later calls wait for that first read.
     public func load() async {
-        await refresh()
+        if let loading {
+            return await loading.value
+        }
+        let loading = Task { await refresh() }
+        self.loading = loading
+        await loading.value
     }
 
     // MARK: - Adding and removing servers

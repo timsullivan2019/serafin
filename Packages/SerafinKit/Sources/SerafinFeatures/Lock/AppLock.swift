@@ -19,7 +19,7 @@ import SwiftUI
     static let graceKey = "appLock.grace"
 
     /// Whether the lock is on.
-    private(set) var isEnabled: Bool
+    public private(set) var isEnabled: Bool
     /// How long Serafin may sit in the background before it locks again.
     private(set) var grace: LockGrace
     /// Whether Serafin is locked now.
@@ -30,7 +30,8 @@ import SwiftUI
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let owner: any OwnerConfirmation
     @ObservationIgnored private let now: @MainActor () -> ContinuousClock.Instant
-    @ObservationIgnored private var backgroundedAt: ContinuousClock.Instant?
+    /// When the app went to the background, or nil while it's in use.
+    private var backgroundedAt: ContinuousClock.Instant?
 
     /// The lock the app runs with, its settings in the standard user defaults.
     public convenience init() {
@@ -54,6 +55,13 @@ import SwiftUI
     /// How this device confirms its owner, which names the setting.
     var check: OwnerCheck {
         owner.check
+    }
+
+    /// Whether something asked for from outside the app, such as by Siri, can go ahead: the lock is off, or the owner
+    /// has unlocked Serafin since it was last in the background. On the way back from the background the app hasn't
+    /// yet decided whether to lock, so a request waits until it has.
+    public var isOpen: Bool {
+        !isLocked && !(isEnabled && backgroundedAt != nil)
     }
 
     /// Follows the app in and out of the background, locking it on its return once the grace period has passed.

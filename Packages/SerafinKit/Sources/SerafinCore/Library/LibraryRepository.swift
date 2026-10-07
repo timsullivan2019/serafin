@@ -164,8 +164,10 @@ public actor LibraryRepository {
 
     /// Everything about one item, for its detail screen.
     ///
-    /// - Throws: ``SerafinError/notFound`` when the item is no longer on the server.
+    /// - Throws: ``SerafinError/notFound`` when the item is no longer on the server, or when `id` isn't an ID
+    ///   Jellyfin would issue, as from a doctored shortcut.
     public func item(id: String) async throws -> BaseItemDto {
+        guard ItemID.isPlain(id) else { throw SerafinError.notFound }
         let request = Paths.getItem(itemID: id, userID: userID)
         return try await cached(request.url, request.query, statuses: [404: .notFound]) {
             try await client.send(request).value

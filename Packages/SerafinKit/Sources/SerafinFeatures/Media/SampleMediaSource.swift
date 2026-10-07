@@ -18,6 +18,16 @@ struct SampleMediaSource: MediaSource {
         )
     }
 
+    func nextToWatch() async throws -> [MediaItem] {
+        (MockLibrary.continueWatching + MockLibrary.nextUp).map(Self.item)
+    }
+
+    func item(_ id: String) async throws -> MediaItem {
+        let all = MockMedia.movies + MockMedia.series + MockMedia.episodes
+        guard let card = all.first(where: { $0.id == id }) else { throw SerafinError.notFound }
+        return Self.item(card)
+    }
+
     func libraries() async throws -> [MediaLibrary] {
         MockLibrary.libraries
     }
