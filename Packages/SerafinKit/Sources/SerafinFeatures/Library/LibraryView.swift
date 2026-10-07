@@ -346,6 +346,7 @@ private struct FilterMenu<Option: Hashable>: View {
             menu.buttonStyle(.glass).tint(.primary)
         } else {
             menu.buttonStyle(.glassProminent).tint(accent)
+                .rebuiltForAccent()
         }
     }
 
