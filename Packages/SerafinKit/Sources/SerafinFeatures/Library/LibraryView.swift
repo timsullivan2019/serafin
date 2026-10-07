@@ -10,6 +10,7 @@ struct LibrariesView: View {
     var body: some View {
         content
             .navigationTitle(String(localized: "Library", bundle: .module, comment: "Title of the library tab."))
+            .profileToolbar()
             .task { await model.load(from: media) }
     }
 

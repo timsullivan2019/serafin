@@ -33,8 +33,10 @@ struct HomeView: View {
             .background(Color.background)
             .navigationTitle(String(localized: "Home", bundle: .module, comment: "Title of the home tab."))
             .toolbarTitleDisplayMode(.inline)
-            // Over the hero there's no bar at all, so the whole artwork takes swipes and taps.
-            .navigationBarShown(showsBar)
+            // With the hero, the bar holds only the profile button, over the artwork; the title would sit on the
+            // poster. The bar never changes while scrolling, which kept the scroll from settling.
+            .toolbar(removing: showsTitle ? nil : .title)
+            .profileToolbar()
             .overlay(alignment: .top) {
                 if isRefreshing, !hero.entries.isEmpty {
                     ProgressView()
@@ -166,9 +168,8 @@ struct HomeView: View {
 
     private var hero: HomeHeroModel { model.hero }
 
-    /// Whether the navigation bar shows: never with the hero or its skeleton, since Home has no buttons in it, so
-    /// the whole artwork takes swipes and nothing about the bar changes while scrolling.
-    private var showsBar: Bool {
+    /// Whether the bar shows the title: not over the hero or its skeleton.
+    private var showsTitle: Bool {
         switch model.phase {
         case .loading: false
         case .loaded: hero.entries.isEmpty
@@ -256,17 +257,6 @@ extension Date {
             }
         }
         return formatted(style)
-    }
-}
-
-extension View {
-    /// Shows or hides the navigation bar. iOS only.
-    fileprivate func navigationBarShown(_ isShown: Bool) -> some View {
-        #if os(iOS)
-            toolbarVisibility(isShown ? .visible : .hidden, for: .navigationBar)
-        #else
-            self
-        #endif
     }
 }
 

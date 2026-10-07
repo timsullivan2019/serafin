@@ -68,6 +68,21 @@ public struct ImageURLs: Hashable, Sendable {
         return components?.url
     }
 
+    /// The address of a user's profile picture, or nil when `userID` is not a plain ID or the user has no picture.
+    ///
+    /// - Parameters:
+    ///   - userID: The user.
+    ///   - tag: The picture's tag, which changes when the picture does, so caches never serve a stale one.
+    public func userImageURL(userID: String, tag: String?) -> URL? {
+        guard ItemID.isPlain(userID), let tag, !tag.isEmpty else { return nil }
+        var components = URLComponents(url: serverURL.appending(path: "UserImage"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "userId", value: userID),
+            URLQueryItem(name: "tag", value: tag),
+        ]
+        return components?.url
+    }
+
     /// One image of one item.
     struct Source: Equatable {
         let itemID: String

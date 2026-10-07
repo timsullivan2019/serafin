@@ -14,6 +14,7 @@ struct SearchView: View {
         content
             .background(Color.background)
             .navigationTitle(String(localized: "Search", bundle: .module, comment: "Title of the search tab."))
+            .profileToolbar()
             .searchable(
                 text: $model.query,
                 isPresented: $isSearchPresented,

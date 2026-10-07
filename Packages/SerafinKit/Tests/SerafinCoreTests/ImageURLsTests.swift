@@ -142,3 +142,27 @@ private let bareEpisode = BaseItemDto(
         #expect(artwork.request(.backdrop, of: BaseItemDto(id: "dddd4444"), width: 390, scale: 3) == nil)
     }
 }
+
+@Suite struct ProfileImageTests {
+    @Test func aProfilePictureComesFromUserImageWithItsTag() throws {
+        let url = try #require(urls.userImageURL(userID: "eeee5555", tag: "face-tag"))
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(components.path == "/UserImage")
+        #expect(components.queryItems?.contains(URLQueryItem(name: "userId", value: "eeee5555")) == true)
+        #expect(components.queryItems?.contains(URLQueryItem(name: "tag", value: "face-tag")) == true)
+    }
+
+    @Test func aUserWithNoPictureOrAnOddIDHasNoAddress() {
+        #expect(urls.userImageURL(userID: "eeee5555", tag: nil) == nil)
+        #expect(urls.userImageURL(userID: "eeee5555", tag: "") == nil)
+        #expect(urls.userImageURL(userID: "../Users", tag: "face-tag") == nil)
+    }
+
+    @Test func theRequestCarriesTheHeaderNotTheToken() throws {
+        let artwork = Artwork(
+            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "header")
+        let request = try #require(artwork.request(userImage: "eeee5555", tag: "face-tag", width: 28, scale: 3))
+        #expect(request.urlRequest?.value(forHTTPHeaderField: "Authorization") == "header")
+        #expect(request.url?.query?.contains("api_key") == false)
+    }
+}

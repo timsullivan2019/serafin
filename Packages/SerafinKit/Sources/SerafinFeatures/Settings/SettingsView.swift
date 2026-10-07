@@ -38,7 +38,7 @@ struct SettingsView: View {
             #endif
         }
         .readableWidth()
-        .navigationTitle(String(localized: "Settings", bundle: .module, comment: "Title of the settings tab."))
+        .navigationTitle(String(localized: "Settings", bundle: .module, comment: "Title of the settings screen."))
     }
 
     /// The app version and build, such as "0.1.0 (1)".

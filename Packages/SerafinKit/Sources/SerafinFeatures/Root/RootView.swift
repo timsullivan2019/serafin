@@ -89,11 +89,13 @@ private struct SpotlightTrigger: Equatable {
     let isLockOn: Bool
 }
 
-/// Home, Library, Search and Settings tabs, a sidebar on iPad, and the mini player in the tab bar while something
-/// plays.
+/// Home, Library and Search tabs, a sidebar on iPad, and the mini player in the tab bar while something plays.
+/// Settings opens as a sheet from the profile button on each tab's first screen, as in Apple's media apps.
 struct MainTabs: View {
     @State private var selection = AppTab.home
     @State private var paths = TabPaths()
+    @State private var showsSettings = false
+    @State private var settingsPath: [Route] = []
     @State private var searchRequest = SearchRequest()
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
@@ -136,25 +138,26 @@ struct MainTabs: View {
             ) {
                 TabStack(path: $paths.library) { LibrariesView() }
             }
-            Tab(
-                String(localized: "Settings", bundle: .module, comment: "Title of the settings tab."),
-                systemImage: "gearshape",
-                value: AppTab.settings
-            ) {
-                TabStack(path: $paths.settings) { SettingsView() }
-            }
+            // Tabs that only some servers can fill, such as Live TV and Music, go here, between Library and Search, in
+            // the phases that build them.
             Tab(value: AppTab.search, role: .search) {
                 TabStack(path: $paths.search) { SearchView() }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
         .background {
-            TabShortcuts(selection: $selection, searchRequest: $searchRequest)
+            TabShortcuts(selection: $selection, searchRequest: $searchRequest, showsSettings: $showsSettings)
         }
+        .sheet(isPresented: $showsSettings) {
+            SettingsSheet(path: $settingsPath)
+        }
+        .environment(
+            \.showSettings, ShowSettingsAction { [showsSettings = $showsSettings] in showsSettings.wrappedValue = true }
+        )
         .modifier(
             OutsideRequests(
-                selection: $selection, paths: $paths, searchRequest: $searchRequest, playback: playback,
-                actions: actions)
+                selection: $selection, paths: $paths, searchRequest: $searchRequest, showsSettings: $showsSettings,
+                playback: playback, actions: actions)
         )
         .environment(\.searchRequest, searchRequest)
         .modifier(TabChrome(playback: playback, playerZoom: playerZoom))
@@ -179,12 +182,13 @@ struct MainTabs: View {
     }
 }
 
-/// Keyboard shortcuts that work anywhere in the tabs: Command-F searches, and while something plays, F opens the
-/// full-screen player. The player handles its own keys, Space, the arrows and F to leave, so these step aside while it
+/// Keyboard shortcuts that work anywhere in the tabs: Command-F searches, Command-comma opens Settings, and while
+/// something plays, F opens the full-screen player. The player handles its own keys, Space, the arrows and F to leave, so these step aside while it
 /// shows.
 private struct TabShortcuts: View {
     @Binding var selection: AppTab
     @Binding var searchRequest: SearchRequest
+    @Binding var showsSettings: Bool
     @Environment(PlaybackCoordinator.self) private var playback
 
     var body: some View {
@@ -200,6 +204,11 @@ private struct TabShortcuts: View {
                 searchRequest = SearchRequest(number: searchRequest.number + 1)
             }
             .keyboardShortcut("f", modifiers: .command)
+            .accessibilityHidden(true)
+            Button(String(localized: "Settings", bundle: .module, comment: "Title of the settings screen.")) {
+                showsSettings = true
+            }
+            .keyboardShortcut(",", modifiers: .command)
             .accessibilityHidden(true)
             if playback.nowPlaying != nil {
                 Button(
@@ -228,7 +237,6 @@ enum AppTab: Hashable {
     case home
     case library
     case search
-    case settings
 }
 
 /// The screens pushed onto each tab, kept together so Siri and Spotlight can push onto them.
@@ -236,7 +244,6 @@ struct TabPaths: Equatable {
     var home: [Route] = []
     var library: [Route] = []
     var search: [Route] = []
-    var settings: [Route] = []
 
     subscript(tab: AppTab) -> [Route] {
         get {
@@ -244,7 +251,6 @@ struct TabPaths: Equatable {
             case .home: home
             case .library: library
             case .search: search
-            case .settings: settings
             }
         }
         set {
@@ -252,16 +258,14 @@ struct TabPaths: Equatable {
             case .home: home = newValue
             case .library: library = newValue
             case .search: search = newValue
-            case .settings: settings = newValue
             }
         }
     }
 
-    /// Pushes an item's page onto the tab showing, or onto Home from Settings, unless it's already on top.
+    /// Pushes an item's page onto the tab showing, unless it's already on top.
     ///
     /// - Returns: The tab to show.
     mutating func show(_ id: String, from tab: AppTab) -> AppTab {
-        let tab = tab == .settings ? AppTab.home : tab
         if self[tab].last != .item(id: id) {
             self[tab].append(.item(id: id))
         }
@@ -274,6 +278,7 @@ private struct OutsideRequests: ViewModifier {
     @Binding var selection: AppTab
     @Binding var paths: TabPaths
     @Binding var searchRequest: SearchRequest
+    @Binding var showsSettings: Bool
     let playback: PlaybackCoordinator
     let actions: MediaActions
     @Environment(AppRequests.self) private var requests: AppRequests?
@@ -301,6 +306,8 @@ private struct OutsideRequests: ViewModifier {
             putPlayerAway()
             selection = paths.show(id, from: selection)
         case .play(let id):
+            // The player can't cover Settings while Settings is up.
+            showsSettings = false
             Task { await play(id) }
         case .search(let term):
             putPlayerAway()
@@ -311,9 +318,10 @@ private struct OutsideRequests: ViewModifier {
         }
     }
 
-    /// Shrinks the full-screen player into the mini player, where playback carries on, so a page or results shown
-    /// for a request don't go unseen under it.
+    /// Closes Settings and shrinks the full-screen player into the mini player, where playback carries on, so a page
+    /// or results shown for a request don't go unseen under them.
     private func putPlayerAway() {
+        showsSettings = false
         if playback.isPlayerPresented {
             playback.minimize()
         }
@@ -331,6 +339,24 @@ private struct OutsideRequests: ViewModifier {
         } catch {
             actions.failure = UserMessage(error)
         }
+    }
+}
+
+/// Settings as a sheet, with its own navigation for adding servers and the screens it opens, and Done to close it.
+private struct SettingsSheet: View {
+    @Binding var path: [Route]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        TabStack(path: $path) {
+            SettingsView()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(role: .confirm) { dismiss() }
+                    }
+                }
+        }
+        .presentationDetents([.large])
     }
 }
 
