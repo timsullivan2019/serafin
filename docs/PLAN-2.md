@@ -139,6 +139,15 @@ One PR, with screenshots before and after for each point.
 7. Confirm the Search tab uses the system bottom search field on iPhone; if it is custom, switch to the system one.
 8. Chapter cards without an image show a dark tile with the chapter number.
 
+### 3.5.9 Design pass three
+
+One PR, with screenshots before and after for each point.
+
+1. Home hero: fade the foreground (logo, metadata, overview, action row, page dots) from 1 to 0 over the 80 pt before it reaches the top safe area, and confirm the top scroll edge effect covers the hero so no content renders under the status bar. The failing case is the screenshot where "Resume · 1 hr, 57 min left" sits under the clock.
+2. Library tiles: use the library view's own Primary image when the server provides one; the client collage is only the fallback, and when used it is four full 2:3 posters at identical crop with a bottom gradient to 70% under the label.
+3. Chips: the selected state uses tinted prominent glass, not a solid fill; hide any chip whose filter the screen already implies (Unplayed on the Unwatched screen); rename "Unplayed" to "Unwatched" everywhere, including Settings copy.
+4. Toolbar played check: filled only when `userData.played` is true; outlined for in-progress and unwatched.
+
 ### Gate 3.5
 
 Owner review on device of Home, Library, a movie detail, a series detail, Search, Settings and sign-in in light and dark. Then 1.0 proceeds through Phase 3.
