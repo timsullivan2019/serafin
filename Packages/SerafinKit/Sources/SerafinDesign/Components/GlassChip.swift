@@ -10,9 +10,10 @@ public struct GlassChip: View {
     private let title: String
     private let systemImage: String?
     private let isSelected: Bool
-    private let tint: Color
+    private let tint: Color?
     private let action: () -> Void
     @Environment(\.glassChipNamespace) private var namespace
+    @Environment(\.accent) private var accent
 
     /// Creates a chip.
     ///
@@ -20,13 +21,13 @@ public struct GlassChip: View {
     ///   - title: The chip's label, already localized.
     ///   - systemImage: An optional SF Symbol shown before the label.
     ///   - isSelected: Whether the option is active.
-    ///   - tint: The glass tint when selected.
+    ///   - tint: The glass tint when selected, or nil for the accent colour chosen in Settings.
     ///   - action: Called when the chip is tapped.
     public init(
         _ title: String,
         systemImage: String? = nil,
         isSelected: Bool,
-        tint: Color = .accentFallback,
+        tint: Color? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -51,7 +52,9 @@ public struct GlassChip: View {
             .padding(.horizontal, Spacing.medium)
             .padding(.vertical, Spacing.xSmall + 2)
             .frame(minHeight: 44)
-            .glassEffect(isSelected ? .regular.tint(tint).interactive() : .regular.interactive(), in: .capsule)
+            .glassEffect(
+                isSelected ? .regular.tint(tint ?? accent).interactive() : .regular.interactive(), in: .capsule
+            )
             .modifier(ChipGlassID(id: title, namespace: namespace))
             .contentShape(.capsule)
         }

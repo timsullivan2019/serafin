@@ -22,7 +22,7 @@ Out of scope: the security of the Jellyfin server itself, of the user's network,
 | The saved Home: titles, artwork references and progress | Caches, one file per account | Shows what the user watches. |
 | Artwork | Caches, Nuke's disk cache, up to 200 MB | Shows what the user's library holds. |
 | The library in Spotlight | The system's Spotlight index | Shows titles and posters outside the app. |
-| Preferences: current account IDs, quality caps, subtitle size | `UserDefaults` | Low value; holds no secrets or titles. |
+| Preferences: current account IDs, quality caps, subtitle size, accent colour | `UserDefaults` | Low value; holds no secrets or titles. |
 
 ## Actors
 

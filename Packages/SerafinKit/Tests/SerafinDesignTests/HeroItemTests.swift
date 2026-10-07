@@ -110,7 +110,7 @@ import Testing
         #expect(HomeHeroLayout.indicatorReserve(pageCount: 4) > HomeHeroLayout.indicatorReserve(pageCount: 3))
     }
 
-    @Test func theHerosZoomSourcesDifferFromTheCardsShowingTheSameItem() {
+    @MainActor @Test func theHerosZoomSourcesDifferFromTheCardsShowingTheSameItem() {
         #expect(HomeHeroLayout.zoomID(for: "movie-metropolis") != "movie-metropolis")
         #expect(HomeHeroLayout.playZoomID(for: "movie-metropolis") != HeroHeader.playZoomID(for: "movie-metropolis"))
     }

@@ -337,6 +337,7 @@ private struct FilterMenu<Option: Hashable>: View {
     let options: [Option]
     let label: (Option) -> String
     @Binding var selection: Option?
+    @Environment(\.accent) private var accent
 
     var body: some View {
         // Clear glass while off, tinted glass once a choice is made, like the toggle chips beside it.
@@ -344,7 +345,7 @@ private struct FilterMenu<Option: Hashable>: View {
             // The glass style colours its label with the tint, so a plain label needs a plain tint.
             menu.buttonStyle(.glass).tint(.primary)
         } else {
-            menu.buttonStyle(.glassProminent).tint(.accentFallback)
+            menu.buttonStyle(.glassProminent).tint(accent)
         }
     }
 

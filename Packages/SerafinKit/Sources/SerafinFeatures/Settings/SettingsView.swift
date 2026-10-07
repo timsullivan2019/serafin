@@ -10,6 +10,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             AccountsSection()
+            AppearanceSection()
             PlaybackSection(server: session.account?.server, isOneOfSeveral: session.servers.count > 1)
                 // Each server keeps its own caps, so another server's section starts afresh.
                 .id(session.account?.server.id)
@@ -46,6 +47,34 @@ struct SettingsView: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "–"
         let build = info?["CFBundleVersion"] as? String ?? "–"
         return "\(short) (\(build))"
+    }
+}
+
+/// The accent colour, for buttons, links, selections and the tab bar.
+private struct AppearanceSection: View {
+    @AppStorage(Accent.storageKey) private var accent = Accent.standard
+
+    var body: some View {
+        Section {
+            LabeledContent(
+                String(
+                    localized: "Accent Colour", bundle: .module,
+                    comment: "Settings row for the colour of buttons, links and selections."),
+                value: accent.name
+            )
+            AccentPicker(selection: $accent)
+        } header: {
+            Text(String(localized: "Appearance", bundle: .module, comment: "Settings section header."))
+        } footer: {
+            Text(
+                String(
+                    localized:
+                        "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are.",
+                    bundle: .module,
+                    comment: "Settings footer under the accent colour choices."
+                )
+            )
+        }
     }
 }
 

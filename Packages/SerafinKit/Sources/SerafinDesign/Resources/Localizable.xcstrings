@@ -27,11 +27,17 @@
     "%@×" : {
       "comment" : "A playback speed, such as 1.25×."
     },
+    "Amber" : {
+      "comment" : "Accent colour: a deep golden yellow."
+    },
     "Audio" : {
       "comment" : "Heading of the audio tracks."
     },
     "Audio and Subtitles" : {
       "comment" : "Button that opens the audio and subtitle picker."
+    },
+    "Blue" : {
+      "comment" : "Accent colour."
     },
     "Cancel" : {
       "comment" : "Button that stops autoplay."
@@ -41,6 +47,12 @@
     },
     "Collection" : {
       "comment" : "Spoken kind of a card that opens a collection of movies."
+    },
+    "Crimson" : {
+      "comment" : "Accent colour: a deep pinkish red."
+    },
+    "Cyan" : {
+      "comment" : "Accent colour."
     },
     "Direct play" : {
       "comment" : "How a video plays: the original file as it is."
@@ -60,20 +72,41 @@
     "Fit to Screen" : {
       "comment" : "Button that shrinks the video to fit inside the screen, with black bars."
     },
+    "Graphite" : {
+      "comment" : "Accent colour: a neutral grey."
+    },
+    "Green" : {
+      "comment" : "Accent colour."
+    },
     "Index" : {
       "comment" : "Spoken name of the letter index."
+    },
+    "Indigo" : {
+      "comment" : "Accent colour."
     },
     "Loading" : {
       "comment" : "Spoken while content loads."
     },
+    "Magenta" : {
+      "comment" : "Accent colour."
+    },
     "Minimize Player" : {
       "comment" : "Button that shrinks the player into the mini player, which keeps playing."
+    },
+    "Mint" : {
+      "comment" : "Accent colour: a blue-green."
     },
     "Off" : {
       "comment" : "Choice that turns subtitles off."
     },
+    "Olive" : {
+      "comment" : "Accent colour: a yellow-green."
+    },
     "Opens the player" : {
       "comment" : "Hint on the mini player's title."
+    },
+    "Orange" : {
+      "comment" : "Accent colour."
     },
     "Page %lld of %lld" : {
       "comment" : "Which featured item on Home is showing, such as Page 2 of 4.",
@@ -91,6 +124,9 @@
     },
     "Picture in Picture" : {
       "comment" : "Button that moves the video into a floating window."
+    },
+    "Pink" : {
+      "comment" : "Accent colour."
     },
     "Play" : {
       "comment" : "Button that starts playback."
@@ -113,8 +149,14 @@
     "Plays in %@" : {
       "comment" : "Countdown before the next episode plays, such as Plays in 7 seconds."
     },
+    "Purple" : {
+      "comment" : "Accent colour."
+    },
     "Rated %@" : {
       "comment" : "Spoken age rating, such as Rated PG."
+    },
+    "Red" : {
+      "comment" : "Accent colour."
     },
     "Repackaged on server (no quality loss)" : {
       "comment" : "How a video plays: the server moves the original video and audio into a new container."
@@ -161,11 +203,17 @@
     "Skip forward 10 seconds" : {
       "comment" : "Button that jumps forward 10 seconds."
     },
+    "Sky" : {
+      "comment" : "Accent colour: a light, sky blue."
+    },
     "Start Over" : {
       "comment" : "Menu item and action that plays an item from the beginning."
     },
     "Subtitles" : {
       "comment" : "Heading of the subtitle tracks."
+    },
+    "Teal" : {
+      "comment" : "Accent colour."
     },
     "The original file plays as it is." : {
       "comment" : "Settings explanation of direct play."
@@ -184,6 +232,9 @@
     },
     "Up Next" : {
       "comment" : "Heading over the next episode."
+    },
+    "Violet" : {
+      "comment" : "Accent colour."
     }
   },
   "version" : "1.0"

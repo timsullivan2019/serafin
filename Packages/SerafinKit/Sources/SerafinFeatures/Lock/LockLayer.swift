@@ -113,6 +113,7 @@ private struct AppLockLayer: ViewModifier {
 /// The lock's window: the lock screen while locked, otherwise the plain cover.
 private struct LockLayerView: View {
     let lock: AppLock
+    @AppStorage(Accent.storageKey) private var accent = Accent.standard
 
     var body: some View {
         Group {
@@ -122,6 +123,7 @@ private struct LockLayerView: View {
                 PrivacyCover()
             }
         }
-        .tint(.accentFallback)
+        .tint(accent.color)
+        .environment(\.accent, accent.color)
     }
 }

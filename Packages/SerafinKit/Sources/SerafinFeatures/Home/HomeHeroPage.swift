@@ -18,6 +18,7 @@ struct HomeHeroPage: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.playerZoomNamespace) private var playerZoom
+    @Environment(\.accent) private var accent
     @Environment(PlaybackCoordinator.self) private var playback
 
     var body: some View {
@@ -64,7 +65,7 @@ struct HomeHeroPage: View {
 
     /// The samples' tint, which have no artwork to measure; the accent for a server's item until its artwork loads.
     private var sampleTint: Color {
-        entry.item.source == nil ? MockMedia.tint(for: entry.item.card) : .accentFallback
+        entry.item.source == nil ? MockMedia.tint(for: entry.item.card) : accent
     }
 
     private func setTint(_ image: CGImage) {
