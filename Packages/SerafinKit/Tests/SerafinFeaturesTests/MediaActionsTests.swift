@@ -41,28 +41,8 @@ import Testing
         let actions = MediaActions()
         actions.reload()
         #expect(actions.confirmation == nil)
-        await actions.setPlayed(true, for: item, in: RefusingMediaSource())
+        await actions.setPlayed(true, for: item, in: TestMediaSource(refusesChanges: true))
         #expect(actions.confirmation == nil)
         #expect(actions.failure != nil)
     }
-}
-
-/// The samples, except that the server refuses every change.
-private struct RefusingMediaSource: MediaSource {
-    private let samples = SampleMediaSource()
-
-    func home() async throws -> HomeContent { try await samples.home() }
-    func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
-    func page(of library: MediaLibrary, options: GridOptions, start: Int) async throws -> MediaPage {
-        try await samples.page(of: library, options: options, start: start)
-    }
-    func filters(in library: MediaLibrary) async throws -> LibraryFilters { try await samples.filters(in: library) }
-    func details(of id: String) async throws -> ItemDetails { try await samples.details(of: id) }
-    func season(_ id: String, of seriesID: String) async throws -> SeasonContent {
-        try await samples.season(id, of: seriesID)
-    }
-    func search(_ term: String) async throws -> MediaSearchResults { try await samples.search(term) }
-    func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws { throw URLError(.badServerResponse) }
-    func setFavourite(_ isFavourite: Bool, for item: MediaItem) async throws { throw URLError(.badServerResponse) }
-    func refresh() async {}
 }

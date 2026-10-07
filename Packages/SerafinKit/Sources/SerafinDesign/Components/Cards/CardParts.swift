@@ -67,11 +67,19 @@ struct ArtworkPlaceholder: View {
         Rectangle()
             .fill(.surface)
             .overlay {
-                Image(systemName: kind == .movie ? "film" : "tv")
+                Image(systemName: symbol)
                     .font(.system(size: 24))
                     .foregroundStyle(.textSecondary)
             }
             .accessibilityHidden(true)
+    }
+
+    private var symbol: String {
+        switch kind {
+        case .movie: "film"
+        case .collection: "rectangle.stack"
+        case .series, .season, .episode: "tv"
+        }
     }
 }
 

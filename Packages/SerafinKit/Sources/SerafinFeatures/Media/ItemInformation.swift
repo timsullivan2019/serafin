@@ -59,7 +59,7 @@ enum ItemInformation {
         if let genres = item.genres?.filter({ !$0.isEmpty }), !genres.isEmpty {
             rows.append(
                 InformationColumns.Row(
-                    label: String(localized: "Genres", bundle: .module, comment: "Detail fact: genres."),
+                    label: String(localized: "Genres", bundle: .module, comment: "Genres, as a heading or a label."),
                     value: genres.formatted(.list(type: .and, width: .narrow).locale(locale))
                 )
             )

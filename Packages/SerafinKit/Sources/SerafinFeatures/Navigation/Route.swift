@@ -8,6 +8,14 @@ enum Route: Hashable {
     case item(id: String)
     /// One library's full grid.
     case library(MediaLibrary)
+    /// The genres of every library.
+    case genres
+    /// The movies and shows in one genre.
+    case genre(Genre)
+    /// Every collection.
+    case collections
+    /// The movies and shows in one collection.
+    case collection(id: String, title: String)
     /// A season's episodes. Jellyfin lists them under the show, so the route carries both.
     case season(id: String, seriesID: String)
     /// A person's filmography. Reserved for person pages after 1.0; nothing navigates here yet.
@@ -77,7 +85,15 @@ private struct RouteDestination: View {
         case .item(let id):
             ItemDetailView(id: id)
         case .library(let library):
-            LibraryView(library: library)
+            LibraryView(scope: .library(library))
+        case .genres:
+            GenresView()
+        case .genre(let genre):
+            LibraryView(scope: .genre(genre))
+        case .collections:
+            LibraryView(scope: .collections)
+        case .collection(let id, let title):
+            LibraryView(scope: .collection(id: id, title: title))
         case .season(let id, let seriesID):
             SeasonView(id: id, seriesID: seriesID)
         case .person:

@@ -39,7 +39,13 @@ struct LandscapeLink: View {
 extension MediaItem {
     /// Where tapping this item goes.
     var route: Route {
-        guard card.kind == .season else { return .item(id: id) }
-        return .season(id: id, seriesID: source?.seriesID ?? SampleMediaSource.seriesID(ofSeason: id) ?? "")
+        switch card.kind {
+        case .season:
+            .season(id: id, seriesID: source?.seriesID ?? SampleMediaSource.seriesID(ofSeason: id) ?? "")
+        case .collection:
+            .collection(id: id, title: card.title)
+        case .movie, .series, .episode:
+            .item(id: id)
+        }
     }
 }

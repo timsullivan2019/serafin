@@ -30,9 +30,11 @@ extension MediaCard {
         return seriesTitle
     }
 
-    /// The line under a poster's title: an episode's code, such as "S2 E4", otherwise the year.
+    /// The line under a poster's title: an episode's code, such as "S2 E4", otherwise the year. A collection spans
+    /// years, so it has none.
     public var posterCaption: String? {
-        episodeCode ?? year.map(String.init)
+        guard kind != .collection else { return nil }
+        return episodeCode ?? year.map(String.init)
     }
 
     /// The running time for display, such as "1 hr, 39 min".
@@ -76,6 +78,12 @@ extension MediaCard {
                     locale: locale,
                     comment: "Spoken season and episode number of an episode."
                 )
+            )
+        } else if kind == .collection {
+            parts.append(
+                String(
+                    localized: "Collection", bundle: .module, locale: locale,
+                    comment: "Spoken kind of a card that opens a collection of movies.")
             )
         } else if let year {
             parts.append(String(year))

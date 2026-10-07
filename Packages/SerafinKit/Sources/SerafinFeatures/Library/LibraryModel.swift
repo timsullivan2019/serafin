@@ -2,7 +2,7 @@ import Observation
 import SerafinCore
 import SerafinDesign
 
-/// The Library tab's list of libraries.
+/// The Library tab's list of libraries, and whether to offer collections beside them.
 @Observable @MainActor final class LibrariesModel {
     enum Phase {
         case loading
@@ -11,10 +11,34 @@ import SerafinDesign
     }
 
     private(set) var phase = Phase.loading
+    /// Whether the server has collections, which adds a Collections row. A failed check leaves it out.
+    private(set) var hasCollections = false
+
+    func load(from media: any MediaSource) async {
+        async let collections = try? media.hasCollections()
+        do {
+            phase = .loaded(try await media.libraries())
+        } catch is CancellationError {
+        } catch {
+            if case .loaded = phase {} else { phase = .failed(UserMessage(error)) }
+        }
+        hasCollections = await collections ?? hasCollections
+    }
+}
+
+/// The genres of every library, for the Genres list.
+@Observable @MainActor final class GenresModel {
+    enum Phase {
+        case loading
+        case loaded([Genre])
+        case failed(UserMessage)
+    }
+
+    private(set) var phase = Phase.loading
 
     func load(from media: any MediaSource) async {
         do {
-            phase = .loaded(try await media.libraries())
+            phase = .loaded(try await media.genres())
         } catch is CancellationError {
         } catch {
             if case .loaded = phase { return }
@@ -23,7 +47,11 @@ import SerafinDesign
     }
 }
 
-/// One library's grid: its items a page at a time, sorted and filtered.
+/// One grid: a library, a genre, the collections or one collection, sorted and filtered.
+///
+/// The grid knows its full length from the first page, and holds a place for every item. Each place's page loads
+/// when the place comes on screen, so a jump from the letter index to the middle of a long grid loads only the
+/// pages around where it lands.
 @Observable @MainActor final class LibraryModel {
     enum Phase {
         case loading
@@ -31,21 +59,45 @@ import SerafinDesign
         case failed(UserMessage)
     }
 
-    /// How many items from the end of the loaded ones the next page starts loading.
+    /// How many items one request loads.
+    static let pageSize = 60
+    /// How close to the end of a page a place has to be for the next page to load as well.
     static let prefetchDistance = 12
+    /// How long a grid sorted by name has to be to get the letter index.
+    static let indexMinimum = 48
 
-    let library: MediaLibrary
+    let scope: GridScope
     /// The sort and filters. Changing them reloads the grid.
-    var options = GridOptions()
+    var options: GridOptions
     private(set) var phase = Phase.loading
-    private(set) var items: [MediaItem] = []
-    /// The library's genres and years, for the filter menus.
+    /// Every place in the grid, filled in as its page loads.
+    private(set) var slots: [MediaItem?] = []
+    /// Goes up whenever the grid reloads, so the places on screen load their pages again.
+    private(set) var generation = 0
+    /// The grid's genres and years, for the filter menus.
     private(set) var filters = LibraryFilters(genres: [], years: [])
-    private(set) var isLoadingMore = false
-    private var nextStart: Int?
+    private var loadedOptions: GridOptions?
+    private var loadedPages: Set<Int> = []
+    private var loadingPages: Set<Int> = []
+    private var letterPositions: [String: Int] = [:]
 
-    init(library: MediaLibrary) {
-        self.library = library
+    init(scope: GridScope) {
+        self.scope = scope
+        options = scope.initialOptions
+    }
+
+    /// How many items the grid has.
+    var total: Int { slots.count }
+
+    /// The item in place `index`, or nil while its page loads.
+    func item(at index: Int) -> MediaItem? {
+        slots.indices.contains(index) ? slots[index] : nil
+    }
+
+    /// The letters the index shows, in the grid's order, or none when the grid isn't sorted by name or is short.
+    var indexLetters: [String] {
+        guard options.sort == .name, total >= Self.indexMinimum else { return [] }
+        return options.ascending ? LetterIndex.alphabet : LetterIndex.alphabet.reversed()
     }
 
     /// Picks a sort. Picking the current sort again flips its direction; a new sort starts in its natural direction.
@@ -59,44 +111,109 @@ import SerafinDesign
     }
 
     /// Loads the first page for the current options, and the filter menus the first time.
+    ///
+    /// When only played marks or favourites changed, the grid keeps showing what it has while the pages on screen
+    /// load again, so nothing flashes.
     func reload(from media: any MediaSource) async {
         let options = options
         do {
-            let page = try await media.page(of: library, options: options, start: 0)
+            let page = try await media.page(of: scope, options: options, start: 0, limit: Self.pageSize)
             guard options == self.options else { return }
-            items = page.items
-            nextStart = page.nextStart
+            if options != loadedOptions || page.total != slots.count {
+                slots = Array(repeating: nil, count: page.total)
+                letterPositions = [:]
+            }
+            loadedOptions = options
+            loadedPages = []
+            loadingPages = []
+            place(page.items, at: 0)
+            loadedPages.insert(0)
+            generation += 1
             phase = .loaded
         } catch is CancellationError {
         } catch {
-            if case .loaded = phase, !items.isEmpty { return }
+            if case .loaded = phase, !slots.isEmpty { return }
             phase = .failed(UserMessage(error))
         }
         if filters.genres.isEmpty, filters.years.isEmpty {
-            filters = (try? await media.filters(in: library)) ?? filters
+            filters = (try? await media.filters(in: scope)) ?? filters
         }
     }
 
-    /// Loads the next page when `item` is close to the end of what has loaded.
-    func loadMore(after item: MediaItem, from media: any MediaSource) async {
-        guard
-            let start = nextStart, !isLoadingMore,
-            let index = items.firstIndex(where: { $0.id == item.id }),
-            index >= items.count - Self.prefetchDistance
-        else { return }
+    /// Loads the page holding place `index`, and the next page too when the place is near the end of its own.
+    func load(around index: Int, from media: any MediaSource) async {
+        let page = index / Self.pageSize
+        await loadPage(page, from: media)
+        if index % Self.pageSize >= Self.pageSize - Self.prefetchDistance {
+            await loadPage(page + 1, from: media)
+        }
+    }
+
+    /// Where the titles under `letter` start, for the letter index, or nil when the server can't say.
+    func position(of letter: String, from media: any MediaSource) async -> Int? {
         let options = options
-        isLoadingMore = true
-        defer { isLoadingMore = false }
-        guard let page = try? await media.page(of: library, options: options, start: start), options == self.options
-        else { return }
-        let known = Set(items.map(\.id))
-        items += page.items.filter { !known.contains($0.id) }
-        nextStart = page.nextStart
+        if let known = letterPositions[letter] { return known }
+        var count = 0
+        if let name = LetterPosition.name(for: letter, ascending: options.ascending) {
+            guard let counted = try? await media.count(in: scope, options: options, before: name) else { return nil }
+            count = counted
+        }
+        guard options == self.options, total > 0 else { return nil }
+        let position = LetterPosition.position(counting: count, ascending: options.ascending, total: total)
+        letterPositions[letter] = position
+        return position
     }
 
     /// Asks the server again, skipping the cache, for pull to refresh.
     func refresh(from media: any MediaSource) async {
         await media.refresh()
         await reload(from: media)
+    }
+
+    private func loadPage(_ page: Int, from media: any MediaSource) async {
+        let start = page * Self.pageSize
+        guard start < slots.count, !loadedPages.contains(page), !loadingPages.contains(page) else { return }
+        let options = options
+        let generation = generation
+        loadingPages.insert(page)
+        let result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
+        // A reload in the meantime started the pages over, and its own loads replace this one.
+        guard generation == self.generation else { return }
+        loadingPages.remove(page)
+        guard let result, options == self.options else { return }
+        place(result.items, at: start)
+        loadedPages.insert(page)
+    }
+
+    private func place(_ items: [MediaItem?], at start: Int) {
+        for (offset, item) in items.enumerated() where start + offset < slots.count {
+            slots[start + offset] = item
+        }
+    }
+}
+
+/// Where a letter's titles start in a grid sorted by name.
+///
+/// The server counts the titles whose sort names come before a name. Sort names are lowercase, and digits and
+/// symbols come before letters, so "#" is the start of an A to Z grid.
+enum LetterPosition {
+    /// The name to count the titles before, or nil when the position needs no count.
+    ///
+    /// From A to Z, a letter's titles start after every title before it. From Z to A, they start after every title
+    /// from the next letter on, so the count is of the titles before the next letter.
+    static func name(for letter: String, ascending: Bool) -> String? {
+        let lower = letter.lowercased()
+        if ascending {
+            return lower == "#" ? nil : lower
+        }
+        if lower == "#" { return "a" }
+        // After "z" comes "{", which sorts after every title starting with z.
+        return lower.unicodeScalars.first.flatMap { Unicode.Scalar($0.value + 1) }.map(String.init)
+    }
+
+    /// The position given the count for ``name(for:ascending:)``, kept inside a grid of `total` items.
+    static func position(counting count: Int, ascending: Bool, total: Int) -> Int {
+        let position = ascending ? count : total - count
+        return min(max(position, 0), max(total - 1, 0))
     }
 }

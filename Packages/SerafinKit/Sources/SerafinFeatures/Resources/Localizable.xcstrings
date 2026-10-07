@@ -34,6 +34,9 @@
     "Audio" : {
       "comment" : "Detail fact: the audio's languages or format."
     },
+    "Browse" : {
+      "comment" : "Library tab section of other ways in."
+    },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
     },
@@ -81,6 +84,12 @@
     },
     "Code" : {
       "comment" : "VoiceOver label of the Quick Connect code."
+    },
+    "Collections" : {
+      "comment" : "Collections, as a heading or a label."
+    },
+    "Collections you make on your server appear here." : {
+      "comment" : "Explanation when there are no collections."
     },
     "Composer" : {
       "comment" : "A crew member's job on a detail screen."
@@ -140,7 +149,10 @@
       "comment" : "Library filter menu."
     },
     "Genres" : {
-      "comment" : "Detail fact: genres."
+      "comment" : "Genres, as a heading or a label."
+    },
+    "Genres appear here once your server has matched your movies and shows to their details." : {
+      "comment" : "Explanation when the server lists no genres."
     },
     "Get a New Code" : {
       "comment" : "Button that restarts Quick Connect."
@@ -172,6 +184,9 @@
     "Licences" : {
       "comment" : "Title of the licences screen, and its row in Settings."
     },
+    "Loading" : {
+      "comment" : "Spoken while content loads."
+    },
     "Lower caps use less data. The server converts anything above the cap." : {
       "comment" : "Settings footer under the streaming quality caps."
     },
@@ -197,10 +212,13 @@
       "comment" : "Search results section."
     },
     "Movies and shows you add to it on your server appear here." : {
-      "comment" : "Explanation for an empty library."
+      "comment" : "Explanation for an empty library or collection."
     },
     "Movies and shows you add to your server appear here." : {
       "comment" : "Explanation when the home screen is empty."
+    },
+    "Movies and shows your server matches to this genre appear here." : {
+      "comment" : "Explanation for an empty genre."
     },
     "Movies, shows and episodes" : {
       "comment" : "Placeholder in the search field."
@@ -211,6 +229,12 @@
     "Next Up" : {
       "comment" : "Home row of next episodes."
     },
+    "No Collections" : {
+      "comment" : "Title when there are no collections."
+    },
+    "No Genres" : {
+      "comment" : "Title when the server lists no genres."
+    },
     "No Libraries" : {
       "comment" : "Title when the server has no libraries."
     },
@@ -219,6 +243,9 @@
     },
     "Nothing Here Yet" : {
       "comment" : "Title when the home screen is empty."
+    },
+    "Nothing in This Genre" : {
+      "comment" : "Title for an empty genre."
     },
     "Nothing in this library matches these filters." : {
       "comment" : "Explanation when filters hide everything."
@@ -390,6 +417,9 @@
     },
     "The server's certificate has changed or isn't trusted. Check it before connecting." : {
       "comment" : "Explanation when a certificate isn't trusted."
+    },
+    "This Collection Is Empty" : {
+      "comment" : "Title for an empty collection."
     },
     "This Connection Isn't Encrypted" : {
       "comment" : "Title of the warning before connecting over plain HTTP."

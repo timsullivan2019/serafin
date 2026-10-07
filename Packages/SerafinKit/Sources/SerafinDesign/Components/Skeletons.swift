@@ -60,10 +60,19 @@ public struct Skeleton: View {
 }
 
 /// A card-shaped placeholder: the artwork's rounded rectangle, then lines where the title and caption go.
-struct SkeletonCard: View {
-    let aspectRatio: CGFloat
+///
+/// Long grids show it in the places whose cards haven't loaded yet.
+public struct SkeletonCard: View {
+    private let aspectRatio: CGFloat
 
-    var body: some View {
+    /// Creates a placeholder card.
+    ///
+    /// - Parameter aspectRatio: The artwork's width over its height, such as 2:3 for a poster.
+    public init(aspectRatio: CGFloat) {
+        self.aspectRatio = aspectRatio
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xSmall) {
             Rectangle()
                 .fill(.surface)

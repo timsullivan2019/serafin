@@ -2,7 +2,7 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// The Library tab: the user's libraries, each opening its grid.
+/// The Library tab: the user's libraries, each opening its grid, then other ways to browse: collections and genres.
 struct LibrariesView: View {
     @State private var model = LibrariesModel()
     @Environment(\.media) private var media
@@ -30,9 +30,32 @@ struct LibrariesView: View {
                 systemImage: "square.stack"
             )
         case .loaded(let libraries):
-            List(libraries) { library in
-                NavigationLink(value: Route.library(library)) {
-                    Label(library.name, systemImage: library.kind.systemImage)
+            List {
+                Section {
+                    ForEach(libraries) { library in
+                        NavigationLink(value: Route.library(library)) {
+                            Label(library.name, systemImage: library.kind.systemImage)
+                        }
+                    }
+                }
+                Section(String(localized: "Browse", bundle: .module, comment: "Library tab section of other ways in."))
+                {
+                    if model.hasCollections {
+                        NavigationLink(value: Route.collections) {
+                            Label(
+                                String(
+                                    localized: "Collections", bundle: .module,
+                                    comment: "Collections, as a heading or a label."),
+                                systemImage: "rectangle.stack"
+                            )
+                        }
+                    }
+                    NavigationLink(value: Route.genres) {
+                        Label(
+                            String(localized: "Genres", bundle: .module, comment: "Genres, as a heading or a label."),
+                            systemImage: "theatermasks"
+                        )
+                    }
                 }
             }
             .refreshable {
@@ -43,27 +66,33 @@ struct LibrariesView: View {
     }
 }
 
-/// One library as a poster grid, with glass chips for sorting and filtering floating over it.
+/// A poster grid of a library, a genre, the collections or one collection. A library or a genre has glass chips for
+/// sorting and filtering floating over it, and a long grid sorted by name has a letter index along its edge.
 struct LibraryView: View {
     @State private var model: LibraryModel
+    @State private var position = ScrollPosition(idType: Int.self)
+    @State private var jump: Task<Void, Never>?
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
     @ScaledMetric(relativeTo: .subheadline) private var columnWidth = 104.0
 
-    init(library: MediaLibrary) {
-        _model = State(initialValue: LibraryModel(library: library))
+    init(scope: GridScope) {
+        _model = State(initialValue: LibraryModel(scope: scope))
     }
 
     var body: some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) {
-                LibraryChips(model: model)
+                if model.scope.offersChips {
+                    LibraryChips(model: model)
+                }
             }
             .background(Color.background)
-            .navigationTitle(model.library.name)
+            .navigationTitle(model.scope.title)
             .task(id: ReloadKey(options: model.options, revision: actions.revision)) {
                 await model.reload(from: media)
             }
+            .onChange(of: model.options) { position.scrollTo(edge: .top) }
     }
 
     @ViewBuilder private var content: some View {
@@ -72,7 +101,7 @@ struct LibraryView: View {
             Skeleton(.posterGrid(columnMinimum: columnWidth))
         case .failed(let message):
             FailureState(message: message) { Task { await model.reload(from: media) } }
-        case .loaded where model.items.isEmpty:
+        case .loaded where model.total == 0:
             emptyState
         case .loaded:
             grid
@@ -80,25 +109,41 @@ struct LibraryView: View {
     }
 
     private var grid: some View {
-        ScrollView {
+        let letters = model.indexLetters
+        return ScrollView {
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: columnWidth), spacing: Spacing.small, alignment: .top)],
                 spacing: Spacing.large
             ) {
-                ForEach(model.items) { item in
-                    PosterLink(item: item)
-                        .task { await model.loadMore(after: item, from: media) }
+                ForEach(0..<model.total, id: \.self) { index in
+                    GridPlace(model: model, index: index)
                 }
             }
-            .padding(.horizontal, Spacing.medium)
+            .scrollTargetLayout()
+            .padding(.leading, Spacing.medium)
+            // Room for the letter index, so it never sits on a poster.
+            .padding(.trailing, letters.isEmpty ? Spacing.medium : Spacing.large)
             .padding(.vertical, Spacing.small)
-            if model.isLoadingMore {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, Spacing.large)
+        }
+        .scrollPosition($position)
+        .overlay(alignment: .trailing) {
+            if !letters.isEmpty {
+                LetterIndex(letters: letters, jump: jumpTo)
+                    .padding(.vertical, Spacing.medium)
+                    .padding(.trailing, Spacing.xxSmall)
             }
         }
         .refreshable { await model.refresh(from: media) }
+    }
+
+    /// Scrolls to the titles under `letter`. A newer letter cancels the jump to an older one, so dragging along the
+    /// index lands where the finger stops.
+    private func jumpTo(_ letter: String) {
+        jump?.cancel()
+        jump = Task {
+            guard let index = await model.position(of: letter, from: media), !Task.isCancelled else { return }
+            position.scrollTo(id: index, anchor: .top)
+        }
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -121,15 +166,51 @@ struct LibraryView: View {
                 }
             )
         } else {
-            EmptyState(
-                String(localized: "This Library Is Empty", bundle: .module, comment: "Title for an empty library."),
-                message: String(
-                    localized: "Movies and shows you add to it on your server appear here.",
-                    bundle: .module,
-                    comment: "Explanation for an empty library."
-                ),
-                systemImage: model.library.kind.systemImage
-            )
+            switch model.scope {
+            case .library(let library):
+                EmptyState(
+                    String(localized: "This Library Is Empty", bundle: .module, comment: "Title for an empty library."),
+                    message: String(
+                        localized: "Movies and shows you add to it on your server appear here.",
+                        bundle: .module,
+                        comment: "Explanation for an empty library or collection."
+                    ),
+                    systemImage: library.kind.systemImage
+                )
+            case .genre:
+                EmptyState(
+                    String(localized: "Nothing in This Genre", bundle: .module, comment: "Title for an empty genre."),
+                    message: String(
+                        localized: "Movies and shows your server matches to this genre appear here.",
+                        bundle: .module,
+                        comment: "Explanation for an empty genre."
+                    ),
+                    systemImage: "theatermasks"
+                )
+            case .collections:
+                EmptyState(
+                    String(
+                        localized: "No Collections", bundle: .module, comment: "Title when there are no collections."),
+                    message: String(
+                        localized: "Collections you make on your server appear here.",
+                        bundle: .module,
+                        comment: "Explanation when there are no collections."
+                    ),
+                    systemImage: "rectangle.stack"
+                )
+            case .collection:
+                EmptyState(
+                    String(
+                        localized: "This Collection Is Empty", bundle: .module,
+                        comment: "Title for an empty collection."),
+                    message: String(
+                        localized: "Movies and shows you add to it on your server appear here.",
+                        bundle: .module,
+                        comment: "Explanation for an empty library or collection."
+                    ),
+                    systemImage: "rectangle.stack"
+                )
+            }
         }
     }
 
@@ -137,6 +218,29 @@ struct LibraryView: View {
     private struct ReloadKey: Hashable {
         let options: GridOptions
         let revision: Int
+    }
+}
+
+/// One place in a grid: its poster once its page has loaded, a placeholder card until then. Coming on screen loads
+/// its page, and the pages around it.
+private struct GridPlace: View {
+    let model: LibraryModel
+    let index: Int
+    @Environment(\.media) private var media
+
+    var body: some View {
+        Group {
+            if let item = model.item(at: index) {
+                PosterLink(item: item)
+            } else {
+                SkeletonCard(aspectRatio: 2 / 3)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        String(localized: "Loading", bundle: .module, comment: "Spoken while content loads.")
+                    )
+            }
+        }
+        .task(id: model.generation) { await model.load(around: index, from: media) }
     }
 }
 
@@ -284,18 +388,23 @@ extension LibraryQuery.Sort {
 }
 
 #Preview("Light") {
-    TabStack { LibraryView(library: MockLibrary.libraries[0]) }
+    TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
         .previewEnvironment()
 }
 
 #Preview("Dark") {
-    TabStack { LibraryView(library: MockLibrary.libraries[0]) }
+    TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
         .previewEnvironment()
         .preferredColorScheme(.dark)
 }
 
 #Preview("Largest text") {
-    TabStack { LibraryView(library: MockLibrary.libraries[1]) }
+    TabStack { LibraryView(scope: .library(MockLibrary.libraries[1])) }
         .previewEnvironment()
         .dynamicTypeSize(.accessibility5)
+}
+
+#Preview("Collection") {
+    TabStack { LibraryView(scope: .collection(id: "collection-blender-open-movies", title: "Blender Open Movies")) }
+        .previewEnvironment()
 }

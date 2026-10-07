@@ -1,0 +1,30 @@
+{
+  "Items": [
+    {
+      "Name": "Comedy",
+      "ServerId": "5e7a1d0c0ffee0000000000000000001",
+      "Id": "0b8f2e21c4a8b4e9a3f7c9d1e5a6b7c8",
+      "Type": "Genre",
+      "MovieCount": 3,
+      "SeriesCount": 1,
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "Horror",
+      "ServerId": "5e7a1d0c0ffee0000000000000000001",
+      "Id": "3c9d4f8a1b2e4c6d8e0f1a2b3c4d5e6f",
+      "Type": "Genre",
+      "MovieCount": 2,
+      "SeriesCount": 0,
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    }
+  ],
+  "TotalRecordCount": 2,
+  "StartIndex": 0
+}

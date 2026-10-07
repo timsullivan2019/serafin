@@ -136,6 +136,49 @@ private let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(request.query("limit") == "60")
     }
 
+    @Test func countingBeforeANameKeepsTheGridsFiltersAndAsksForNoItems() async throws {
+        let host = "count.example.com"
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items", .json(200, #"{"Items":[],"TotalRecordCount":17,"StartIndex":0}"#))
+        let query = LibraryQuery(parentID: moviesView, types: [.movie], unplayedOnly: true, genres: ["Comedy"])
+        let count = try await library(on: host).count(query, before: "m")
+
+        #expect(count == 17)
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items").first)
+        #expect(request.query("nameLessThan") == "m")
+        #expect(request.query("limit") == "0")
+        #expect(request.query("parentId") == moviesView)
+        #expect(request.queryValues("includeItemTypes") == ["Movie"])
+        #expect(request.queryValues("filters") == ["IsUnplayed"])
+        #expect(request.queryValues("genres") == ["Comedy"])
+        #expect(request.query("enableTotalRecordCount") == "true")
+        #expect(request.query("fields") == nil)
+    }
+
+    @Test func aGridOfAnyKindSendsNoKinds() async throws {
+        let host = "anykind.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
+        _ = try await library(on: host).items(LibraryQuery(parentID: "collection-1", types: []))
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items").first)
+        #expect(request.query("parentId") == "collection-1")
+        #expect(request.query("includeItemTypes") == nil)
+    }
+
+    @Test func genresComeWithTheirCountsInOrder() async throws {
+        let host = "genres.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Genres", .json(200, try Fixture.json("Genres")))
+        let genres = try await library(on: host).genres()
+
+        #expect(genres.map(\.name) == ["Comedy", "Horror"])
+        #expect(genres.first?.movieCount == 3)
+        #expect(genres.first?.seriesCount == 1)
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Genres").first)
+        #expect(request.query("userId") == "user-1")
+        #expect(request.queryValues("includeItemTypes") == ["Movie", "Series"])
+        #expect(request.queryValues("fields") == ["ItemCounts"])
+        #expect(request.queryValues("sortBy") == ["SortName"])
+    }
+
     @Test func itemReturnsEverythingTheDetailScreenShows() async throws {
         let host = "item.example.com"
         let id = "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"

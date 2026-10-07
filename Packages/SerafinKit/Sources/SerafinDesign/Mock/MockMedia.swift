@@ -85,6 +85,35 @@ public enum MockMedia {
         oz.card,
     ]
 
+    /// Two collections: Blender's open movies and the silent classics.
+    public static let collections: [MediaCard] = [
+        MediaCard(
+            id: "collection-blender-open-movies", kind: .collection, title: "Blender Open Movies",
+            overview: "Every open movie from Blender Studio, from Elephants Dream to Sprite Fright."
+        ),
+        MediaCard(
+            id: "collection-silent-classics", kind: .collection, title: "Silent Classics",
+            overview: "Two landmarks of the silent era."
+        ),
+    ]
+
+    /// The movies in a collection from ``collections``, in release order, or an empty array for anything else.
+    ///
+    /// - Parameter collection: A collection card.
+    public static func members(of collection: MediaCard) -> [MediaCard] {
+        let ids: [String] =
+            switch collection.id {
+            case "collection-blender-open-movies":
+                [
+                    "movie-elephants-dream", "movie-big-buck-bunny", "movie-sintel", "movie-tears-of-steel",
+                    "movie-cosmos-laundromat", "movie-spring", "movie-sprite-fright",
+                ]
+            case "collection-silent-classics": ["movie-nosferatu", "movie-the-general"]
+            default: []
+            }
+        return ids.compactMap { id in movies.first { $0.id == id } }
+    }
+
     /// Every episode of every series, in series, season and episode order.
     public static let episodes: [MediaCard] = allSeries.flatMap { $0.seasons.flatMap(\.episodes) }
 

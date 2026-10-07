@@ -22,31 +22,91 @@ struct SampleMediaSource: MediaSource {
         MockLibrary.libraries
     }
 
-    func page(of library: MediaLibrary, options: GridOptions, start: Int) async throws -> MediaPage {
-        let all = MockLibrary.libraries.first { $0.id == library.id }?.items ?? []
-        var items = all.filter { card in
+    func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
+        let cards = Self.cards(in: scope, options: options)
+        let page = cards.dropFirst(start).prefix(limit)
+        return MediaPage(items: page.map(Self.item), total: cards.count)
+    }
+
+    func filters(in scope: GridScope) async throws -> LibraryFilters {
+        guard case .library(let library) = scope else { return LibraryFilters(genres: [], years: []) }
+        let years = Set(MockLibrary.libraries.first { $0.id == library.id }?.items.compactMap(\.year) ?? [])
+        return LibraryFilters(genres: [], years: years.sorted(by: >))
+    }
+
+    func count(in scope: GridScope, options: GridOptions, before name: String) async throws -> Int {
+        Self.cards(in: scope, options: options).count { Self.sortName($0.title) < name.lowercased() }
+    }
+
+    func genres() async throws -> [Genre] {
+        let names = Set(Self.genres.values.flatMap { $0 })
+        return names.sorted().map { name in
+            Genre(id: "genre-\(name)", name: name, count: Self.genres.values.count { $0.contains(name) })
+        }
+    }
+
+    func hasCollections() async throws -> Bool {
+        !MockMedia.collections.isEmpty
+    }
+
+    /// A grid's samples, filtered and sorted.
+    private static func cards(in scope: GridScope, options: GridOptions) -> [MediaCard] {
+        let all: [MediaCard] =
+            switch scope {
+            case .library(let library): MockLibrary.libraries.first { $0.id == library.id }?.items ?? []
+            case .genre(let genre):
+                (MockMedia.movies + MockMedia.series).filter { genres[$0.id]?.contains(genre.name) == true }
+            case .collections: MockMedia.collections
+            case .collection(let id, _): MockMedia.collections.first { $0.id == id }.map(MockMedia.members) ?? []
+            }
+        var cards = all.filter { card in
             (!options.unplayedOnly || !card.isPlayed) && (!options.favouritesOnly || card.isFavourite)
                 && (options.year == nil || card.year == options.year)
         }
         switch options.sort {
         case .name:
-            items.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            cards.sort { sortName($0.title) < sortName($1.title) }
         case .dateAdded:
             // The samples are listed oldest addition first.
-            items.reverse()
+            cards.reverse()
         case .premiereDate, .rating:
-            items.sort { ($0.year ?? 0) > ($1.year ?? 0) }
+            cards.sort { ($0.year ?? 0) > ($1.year ?? 0) }
         }
+        // Each sort above runs in its natural direction: names A to Z, everything else newest or highest first.
         if options.ascending != (options.sort == .name) {
-            items.reverse()
+            cards.reverse()
         }
-        return MediaPage(items: items.map(Self.item), nextStart: nil)
+        return cards
     }
 
-    func filters(in library: MediaLibrary) async throws -> LibraryFilters {
-        let years = Set(MockLibrary.libraries.first { $0.id == library.id }?.items.compactMap(\.year) ?? [])
-        return LibraryFilters(genres: [], years: years.sorted(by: >))
+    /// A title as the server sorts it: lowercase, without a leading article.
+    static func sortName(_ title: String) -> String {
+        let lower = title.lowercased()
+        for article in ["the ", "a ", "an "] where lower.hasPrefix(article) {
+            return String(lower.dropFirst(article.count))
+        }
+        return lower
     }
+
+    /// The samples' genres, so browsing by genre has something to show.
+    private static let genres: [String: [String]] = [
+        "movie-big-buck-bunny": ["Animation", "Comedy"],
+        "movie-sintel": ["Animation", "Fantasy"],
+        "movie-tears-of-steel": ["Science Fiction"],
+        "movie-elephants-dream": ["Animation", "Science Fiction"],
+        "movie-cosmos-laundromat": ["Animation", "Fantasy"],
+        "movie-spring": ["Animation", "Fantasy"],
+        "movie-sprite-fright": ["Animation", "Comedy", "Horror"],
+        "movie-night-of-the-living-dead": ["Horror"],
+        "movie-the-general": ["Comedy"],
+        "movie-nosferatu": ["Horror"],
+        "movie-his-girl-friday": ["Comedy"],
+        "movie-charade": ["Mystery"],
+        "series-caminandes": ["Animation", "Comedy"],
+        "series-sherlock-holmes": ["Mystery"],
+        "series-alice": ["Fantasy"],
+        "series-oz": ["Fantasy"],
+    ]
 
     func details(of id: String) async throws -> ItemDetails {
         let all = MockMedia.movies + MockMedia.series + MockMedia.episodes
@@ -68,6 +128,8 @@ struct SampleMediaSource: MediaSource {
         case .movie, .season:
             details.similar = MockMedia.movies.filter { $0.id != id }.map(Self.item)
             details.cast = Self.cast
+        case .collection:
+            break
         }
         return details
     }
