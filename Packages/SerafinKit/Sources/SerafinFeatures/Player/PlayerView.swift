@@ -3,8 +3,9 @@ import SerafinDesign
 import SerafinPlayback
 import SwiftUI
 
-/// The full-screen player: the video under glass controls, double-tap skipping, the audio and subtitle picker, and
-/// Up Next when an episode ends. On iPhone the interface turns to landscape while it shows.
+/// The full-screen player: the video under glass controls, double-tap skipping, pinching to fill the screen or fit
+/// it, the audio and subtitle picker, and Up Next when an episode ends. On iPhone the interface turns to landscape
+/// while it shows.
 struct PlayerView: View {
     @Environment(PlaybackCoordinator.self) private var playback
 
@@ -140,6 +141,7 @@ struct PlayerView: View {
                     rate: engine.rate
                 ),
                 showsPictureInPicture: engine.isPictureInPicturePossible,
+                fillsScreen: engine.fillsScreen,
                 actions: PlayerControlActions(
                     minimize: { playback.minimize() },
                     playPause: {
@@ -161,7 +163,11 @@ struct PlayerView: View {
                         engine.setRate(rate)
                     },
                     showTracks: { showsTracks = true },
-                    togglePictureInPicture: { engine.togglePictureInPicture() }
+                    togglePictureInPicture: { engine.togglePictureInPicture() },
+                    toggleFill: {
+                        screen.touched()
+                        engine.setFillsScreen(!engine.fillsScreen, animated: !reduceMotion)
+                    }
                 )
             ) {
                 AirPlayButton()
@@ -193,6 +199,7 @@ struct PlayerView: View {
         let screen: PlayerScreenModel
         let engine: PlayerEngine
         @Environment(PlaybackCoordinator.self) private var playback
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var width: CGFloat = 0
 
         var body: some View {
@@ -208,6 +215,17 @@ struct PlayerView: View {
                     SpatialTapGesture(count: 2)
                         .onEnded { value in skip(at: value.location.x) }
                         .exclusively(before: TapGesture().onEnded { screen.toggleControls() })
+                )
+                // Pinching out fills the screen with the picture and pinching in fits it again, as in other players.
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onEnded { value in
+                            if value.magnification > 1.1, !engine.fillsScreen {
+                                engine.setFillsScreen(true, animated: !reduceMotion)
+                            } else if value.magnification < 0.9, engine.fillsScreen {
+                                engine.setFillsScreen(false, animated: !reduceMotion)
+                            }
+                        }
                 )
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 40)

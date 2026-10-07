@@ -256,9 +256,24 @@ public enum PlaybackState: Equatable, Sendable {
             }
             let view = PlayerLayerView()
             view.playerLayer.player = player
+            view.setFillsBounds(fillsScreen, animated: false)
             hostedVideoView = view
             setUpPictureInPicture(for: view.playerLayer)
             return view
+        }
+
+        /// Whether the picture fills the screen, cropping its edges, rather than fitting inside it with black bars.
+        /// It stays as chosen from one video to the next.
+        public private(set) var fillsScreen = false
+
+        /// Fills the screen with the picture, cropping its edges, or fits the picture inside it.
+        ///
+        /// - Parameters:
+        ///   - fills: Whether the picture fills the screen.
+        ///   - animated: Whether the picture grows or shrinks into place, which Reduce Motion turns off.
+        public func setFillsScreen(_ fills: Bool, animated: Bool) {
+            fillsScreen = fills
+            hostedVideoView?.setFillsBounds(fills, animated: animated)
         }
 
         /// Starts Picture in Picture, or stops it when it is on.

@@ -48,6 +48,12 @@
     "Favourite" : {
       "comment" : "Spoken state of a favourite item."
     },
+    "Fill Screen" : {
+      "comment" : "Button that enlarges the video to fill the screen, cropping its edges."
+    },
+    "Fit to Screen" : {
+      "comment" : "Button that shrinks the video to fit inside the screen, with black bars."
+    },
     "Index" : {
       "comment" : "Spoken name of the letter index."
     },
