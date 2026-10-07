@@ -44,6 +44,10 @@ struct TestMediaSource: MediaSource {
 
     func cover(of library: MediaLibrary) async -> MediaItem? { await samples.cover(of: library) }
 
+    func canRefreshMetadata() async -> Bool { false }
+
+    func refreshMetadata(of item: MediaItem) async throws {}
+
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
         guard let cards = cards(options) else {
             return try await samples.page(of: scope, options: options, start: start, limit: limit)

@@ -51,15 +51,15 @@ public struct ImageURLs: Hashable, Sendable {
     ///   - itemID: The item that has the image.
     ///   - type: Which of its images.
     ///   - tag: The image's tag, which changes when the image does, so caches never serve a stale one.
+    ///   - index: Which of several images of the type, as for a chapter's picture, or nil for the first.
     ///   - maxWidth: The width to ask the server for, in pixels.
     ///   - quality: The JPEG quality to ask for.
-    public func url(itemID: String, type: ImageType, tag: String?, maxWidth: Int, quality: Int = defaultQuality) -> URL?
-    {
-        guard ItemID.isPlain(itemID) else { return nil }
-        var components = URLComponents(
-            url: serverURL.appending(path: "Items/\(itemID)/Images/\(type.rawValue)"),
-            resolvingAgainstBaseURL: false
-        )
+    public func url(
+        itemID: String, type: ImageType, tag: String?, index: Int? = nil, maxWidth: Int, quality: Int = defaultQuality
+    ) -> URL? {
+        guard ItemID.isPlain(itemID), index.map({ $0 >= 0 }) ?? true else { return nil }
+        let path = "Items/\(itemID)/Images/\(type.rawValue)" + (index.map { "/\($0)" } ?? "")
+        var components = URLComponents(url: serverURL.appending(path: path), resolvingAgainstBaseURL: false)
         var query = [
             URLQueryItem(name: "maxWidth", value: String(max(1, maxWidth))),
             URLQueryItem(name: "quality", value: String(min(max(quality, 1), 100))),

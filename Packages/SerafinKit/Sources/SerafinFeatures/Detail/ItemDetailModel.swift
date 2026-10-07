@@ -14,6 +14,8 @@ import SwiftUI
     private(set) var phase = Phase.loading
     /// The screen's accent, taken from its backdrop once that loads, or nil until then.
     var tint: Color?
+    /// Whether the user can ask the server to refresh the item's metadata, which administrators can.
+    private(set) var canRefreshMetadata = false
 
     init(id: String) {
         self.id = id
@@ -33,8 +35,10 @@ import SwiftUI
         if case .loaded(let details) = phase { details } else { nil }
     }
 
-    /// Loads the details. A failed reload keeps the details already showing.
+    /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the details
+    /// already showing.
     func load(from media: any MediaSource) async {
+        async let canRefresh = media.canRefreshMetadata()
         do {
             let details = try await media.details(of: id)
             if details.item.source == nil {
@@ -43,9 +47,9 @@ import SwiftUI
             phase = .loaded(details)
         } catch is CancellationError {
         } catch {
-            if case .loaded = phase { return }
-            phase = .failed(UserMessage(error))
+            if case .loaded = phase {} else { phase = .failed(UserMessage(error)) }
         }
+        canRefreshMetadata = await canRefresh
     }
 
     /// Takes the tint from the loaded backdrop.

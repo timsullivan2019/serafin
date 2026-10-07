@@ -93,7 +93,8 @@ public struct HeroItem: Identifiable, Hashable, Sendable {
                 localized: "Play \(code)",
                 bundle: .module,
                 locale: locale,
-                comment: "Button on Home's featured show or episode that plays an episode, such as Play S1 E1."
+                comment:
+                    "Button that plays an episode, such as Play S1 E1: on Home's featured item and on a detail screen."
             )
         }
         return String(localized: "Play", bundle: .module, locale: locale, comment: "Button that starts playback.")

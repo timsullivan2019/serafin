@@ -299,9 +299,57 @@ public actor LibraryRepository {
 
     /// The tag of the signed-in user's profile picture, or nil when they haven't set one.
     public func profileImageTag() async throws -> String? {
+        try await currentUser().imageTag
+    }
+
+    /// Whether the signed-in user administers the server, which lets them refresh an item's metadata.
+    public func isAdministrator() async throws -> Bool {
+        try await currentUser().isAdministrator
+    }
+
+    /// The two things Serafin reads about the signed-in user.
+    private struct CurrentUser: Sendable {
+        let imageTag: String?
+        let isAdministrator: Bool
+    }
+
+    /// Reads the user's picture tag and role from the server's answer directly, so a server that leaves out a field
+    /// the SDK's user model requires, such as one of the policy's switches, doesn't hide either.
+    private func currentUser() async throws -> CurrentUser {
         let request = Paths.getCurrentUser
-        let user = try await cached(request.url, request.query) { try await client.send(request).value }
-        return user.primaryImageTag
+        return try await cached(request.url, request.query) {
+            let data = try await client.data(for: request).value
+            guard case .object(let user)? = try? JSONDecoder().decode(AnyJSON.self, from: data) else {
+                throw SerafinError.unexpectedResponse(status: nil)
+            }
+            var imageTag: String?
+            if case .string(let tag)? = user["PrimaryImageTag"] { imageTag = tag }
+            var isAdministrator = false
+            if case .object(let policy)? = user["Policy"], case .bool(let admin)? = policy["IsAdministrator"] {
+                isAdministrator = admin
+            }
+            return CurrentUser(imageTag: imageTag, isAdministrator: isAdministrator)
+        }
+    }
+
+    // MARK: - Detail extras
+
+    /// An item's trailers stored with it on the server, as items that play in the normal player.
+    public func localTrailers(of id: String) async throws -> [BaseItemDto] {
+        guard ItemID.isPlain(id) else { throw SerafinError.notFound }
+        let request = Paths.getLocalTrailers(itemID: id, userID: userID)
+        return try await cached(request.url, request.query) { try await client.send(request).value }
+    }
+
+    /// Asks the server to look up an item's metadata again, as the Jellyfin dashboard's Refresh Metadata does,
+    /// without replacing what an administrator has edited. Administrators only.
+    public func refreshMetadata(of id: String) async throws {
+        guard ItemID.isPlain(id) else { throw SerafinError.notFound }
+        let parameters = Paths.RefreshItemParameters(metadataRefreshMode: .default, imageRefreshMode: .default)
+        try await sending(statuses: [:]) {
+            _ = try await client.send(Paths.refreshItem(itemID: id, parameters: parameters))
+        }
+        cache.removeAll()
     }
 
     // MARK: - Language preferences

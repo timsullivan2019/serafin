@@ -17,7 +17,8 @@ extension MediaCard {
             return String(
                 localized: "\(episode.seriesTitle) · \(episodeCode)",
                 bundle: .module,
-                comment: "Series title and episode code above an episode title, such as Caminandes · S1 E2."
+                comment:
+                    "Two parts of a line joined by a dot: a series title and episode code above an episode title (Caminandes · S1 E2), or a show's next episode under its details (S2 E4 · The Final Problem)."
             )
         }
         return year.map(String.init)

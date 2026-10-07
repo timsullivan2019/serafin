@@ -8,7 +8,7 @@ import SwiftUI
     struct Confirmation: Equatable {
         /// What changed.
         enum Kind: Equatable {
-            case played, unplayed, favourite, notFavourite
+            case played, unplayed, favourite, notFavourite, refreshing
         }
 
         let kind: Kind
@@ -35,6 +35,10 @@ import SwiftUI
                 String(
                     localized: "Removed from Favourites", bundle: .module,
                     comment: "Spoken once a favourite is taken out.")
+            case .refreshing:
+                String(
+                    localized: "Refreshing metadata", bundle: .module,
+                    comment: "Spoken once the server has been asked to refresh an item's metadata.")
             }
         }
     }
@@ -49,6 +53,12 @@ import SwiftUI
     /// Marks `item` played or not.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem, in media: any MediaSource) async {
         await change(isPlayed ? .played : .unplayed) { try await media.setPlayed(isPlayed, for: item) }
+    }
+
+    /// Asks the server to refresh `item`'s metadata. The server does it in the background, so screens reload now and
+    /// show the new details the next time they load.
+    func refreshMetadata(of item: MediaItem, in media: any MediaSource) async {
+        await change(.refreshing) { try await media.refreshMetadata(of: item) }
     }
 
     /// Has every screen reload, as after playback changes an item's progress.
