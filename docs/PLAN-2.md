@@ -114,9 +114,21 @@ Acceptance: badges match the Jellyfin web client's media info for five test item
 - Show "Recent" (last ten searches, stored locally) and "Suggested" (six random unplayed titles) when the field is empty, as the Apple TV app does.
 - Group results in this order: Shows, Movies, Episodes, People, Collections. People open a person page listing their items (`/Items?PersonIds=`).
 
+### 3.5.7 Sign-in flow, phone-first
+
+The flow led with Quick Connect. On iPhone and iPad, lead with a password and offer Quick Connect as the alternative. Keep Quick Connect first in any future tvOS target, where typing a password is the hard part.
+
+1. The server address field accepts a hostname, IP, host:port or full URL, as now.
+2. After the server responds, fetch `GET /Users/Public`. If it returns users, show them as avatar tiles, the Jellyfin web login pattern; tapping one fills in the username.
+3. Username and password fields use `textContentType(.username)` and `.password`, so iOS Password AutoFill works, including the system's prompt to save the password after a successful sign-in. The app itself never persists the password, the same rule as before.
+4. A secondary "Sign In with Quick Connect" button, hidden when `GET /QuickConnect/Enabled` returns false.
+5. Remember the last username per server. Keep the HTTP warning and certificate-pinning sheets exactly as they are.
+
+Acceptance: signing in with a password saved in iCloud Keychain takes two taps and Face ID; Quick Connect still works; no password appears in logs, UserDefaults or the Keychain store.
+
 ### Gate 3.5
 
-Owner review on device of Home, Library, a movie detail, a series detail, Search and Settings in light and dark. Then 1.0 proceeds through Phase 3.
+Owner review on device of Home, Library, a movie detail, a series detail, Search, Settings and sign-in in light and dark. Then 1.0 proceeds through Phase 3.
 
 ---
 

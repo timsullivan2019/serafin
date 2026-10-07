@@ -151,6 +151,56 @@ private struct Harness {
 }
 
 @Suite struct QuickConnectTests {
+    @Test func theServersSignInUsersAreReadLoosely() async throws {
+        let harness = try Harness()
+        let server = try harness.server(on: "public-users.example.com")
+        let users = #"""
+            [{"Name":"Alice","Id":"u1","HasPassword":true,"PrimaryImageTag":"t1","Policy":{"IsAdministrator":true}},
+             {"Name":"  Kids ","Id":"u2","HasPassword":false},
+             {"Name":"No ID"},
+             {"Name":"","Id":"u3"},
+             {"Name":"Bram","Id":"u4"}]
+            """#
+        StubURLProtocol.stub("public-users.example.com:443", path: "/Users/Public", .json(200, users))
+
+        let found = try await harness.accounts.publicUsers(on: server)
+        #expect(found.map(\.name) == ["Alice", "Kids", "Bram"])
+        #expect(found.map(\.hasPassword) == [true, false, true])
+        #expect(found.first?.imageTag == "t1")
+        let request = try #require(
+            StubURLProtocol.requests(to: "public-users.example.com:443", path: "/Users/Public").first)
+        #expect(request.request.value(forHTTPHeaderField: "Authorization")?.contains("Token=") != true)
+    }
+
+    @Test func aLongListOfUsersIsCut() {
+        let many = (0..<100).map { #"{"Name":"User \#($0)","Id":"u\#($0)"}"# }.joined(separator: ",")
+        let users = PublicUser.list(from: Data("[\(many)]".utf8), limit: Accounts.maximumPublicUsers)
+        #expect(users.count == Accounts.maximumPublicUsers)
+        #expect(PublicUser.list(from: Data(#"{"Name":"Alice"}"#.utf8), limit: 10).isEmpty)
+    }
+
+    @Test func quickConnectIsOnOffOrUnknown() async throws {
+        let harness = try Harness()
+        let on = try harness.server(on: "qc-on.example.com")
+        let off = try harness.server(on: "qc-off.example.com")
+        let down = try harness.server(on: "qc-down.example.com")
+        StubURLProtocol.stub("qc-on.example.com:443", path: "/QuickConnect/Enabled", .json(200, "true"))
+        StubURLProtocol.stub("qc-off.example.com:443", path: "/QuickConnect/Enabled", .json(200, "false"))
+
+        #expect(await harness.accounts.isQuickConnectEnabled(on: on) == true)
+        #expect(await harness.accounts.isQuickConnectEnabled(on: off) == false)
+        #expect(await harness.accounts.isQuickConnectEnabled(on: down) == nil)
+    }
+
+    @Test func picturesBeforeSignInCarryNoToken() async throws {
+        let harness = try Harness()
+        let artwork = try await harness.accounts.signInArtwork(for: try harness.server(on: "pictures.example.com"))
+        #expect(artwork.authorization.contains("DeviceId="))
+        #expect(!artwork.authorization.contains("Token="))
+        let url = try #require(artwork.urls.userImageURL(userID: "u1", tag: "t1"))
+        #expect(url.path() == "/UserImage")
+    }
+
     @Test func signsInOnceTheCodeIsApproved() async throws {
         let harness = try Harness()
         let host = "quick.example.com"

@@ -1,11 +1,14 @@
+import NukeUI
 import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// Signing in to a server: a Quick Connect code to approve from another device, or a username and password.
+/// Signing in to a server: a username and password first, which the phone's Password AutoFill can fill, with the
+/// server's users as pictures to tap when it lists them, and Quick Connect a button away.
 struct SignInView: View {
     @State private var model: SignInModel
     @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
 
     init(server: Server) {
         _model = State(initialValue: SignInModel(server: server))
@@ -14,12 +17,18 @@ struct SignInView: View {
     var body: some View {
         Group {
             switch model.method {
+            case .password:
+                PasswordForm(model: model)
             case .quickConnect:
                 QuickConnectPanel(model: model)
                     .task(id: model.quickConnectAttempt) { await model.runQuickConnect(with: session) }
-            case .password:
-                PasswordForm(model: model)
             }
+        }
+        .task { await model.loadServerDetails(with: session) }
+        // Signing in to a new account replaces the screens anyway; signing in as the current one changes nothing,
+        // so the screen closes itself.
+        .onChange(of: model.didSignIn) { _, didSignIn in
+            if didSignIn { dismiss() }
         }
         .background(Color.background)
         .navigationTitle(model.server.displayName)
@@ -106,7 +115,7 @@ private struct QuickConnectPanel: View {
     }
 }
 
-/// The username and password form.
+/// The username and password form, under the server's users when it lists them, with Quick Connect below.
 private struct PasswordForm: View {
     @Bindable var model: SignInModel
     @Environment(AppSession.self) private var session
@@ -119,6 +128,25 @@ private struct PasswordForm: View {
 
     var body: some View {
         Form {
+            if !model.users.isEmpty {
+                Section {
+                    UserTiles(model: model) { user in
+                        Task {
+                            if await model.choose(user, with: session) {
+                                field = .password
+                            }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                } header: {
+                    Text(
+                        String(
+                            localized: "Who's Watching?", bundle: .module,
+                            comment: "Heading over the users a server lists on its sign-in screen.")
+                    )
+                }
+            }
             Section {
                 TextField(
                     String(localized: "Username", bundle: .module, comment: "Label of the username field."),
@@ -138,17 +166,6 @@ private struct PasswordForm: View {
                 .focused($field, equals: .password)
                 .submitLabel(.go)
                 .onSubmit(signIn)
-            } header: {
-                if !model.isQuickConnectAvailable {
-                    Text(
-                        String(
-                            localized: "Quick Connect is off on this server, so sign in with your password.",
-                            bundle: .module,
-                            comment: "Note when the server has Quick Connect turned off."
-                        )
-                    )
-                    .textCase(nil)
-                }
             } footer: {
                 if let failure = model.passwordFailure {
                     FailureMessage(message: failure)
@@ -170,20 +187,31 @@ private struct PasswordForm: View {
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
                 if model.isQuickConnectAvailable {
-                    Button(
-                        String(
-                            localized: "Use Quick Connect Instead",
-                            bundle: .module,
-                            comment: "Button that switches back to Quick Connect."
+                    Button {
+                        field = nil
+                        model.method = .quickConnect
+                    } label: {
+                        Text(
+                            String(
+                                localized: "Sign In with Quick Connect",
+                                bundle: .module,
+                                comment: "Button that shows a Quick Connect code to approve on another device."
+                            )
                         )
-                    ) { model.method = .quickConnect }
-                    .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.large)
+                    .listRowInsets(EdgeInsets(top: Spacing.small, leading: 0, bottom: 0, trailing: 0))
                     .listRowBackground(Color.clear)
                 }
             }
         }
         .readableWidth()
-        .onAppear { field = .username }
+        .onAppear {
+            // The name last used here is filled in already, so the password is next.
+            field = model.username.isEmpty ? .username : .password
+        }
         .onChange(of: model.passwordFailure) { _, failure in
             if failure != nil {
                 field = .password
@@ -195,6 +223,61 @@ private struct PasswordForm: View {
         guard model.canSignIn else { return }
         field = nil
         Task { await model.signIn(with: session) }
+    }
+}
+
+/// The users a server lists on its sign-in screen, as pictures that fill in the name when tapped.
+private struct UserTiles: View {
+    let model: SignInModel
+    let choose: (PublicUser) -> Void
+    @ScaledMetric(relativeTo: .body) private var tileWidth = 88.0
+
+    var body: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: tileWidth), spacing: Spacing.small, alignment: .top)],
+            spacing: Spacing.medium
+        ) {
+            ForEach(model.users) { user in
+                Button {
+                    choose(user)
+                } label: {
+                    UserPicture(user: user, artwork: model.artwork, isSelected: user.name == model.username)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isSigningIn)
+                .accessibilityHint(
+                    user.hasPassword
+                        ? String(
+                            localized: "Fills in this name", bundle: .module,
+                            comment: "Hint on a user picture on the sign-in screen, for a user with a password.")
+                        : String(
+                            localized: "Signs in", bundle: .module,
+                            comment: "Hint on a user picture on the sign-in screen, for a user without a password.")
+                )
+            }
+        }
+        .padding(.vertical, Spacing.xSmall)
+    }
+}
+
+/// One user's tile, with their picture from the server once it loads.
+private struct UserPicture: View {
+    let user: PublicUser
+    let artwork: Artwork?
+    let isSelected: Bool
+    @Environment(\.displayScale) private var scale
+
+    var body: some View {
+        if let artwork,
+            let request = artwork.request(userImage: user.id, tag: user.imageTag, width: 72, scale: scale)
+        {
+            LazyImage(request: request) { state in
+                UserTile(name: user.name, image: state.image, isSelected: isSelected)
+            }
+            .pipeline(artwork.pipeline)
+        } else {
+            UserTile(name: user.name, image: nil, isSelected: isSelected)
+        }
     }
 }
 
@@ -210,7 +293,7 @@ extension View {
 }
 
 #if DEBUG
-    #Preview("Quick Connect") {
+    #Preview("Password") {
         NavigationStack {
             SignInView(
                 server: Server(
