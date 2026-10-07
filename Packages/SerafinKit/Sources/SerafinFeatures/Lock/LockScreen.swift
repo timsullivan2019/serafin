@@ -12,6 +12,7 @@ struct LockScreen: View {
                 .typography(.title)
                 .foregroundStyle(.textPrimary)
                 .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
             Button {
                 Task { await lock.unlock() }
             } label: {

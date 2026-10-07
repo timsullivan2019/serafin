@@ -47,7 +47,7 @@ public struct LandscapeCard<Menu: View>: View {
                 Text(card.title)
                     .typography(.cardTitle)
                     .foregroundStyle(.textPrimary)
-                    .lineLimit(2)
+                    .modifier(CardTitleLines(standard: 2))
                 if let time = card.remainingText ?? card.runtimeText {
                     Text(time)
                         .typography(.caption)

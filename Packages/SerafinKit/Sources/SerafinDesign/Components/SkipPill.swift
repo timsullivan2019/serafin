@@ -60,6 +60,7 @@ public struct SkipPill: View {
                         .contentShape(.capsule)
                 }
                 .buttonStyle(.plain)
+                .accessibilityShowsLargeContentViewer()
                 // White glass, like the system player's play buttons, so it reads over any picture.
                 .glassEffect(.regular.tint(.white).interactive(), in: .capsule)
                 .glassEffectTransition(.materialize)

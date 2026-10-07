@@ -19,7 +19,7 @@ struct SearchView: View {
                 isPresented: $isSearchPresented,
                 placement: Self.fieldPlacement,
                 prompt: String(
-                    localized: "Movies, shows and episodes",
+                    localized: "Movies and shows",
                     bundle: .module,
                     comment: "Placeholder in the search field."
                 )

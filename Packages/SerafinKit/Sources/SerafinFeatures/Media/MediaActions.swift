@@ -19,6 +19,24 @@ import SwiftUI
         var feedback: SensoryFeedback {
             kind == .played ? .success : .selection
         }
+
+        /// What VoiceOver says once the change goes through, since the button only changes its label.
+        var announcement: String {
+            switch kind {
+            case .played:
+                String(localized: "Marked as played", bundle: .module, comment: "Spoken once an item is marked played.")
+            case .unplayed:
+                String(
+                    localized: "Marked as unplayed", bundle: .module, comment: "Spoken once an item is marked unplayed."
+                )
+            case .favourite:
+                String(localized: "Added to Favourites", bundle: .module, comment: "Spoken once a favourite is added.")
+            case .notFavourite:
+                String(
+                    localized: "Removed from Favourites", bundle: .module,
+                    comment: "Spoken once a favourite is taken out.")
+            }
+        }
     }
 
     /// Goes up by one after every change, so screens showing played marks and favourites reload.

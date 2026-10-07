@@ -117,6 +117,7 @@ public struct PlayerControls<RoutePicker: View>: View {
     private let actions: PlayerControlActions
     private let routePicker: RoutePicker
     @State private var playPauseTaps = 0
+    @Environment(\.colorSchemeContrast) private var contrast
 
     /// Creates the player controls.
     ///
@@ -196,10 +197,12 @@ public struct PlayerControls<RoutePicker: View>: View {
                 if let subtitle {
                     Text(subtitle)
                         .typography(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(contrast == .increased ? .primary : .secondary)
                         .lineLimit(1)
                 }
             }
+            // Lifted off bright video, as the hero's title is.
+            .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
             if showsPictureInPicture {

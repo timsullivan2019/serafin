@@ -215,6 +215,7 @@ private struct HeroBackdrop: View {
 /// Year or episode code, running time and rating, separated by dots.
 private struct HeroMetadata: View {
     let card: MediaCard
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         HStack(spacing: Spacing.xSmall) {
@@ -244,7 +245,9 @@ private struct HeroMetadata: View {
             }
         }
         .typography(.cardTitle)
-        .foregroundStyle(.white.opacity(0.85))
+        .foregroundStyle(.white.opacity(contrast == .increased ? 1 : 0.85))
+        // The same lift as the title, for artwork that's bright where the line sits.
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         .accessibilityElement(children: .combine)
     }
 }
