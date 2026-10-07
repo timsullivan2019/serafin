@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 /// A Jellyfin server the user has added. It holds no secrets: tokens and certificate pins live in the
 /// ``SecretStore``.
@@ -33,6 +34,35 @@ public struct Server: Codable, Hashable, Identifiable, Sendable {
     /// The signed-in user with `id`, if there is one.
     public func user(id: String) -> ServerUser? {
         users.first { $0.id == id }
+    }
+
+    /// The name to show for the server: the name it reports, unless that is a generated one, when it's the
+    /// address's host name. See ``ServerName``.
+    public var displayName: String {
+        ServerName.display(name, at: url)
+    }
+}
+
+/// How Serafin names a server on screen.
+///
+/// A server in a Docker container that nobody has named reports the container's ID as its name, twelve hex digits
+/// such as `3f9a1c07be52`, which reads like an error. Serafin shows the address's host name instead, such as `nas`,
+/// or "Jellyfin" when the address is an IP address, which says no more.
+enum ServerName {
+    /// The name to show for a server that reports `name` and is reached at `url`.
+    static func display(_ name: String, at url: URL) -> String {
+        guard isGenerated(name) else { return name }
+        guard let host = url.host(), !host.isEmpty, !host.contains(":"), IPv4Address(host) == nil else {
+            return "Jellyfin"
+        }
+        return host
+    }
+
+    /// Whether `name` was made by a machine rather than a person: empty, or a container's or server's ID, which is
+    /// 12, 32 or 64 hex digits.
+    static func isGenerated(_ name: String) -> Bool {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty || ([12, 32, 64].contains(name.count) && name.allSatisfy(\.isHexDigit))
     }
 }
 

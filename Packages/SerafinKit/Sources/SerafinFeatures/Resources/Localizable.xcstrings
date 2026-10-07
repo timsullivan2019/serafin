@@ -142,7 +142,7 @@
       "comment" : "Settings section header."
     },
     "Accent Colour" : {
-      "comment" : "Settings row for the colour of buttons, links and selections."
+      "comment" : "Title of the accent colour screen, and its row in Settings."
     },
     "Accounts, playback, appearance and privacy" : {
       "comment" : "Hint on the profile button, which opens Settings."
@@ -212,6 +212,9 @@
     },
     "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are." : {
       "comment" : "Settings footer under the accent colour choices."
+    },
+    "Buttons, progress and selections in %@" : {
+      "comment" : "Spoken for the accent colour preview, such as Buttons, progress and selections in Red."
     },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
@@ -302,6 +305,9 @@
     },
     "Director" : {
       "comment" : "A crew member's job on a detail screen."
+    },
+    "Encrypted" : {
+      "comment" : "Spoken for the lock beside an HTTPS server's address in Settings."
     },
     "Enter your server's address, such as jellyfin.example.com or 192.168.1.20:8096." : {
       "comment" : "Explanation when a server address can't be used."
@@ -401,6 +407,9 @@
     },
     "Loading" : {
       "comment" : "Spoken while content loads."
+    },
+    "Local network" : {
+      "comment" : "Under a plain HTTP server's address in Settings: it's allowed because it's on the user's own network."
     },
     "Lock Again" : {
       "comment" : "Settings row: the lock's grace period."
@@ -529,7 +538,7 @@
       "comment" : "Label of the password field."
     },
     "Play" : {
-      "comment" : "Menu item that starts playback."
+      "comment" : "Starts playback: a menu item, and a sample button in the accent colour preview."
     },
     "Play ${item}" : {},
     "Play Movie or Show" : {
@@ -552,6 +561,9 @@
     },
     "Plays the movie or episode you were last watching in Serafin, or the next episode of a show you're watching." : {
       "comment" : "Description of the Continue Watching shortcut."
+    },
+    "Preview" : {
+      "comment" : "Header over sample controls in the chosen accent colour."
     },
     "Privacy" : {
       "comment" : "Settings section header."

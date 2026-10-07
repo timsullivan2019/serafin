@@ -38,6 +38,8 @@ enum Route: Hashable {
     case licences
     /// Audio and subtitle languages, and how subtitles look, from Settings.
     case audioAndSubtitles
+    /// The accent colour, from Settings.
+    case accentColour
 }
 
 /// Pushes a route onto the current tab's navigation stack, for buttons that are not navigation links.
@@ -146,6 +148,8 @@ private struct RouteDestination: View {
             LicencesView()
         case .audioAndSubtitles:
             AudioAndSubtitlesView()
+        case .accentColour:
+            AccentColourView()
         }
     }
 }

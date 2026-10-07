@@ -16,10 +16,7 @@ public struct AccentPicker: View {
     }
 
     public var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: swatch + Spacing.small), spacing: Spacing.small)],
-            spacing: Spacing.small
-        ) {
+        SwatchGrid(minimumWidth: swatch + Spacing.small, spacing: Spacing.small) {
             ForEach(Accent.allCases) { accent in
                 Button {
                     withAnimation(Motion.animation(reduceMotion: reduceMotion)) { selection = accent }
@@ -33,6 +30,47 @@ public struct AccentPicker: View {
             }
         }
         .padding(.vertical, Spacing.xSmall)
+    }
+}
+
+/// Equal columns, as many as fit at `minimumWidth`, each subview centred in its cell.
+///
+/// Not a `LazyVGrid`: inside a list row a lazy grid can pile its cells on top of each other when the text size
+/// changes, and seventeen swatches don't need laziness.
+private struct SwatchGrid: Layout {
+    let minimumWidth: CGFloat
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? minimumWidth * 6
+        let grid = metrics(width: width, subviews: subviews)
+        return CGSize(width: width, height: grid.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let grid = metrics(width: bounds.width, subviews: subviews)
+        for (index, subview) in subviews.enumerated() {
+            let column = index % grid.columns
+            let row = index / grid.columns
+            let center = CGPoint(
+                x: bounds.minX + CGFloat(column) * (grid.cellWidth + spacing) + grid.cellWidth / 2,
+                y: bounds.minY + CGFloat(row) * (grid.rowHeight + spacing) + grid.rowHeight / 2
+            )
+            subview.place(
+                at: center, anchor: .center, proposal: ProposedViewSize(width: grid.cellWidth, height: grid.rowHeight))
+        }
+    }
+
+    private func metrics(width: CGFloat, subviews: Subviews)
+        -> (columns: Int, cellWidth: CGFloat, rowHeight: CGFloat, height: CGFloat)
+    {
+        let columns = max(1, Int((width + spacing) / (minimumWidth + spacing)))
+        let cellWidth = max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+        let rowHeight =
+            subviews.map { $0.sizeThatFits(ProposedViewSize(width: cellWidth, height: nil)).height }.max() ?? 0
+        let rows = (subviews.count + columns - 1) / columns
+        let height = rows == 0 ? 0 : CGFloat(rows) * rowHeight + CGFloat(rows - 1) * spacing
+        return (columns, cellWidth, rowHeight, height)
     }
 }
 

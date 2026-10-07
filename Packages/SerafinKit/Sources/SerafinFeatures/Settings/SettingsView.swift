@@ -39,6 +39,9 @@ struct SettingsView: View {
         }
         .readableWidth()
         .navigationTitle(String(localized: "Settings", bundle: .module, comment: "Title of the settings screen."))
+        .task {
+            await session.refreshServerNames()
+        }
     }
 
     /// The app version and build, such as "0.1.0 (1)".
@@ -50,30 +53,17 @@ struct SettingsView: View {
     }
 }
 
-/// The accent colour, for buttons, links, selections and the tab bar.
+/// The accent colour, for buttons, links, selections and the tab bar, as a row that opens its own screen.
 private struct AppearanceSection: View {
     @AppStorage(Accent.storageKey) private var accent = Accent.standard
 
     var body: some View {
         Section {
-            LabeledContent(
-                String(
-                    localized: "Accent Colour", bundle: .module,
-                    comment: "Settings row for the colour of buttons, links and selections."),
-                value: accent.name
-            )
-            AccentPicker(selection: $accent)
+            NavigationLink(value: Route.accentColour) {
+                LabeledContent(AccentColourView.title, value: accent.name)
+            }
         } header: {
             Text(String(localized: "Appearance", bundle: .module, comment: "Settings section header."))
-        } footer: {
-            Text(
-                String(
-                    localized:
-                        "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are.",
-                    bundle: .module,
-                    comment: "Settings footer under the accent colour choices."
-                )
-            )
         }
     }
 }
@@ -135,7 +125,7 @@ private struct PlaybackSection: View {
         )
         guard isOneOfSeveral, let server else { return caps }
         return String(
-            localized: "\(caps) These caps are for \(server.name); each server keeps its own.",
+            localized: "\(caps) These caps are for \(server.displayName); each server keeps its own.",
             bundle: .module,
             comment: "Settings footer under the streaming quality caps with more than one server: the caps, then whose."
         )
@@ -224,9 +214,9 @@ private struct AccountsSection: View {
                 }
                 .tint(.red)
             } header: {
-                Text(server.name)
+                Text(server.displayName)
             } footer: {
-                Text(server.url.absoluteString)
+                ServerAddressLine(url: server.url)
             }
         }
         Section {
@@ -250,7 +240,9 @@ private struct AccountsSection: View {
             presenting: serverToRemove
         ) { server in
             Button(
-                String(localized: "Remove \(server.name)", bundle: .module, comment: "Button that removes a server."),
+                String(
+                    localized: "Remove \(server.displayName)", bundle: .module, comment: "Button that removes a server."
+                ),
                 role: .destructive
             ) {
                 Task { await run { try await session.remove(server) } }
@@ -317,6 +309,56 @@ private struct AccountsSection: View {
         } catch {
             failure = UserMessage(error)
         }
+    }
+}
+
+/// A server's address under its section: a lock for HTTPS, or "Local network" for plain HTTP, which Serafin allows
+/// only on the user's own network and only after a warning, so it's plain why the server was accepted.
+private struct ServerAddressLine: View {
+    let url: URL
+
+    var body: some View {
+        switch try? TransportPolicy.security(of: url) {
+        case .encrypted:
+            Label {
+                Text(address)
+            } icon: {
+                Image(systemName: "lock.fill")
+                    .accessibilityLabel(
+                        String(
+                            localized: "Encrypted", bundle: .module,
+                            comment: "Spoken for the lock beside an HTTPS server's address in Settings."))
+            }
+            .accessibilityElement(children: .combine)
+        case .unencryptedOnPrivateNetwork:
+            VStack(alignment: .leading, spacing: 2) {
+                Text(address)
+                Text(
+                    String(
+                        localized: "Local network", bundle: .module,
+                        comment:
+                            "Under a plain HTTP server's address in Settings: it's allowed because it's on the user's own network."
+                    )
+                )
+                .font(.caption)
+            }
+            .accessibilityElement(children: .combine)
+        case nil:
+            Text(address)
+        }
+    }
+
+    /// The address without its scheme, which the lock or the caption already gives, such as "media.example.com" or
+    /// "192.168.1.20:8096".
+    private var address: String {
+        var text = url.absoluteString
+        if let scheme = url.scheme, text.hasPrefix("\(scheme)://") {
+            text.removeFirst(scheme.count + 3)
+        }
+        if text.hasSuffix("/") {
+            text.removeLast()
+        }
+        return text
     }
 }
 
