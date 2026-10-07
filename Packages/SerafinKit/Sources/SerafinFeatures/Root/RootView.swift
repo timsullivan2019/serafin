@@ -7,6 +7,7 @@ import SwiftUI
 /// current account.
 public struct RootView: View {
     @Environment(AppSession.self) private var session
+    @Environment(AppLock.self) private var lock: AppLock?
 
     /// Creates the root view. It expects the app's ``AppSession`` in the environment.
     public init() {}
@@ -37,6 +38,7 @@ public struct RootView: View {
             }
         }
         .tint(.accentFallback)
+        .appLock(lock)
     }
 }
 
