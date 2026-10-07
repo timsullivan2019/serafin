@@ -69,8 +69,12 @@ private struct DetailContent: View {
     let arrivesFromHomeHero: Bool
     /// The hero's size, which decides how wide a backdrop to ask for.
     @State private var heroSize: CGSize = .zero
-    /// Whether the page has scrolled past the hero, so rows rather than artwork pass under the navigation bar.
-    @State private var isPastHero = false
+    /// Whether the page has been scrolled at all, which brings the top edge's blur over what passes under the
+    /// navigation bar.
+    @State private var isScrolled = false
+    /// Where the top safe area ends, below the navigation bar, which the hero's text and pill fade out before
+    /// reaching.
+    @State private var safeAreaTop: CGFloat = 0
     /// A trailer's web page, showing in Safari inside the app.
     @State private var webTrailer: WebPage?
     @Environment(PlaybackCoordinator.self) private var playback
@@ -137,20 +141,24 @@ private struct DetailContent: View {
         }
         // The hero runs under the navigation bar, whose glass back button floats over the artwork.
         .ignoresSafeArea(edges: .top)
-        .onScrollGeometryChange(for: CGFloat.self) { [heroHeight = heroSize.height] geometry in
-            // How far the hero's bottom is from the top of the screen, taken as far off until the hero has a size.
-            guard heroHeight > 0 else { return .infinity }
-            return heroHeight - geometry.contentOffset.y - geometry.contentInsets.top
-        } action: { _, heroBottom in
-            let isPast = HomeHeroLayout.isPastHero(heroBottom: heroBottom, wasPast: isPastHero)
-            if isPast != isPastHero {
-                isPastHero = isPast
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top
+        } action: { _, offset in
+            let scrolled = HomeHeroLayout.isScrolled(offset: offset, wasScrolled: isScrolled)
+            if scrolled != isScrolled {
+                isScrolled = scrolled
             }
         }
-        // Rows scrolling up under the navigation bar soften into it, as on Home. Over the artwork there's nothing to
-        // soften, and while the screen zooms in the effect would show as a band across the top, so it stays hidden.
+        .onGeometryChange(for: CGFloat.self) {
+            $0.safeAreaInsets.top
+        } action: {
+            safeAreaTop = $0
+        }
+        .environment(\.heroSafeAreaTop, safeAreaTop)
+        // Anything scrolling up under the navigation bar softens into it, as on Home. At rest the artwork runs clear to
+        // the top, and while the screen zooms in the effect would show as a band across the top, so it stays hidden.
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .scrollEdgeEffectHidden(!isPastHero, for: .top)
+        .scrollEdgeEffectHidden(!isScrolled, for: .top)
         .sheet(item: $webTrailer) { page in
             WebPageView(url: page.url)
                 .ignoresSafeArea()
@@ -296,7 +304,7 @@ private struct WebPage: Identifiable {
     var id: URL { url }
 }
 
-/// Mark as Played and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unplayed,
+/// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched,
 /// Refresh Metadata for administrators, and Share.
 private struct DetailToolbar: ToolbarContent {
     let item: MediaItem
@@ -308,11 +316,12 @@ private struct DetailToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                Task { await actions.setPlayed(!item.card.isPlayed, for: item, in: media) }
+                Task { await actions.setPlayed(!item.card.isWatched, for: item, in: media) }
             } label: {
                 Label(
-                    item.card.isPlayed ? Self.markUnplayed : Self.markPlayed,
-                    systemImage: item.card.isPlayed ? "checkmark.circle.fill" : "checkmark.circle"
+                    item.card.isWatched ? Self.markUnwatched : Self.markWatched,
+                    // Filled only once it's watched: a film started again shows as in progress.
+                    systemImage: item.card.isWatched ? "checkmark.circle.fill" : "checkmark.circle"
                 )
             }
             Button {
@@ -337,7 +346,7 @@ private struct DetailToolbar: ToolbarContent {
                     Button {
                         Task { await actions.setPlayed(false, for: item, in: media) }
                     } label: {
-                        Label(Self.markUnplayed, systemImage: "circle")
+                        Label(Self.markUnwatched, systemImage: "circle")
                     }
                 }
                 if canRefreshMetadata {
@@ -368,15 +377,15 @@ private struct DetailToolbar: ToolbarContent {
         }
     }
 
-    static var markPlayed: String {
+    static var markWatched: String {
         String(
-            localized: "Mark as Played", bundle: .module, comment: "Button and menu item that marks an item played.")
+            localized: "Mark as Watched", bundle: .module, comment: "Button and menu item that marks an item watched.")
     }
 
-    static var markUnplayed: String {
+    static var markUnwatched: String {
         String(
-            localized: "Mark as Unplayed", bundle: .module,
-            comment: "Button and menu item that marks an item not played.")
+            localized: "Mark as Unwatched", bundle: .module,
+            comment: "Button and menu item that marks an item not watched.")
     }
 }
 

@@ -15,6 +15,17 @@ import Testing
             let overview = try #require(model.overviews[library.id])
             #expect(overview.total == library.items.count)
             #expect(overview.newest.count == min(LibrariesModel.collageSize, library.items.count))
+            #expect(overview.cover == nil)
+        }
+    }
+
+    @Test func aLibraryWithAPictureOfItsOwnKeepsItForItsTile() async throws {
+        let library = try #require(MockLibrary.libraries.first)
+        let model = LibrariesModel()
+        await model.load(from: TestMediaSource(covers: [library.id]))
+        #expect(try #require(model.overviews[library.id]).cover?.id == library.id)
+        for other in MockLibrary.libraries.dropFirst() {
+            #expect(try #require(model.overviews[other.id]).cover == nil)
         }
     }
 
@@ -40,6 +51,18 @@ import Testing
             #expect(GridScope.shortcut(shortcut).offersChips)
             #expect(GridScope.shortcut(shortcut).title == shortcut.title)
         }
+    }
+
+    @Test func aGridLeavesOutTheChipItsScreenAlreadyImplies() {
+        #expect(!GridScope.shortcut(.unwatched).offersUnwatchedChip)
+        #expect(GridScope.shortcut(.unwatched).offersFavouritesChip)
+        #expect(!GridScope.shortcut(.favourites).offersFavouritesChip)
+        #expect(GridScope.shortcut(.favourites).offersUnwatchedChip)
+        #expect(GridScope.shortcut(.recentlyAdded).offersUnwatchedChip)
+        #expect(GridScope.shortcut(.recentlyAdded).offersFavouritesChip)
+        let library = GridScope.library(MockLibrary.libraries[0])
+        #expect(library.offersUnwatchedChip && library.offersFavouritesChip)
+        #expect(!GridScope.collections.offersUnwatchedChip && !GridScope.collections.offersFavouritesChip)
     }
 
     @Test func aShortcutAsksForEveryMovieAndShow() {

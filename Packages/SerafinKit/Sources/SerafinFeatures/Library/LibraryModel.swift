@@ -14,8 +14,10 @@ import SerafinDesign
     struct Overview: Sendable {
         /// How many movies or shows the library holds.
         let total: Int
-        /// Its newest posters, up to four, for its collage.
+        /// Its newest posters, up to four, for a collage when it has no picture.
         let newest: [MediaItem]
+        /// Its own picture, when the server has one.
+        let cover: MediaItem?
     }
 
     /// How many posters a collage takes.
@@ -40,17 +42,21 @@ import SerafinDesign
         hasCollections = await collections ?? hasCollections
     }
 
-    /// Asks for every library's count and newest posters at once. A library whose answer fails keeps its last tile,
-    /// or shows a plain one.
+    /// Asks for every library's count, newest posters and picture at once. A library whose answer fails keeps its
+    /// last tile, or shows a plain one.
     private func loadOverviews(of libraries: [MediaLibrary], from media: any MediaSource) async {
         let newestFirst = GridOptions(sort: .dateAdded, ascending: false)
         await withTaskGroup(of: (String, Overview?).self) { group in
             for library in libraries {
                 group.addTask {
+                    async let cover = media.cover(of: library)
                     let page = try? await media.page(
                         of: .library(library), options: newestFirst, start: 0, limit: Self.collageSize)
                     guard let page else { return (library.id, nil) }
-                    return (library.id, Overview(total: page.total, newest: page.items.compactMap { $0 }))
+                    return (
+                        library.id,
+                        Overview(total: page.total, newest: page.items.compactMap { $0 }, cover: await cover)
+                    )
                 }
             }
             for await (id, overview) in group {

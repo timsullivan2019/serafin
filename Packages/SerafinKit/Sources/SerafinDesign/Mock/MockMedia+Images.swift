@@ -38,7 +38,7 @@ extension MockMedia {
             Button {
             } label: {
                 Label {
-                    Text(verbatim: "Mark as Played")
+                    Text(verbatim: "Mark as Watched")
                 } icon: {
                     Image(systemName: "checkmark.circle")
                 }

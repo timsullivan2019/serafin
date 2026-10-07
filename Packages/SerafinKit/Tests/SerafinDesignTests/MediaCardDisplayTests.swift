@@ -83,14 +83,33 @@ import Testing
         #expect(show.accessibilityLabel(locale: english) == "Caminandes, 2013")
     }
 
-    @Test func voiceOverDescribesAPlayedFavouriteEpisode() {
+    @Test func voiceOverDescribesAWatchedFavouriteEpisode() {
         var card = episode
         card.progress = 0
         card.isPlayed = true
         card.isFavourite = true
         #expect(
             card.accessibilityLabel(locale: english)
-                == "Gran Dillama, Caminandes, Season 1, episode 2, 3 minutes, Played, Favourite"
+                == "Gran Dillama, Caminandes, Season 1, episode 2, 3 minutes, Watched, Favourite"
         )
+    }
+
+    @Test func anItemIsWatchedOnlyOncePlayedAndNotStartedAgain() {
+        var card = movie
+        card.progress = 0
+        #expect(!card.isWatched)
+        card.isPlayed = true
+        #expect(card.isWatched)
+        // Watched before and started again: the server keeps it played, but it's in progress.
+        card.progress = 0.4
+        #expect(!card.isWatched)
+        card.isPlayed = false
+        #expect(!card.isWatched)
+    }
+
+    @Test func voiceOverDescribesAFilmWatchedAgainByItsProgress() {
+        var card = movie
+        card.isPlayed = true
+        #expect(card.accessibilityLabel(locale: english) == "Sintel, 2010, 40% watched, 1 hour left")
     }
 }

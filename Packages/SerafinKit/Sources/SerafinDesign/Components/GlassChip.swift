@@ -1,18 +1,17 @@
 import SwiftUI
 
-/// A selectable glass pill for a filter or sort option.
+/// A selectable glass pill for a filter.
 ///
-/// Unselected chips are clear glass whose label adapts to whatever scrolls behind it. The selected chip takes the
-/// screen's tint with a white label. Put neighbouring chips in a ``GlassChipGroup`` so they merge and morph
-/// together: when a chip grows or shrinks, as when a sort gains its direction arrow, its neighbours' glass flows
-/// with it. Make selection changes inside an animation, such as `withAnimation`, so the whole row moves together.
+/// Unselected chips are the system's clear glass button, whose label adapts to whatever scrolls behind it. The
+/// selected chip is the system's prominent glass, tinted with the screen's tint, with a white label: tinted glass
+/// that still catches the light, not a flat fill. Put neighbouring chips in a ``GlassChipGroup`` so their glass
+/// merges. Make selection changes inside an animation, such as `withAnimation`, so the whole row moves together.
 public struct GlassChip: View {
     private let title: String
     private let systemImage: String?
     private let isSelected: Bool
     private let tint: Color?
     private let action: () -> Void
-    @Environment(\.glassChipNamespace) private var namespace
     @Environment(\.accent) private var accent
 
     /// Creates a chip.
@@ -38,6 +37,20 @@ public struct GlassChip: View {
     }
 
     public var body: some View {
+        // The system's own glass buttons, as the menu chips beside these use.
+        if isSelected {
+            button
+                .buttonStyle(.glassProminent)
+                .tint(tint ?? accent)
+        } else {
+            // The glass style colours its label with the tint, so a plain label needs a plain tint.
+            button
+                .buttonStyle(.glass)
+                .tint(.primary)
+        }
+    }
+
+    private var button: some View {
         Button(action: action) {
             HStack(spacing: Spacing.xxSmall + 2) {
                 if let systemImage {
@@ -48,17 +61,8 @@ public struct GlassChip: View {
                 Text(title)
             }
             .typography(.cardTitle)
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
-            .padding(.horizontal, Spacing.medium)
-            .padding(.vertical, Spacing.xSmall + 2)
-            .frame(minHeight: 44)
-            .glassEffect(
-                isSelected ? .regular.tint(tint ?? accent).interactive() : .regular.interactive(), in: .capsule
-            )
-            .modifier(ChipGlassID(id: title, namespace: namespace))
-            .contentShape(.capsule)
+            .frame(minHeight: 32)
         }
-        .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .serafinAnimation(value: isSelected)
     }
@@ -69,7 +73,6 @@ public struct GlassChip: View {
 /// Keep menus out of the group: a `Menu` inside a glass container loses its own open and close morph.
 public struct GlassChipGroup<Content: View>: View {
     private let content: Content
-    @Namespace private var namespace
 
     /// Creates a chip group.
     ///
@@ -83,26 +86,6 @@ public struct GlassChipGroup<Content: View>: View {
             HStack(spacing: Spacing.xSmall) {
                 content
             }
-        }
-        .environment(\.glassChipNamespace, namespace)
-    }
-}
-
-extension EnvironmentValues {
-    /// The namespace of the ``GlassChipGroup`` a chip is in, which identifies its glass for morphing.
-    @Entry var glassChipNamespace: Namespace.ID?
-}
-
-/// Identifies a chip's glass within its group, so the group morphs it rather than redrawing it.
-private struct ChipGlassID: ViewModifier {
-    let id: String
-    let namespace: Namespace.ID?
-
-    func body(content: Content) -> some View {
-        if let namespace {
-            content.glassEffectID(id, in: namespace)
-        } else {
-            content
         }
     }
 }
@@ -125,7 +108,7 @@ private struct ChipGlassID: ViewModifier {
                 .padding(.top, 72)
                 ScrollView(.horizontal) {
                     GlassChipGroup {
-                        GlassChip("Unplayed", systemImage: "circle.dashed", isSelected: unplayedOnly) {
+                        GlassChip("Unwatched", systemImage: "circle.dashed", isSelected: unplayedOnly) {
                             withAnimation(.serafinSnappy) { unplayedOnly.toggle() }
                         }
                         ForEach(sorts, id: \.self) { option in

@@ -100,6 +100,12 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
         self.episode = episode
     }
 
+    /// Whether to show the item as watched: played, and not being watched again. A film watched before and started
+    /// again is played on the server but in progress, and shows as in progress, never as watched.
+    public var isWatched: Bool {
+        isPlayed && !isInProgress
+    }
+
     /// Whether playback has started and not finished, which puts the item in Continue Watching.
     public var isInProgress: Bool {
         progress > 0 && progress < 1

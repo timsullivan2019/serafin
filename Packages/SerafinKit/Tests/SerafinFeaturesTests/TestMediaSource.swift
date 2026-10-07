@@ -5,8 +5,8 @@ import SerafinDesign
 @testable import SerafinFeatures
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
-/// the server does, a server that refuses every change, or Home saved on the device and a server that can't be
-/// reached.
+/// the server does, a server that refuses every change, Home saved on the device and a server that can't be reached,
+/// or libraries with pictures of their own.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
@@ -18,6 +18,8 @@ struct TestMediaSource: MediaSource {
     var saved: HomeContent?
     /// Why Home fails to load, or nil when it loads the samples.
     var homeFailure: SerafinError?
+    /// The libraries that have a picture of their own on the server.
+    var covers: Set<String> = []
     private let samples = SampleMediaSource()
 
     func home() async throws -> HomeContent {
@@ -41,6 +43,11 @@ struct TestMediaSource: MediaSource {
     func item(_ id: String) async throws -> MediaItem { try await samples.item(id) }
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
+
+    func cover(of library: MediaLibrary) async -> MediaItem? {
+        guard covers.contains(library.id) else { return await samples.cover(of: library) }
+        return MediaItem(card: MediaCard(id: library.id, kind: .collection, title: library.name), source: nil)
+    }
 
     func canRefreshMetadata() async -> Bool { false }
 

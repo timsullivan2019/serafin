@@ -24,10 +24,12 @@ import SwiftUI
         var announcement: String {
             switch kind {
             case .played:
-                String(localized: "Marked as played", bundle: .module, comment: "Spoken once an item is marked played.")
+                String(
+                    localized: "Marked as watched", bundle: .module, comment: "Spoken once an item is marked watched.")
             case .unplayed:
                 String(
-                    localized: "Marked as unplayed", bundle: .module, comment: "Spoken once an item is marked unplayed."
+                    localized: "Marked as unwatched", bundle: .module,
+                    comment: "Spoken once an item is marked unwatched."
                 )
             case .favourite:
                 String(localized: "Added to Favourites", bundle: .module, comment: "Spoken once a favourite is added.")
@@ -83,7 +85,7 @@ import SwiftUI
     }
 }
 
-/// The items in a card's context menu: Play, Go to Show for an episode, Mark as Played and Favourite.
+/// The items in a card's context menu: Play, Go to Show for an episode, Mark as Watched and Favourite.
 struct CardMenuItems: View {
     let item: MediaItem
     @Environment(PlaybackCoordinator.self) private var playback
@@ -116,20 +118,20 @@ struct CardMenuItems: View {
             }
         }
         Button {
-            Task { await actions.setPlayed(!item.card.isPlayed, for: item, in: media) }
+            Task { await actions.setPlayed(!item.card.isWatched, for: item, in: media) }
         } label: {
-            if item.card.isPlayed {
+            if item.card.isWatched {
                 Label(
                     String(
-                        localized: "Mark as Unplayed", bundle: .module,
-                        comment: "Button and menu item that marks an item not played."),
+                        localized: "Mark as Unwatched", bundle: .module,
+                        comment: "Button and menu item that marks an item not watched."),
                     systemImage: "circle.dashed"
                 )
             } else {
                 Label(
                     String(
-                        localized: "Mark as Played", bundle: .module,
-                        comment: "Button and menu item that marks an item played."),
+                        localized: "Mark as Watched", bundle: .module,
+                        comment: "Button and menu item that marks an item watched."),
                     systemImage: "checkmark.circle"
                 )
             }

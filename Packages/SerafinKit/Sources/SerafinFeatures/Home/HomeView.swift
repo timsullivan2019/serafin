@@ -4,13 +4,18 @@ import SwiftUI
 
 /// The first tab: featured items at the top, then Continue Watching, Next Up and the newest items in each library.
 ///
-/// The hero is the top of the screen, under the status bar, with no navigation bar over it; the top edge blurs once
-/// the hero has scrolled away. When the server can't be reached, Home shows the rows it last had, under a banner saying so. After a
-/// failure it asks again when the device joins a network or Serafin comes back to the foreground.
+/// The hero is the top of the screen, under the status bar, with no navigation bar over it; its text and buttons fade
+/// out before they reach the status bar, and the top edge blurs once Home is scrolled at all. When the server can't
+/// be reached, Home shows the rows it last had, under a banner saying so. After a failure it asks again when the
+/// device joins a network or Serafin comes back to the foreground.
 struct HomeView: View {
     @State private var model = HomeModel()
-    /// Whether the hero has scrolled away under the status bar, which brings back the top edge's blur.
-    @State private var isPastHero = false
+    /// Whether Home has been scrolled at all, which brings the top edge's blur over whatever passes under the status
+    /// bar.
+    @State private var isScrolled = false
+    /// Where the top safe area ends, below the status bar and the navigation bar, which the hero's text and buttons
+    /// fade out before reaching.
+    @State private var safeAreaTop: CGFloat = 0
     /// The hero's size, for prefetching the next page's artwork at the size it's drawn.
     @State private var heroSize: CGSize = .zero
     /// Whether pull to refresh is running, which the hero shows, since its stretched artwork covers the system's
@@ -23,8 +28,6 @@ struct HomeView: View {
     @Environment(MediaActions.self) private var actions
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.displayScale) private var displayScale
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.navigate) private var navigate
     private let network = NetworkWatcher.shared
 
@@ -148,18 +151,23 @@ struct HomeView: View {
         // The hero runs under the status bar; without one, the rows start under the bar as usual.
         .ignoresSafeArea(edges: hasHero ? .top : [])
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            // How far the hero's bottom is from the top of the screen.
-            geometry.containerSize.height * heroFraction - geometry.contentOffset.y - geometry.contentInsets.top
-        } action: { _, heroBottom in
-            let isPast = HomeHeroLayout.isPastHero(heroBottom: heroBottom, wasPast: isPastHero)
-            if isPast != isPastHero {
-                isPastHero = isPast
+            geometry.contentOffset.y + geometry.contentInsets.top
+        } action: { _, offset in
+            let scrolled = HomeHeroLayout.isScrolled(offset: offset, wasScrolled: isScrolled)
+            if scrolled != isScrolled {
+                isScrolled = scrolled
             }
         }
-        // Rows scrolling up under the status bar soften into it, so a title is never cut off behind the clock. Over
-        // the hero at rest there's nothing to soften, so the artwork stays clear.
+        .onGeometryChange(for: CGFloat.self) {
+            $0.safeAreaInsets.top
+        } action: {
+            safeAreaTop = $0
+        }
+        .environment(\.heroSafeAreaTop, safeAreaTop)
+        // Anything scrolling up under the status bar softens into it, the hero's artwork included, so nothing is ever
+        // drawn sharp behind the clock. At rest the artwork runs clear to the top of the screen.
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .scrollEdgeEffectHidden(hasHero && !isPastHero, for: .top)
+        .scrollEdgeEffectHidden(hasHero && !isScrolled, for: .top)
         .refreshable {
             isRefreshing = true
             await model.refresh(from: media)
@@ -176,10 +184,6 @@ struct HomeView: View {
         case .loaded: hero.entries.isEmpty
         case .failed: true
         }
-    }
-
-    private var heroFraction: CGFloat {
-        HomeHeroLayout.heightFraction(isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
     }
 
     private func prefetchNextPage() {

@@ -2,7 +2,7 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// A poster that opens its item, zooms into it, and offers Play, Go to Show, Mark as Played and Favourite in its
+/// A poster that opens its item, zooms into it, and offers Play, Go to Show, Mark as Watched and Favourite in its
 /// context menu.
 struct PosterLink: View {
     let item: MediaItem

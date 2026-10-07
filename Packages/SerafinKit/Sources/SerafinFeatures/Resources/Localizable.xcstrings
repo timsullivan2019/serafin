@@ -440,17 +440,17 @@
     "Lowest First" : {
       "comment" : "Library sort direction for ratings."
     },
-    "Mark as Played" : {
-      "comment" : "Button and menu item that marks an item played."
+    "Mark as Unwatched" : {
+      "comment" : "Button and menu item that marks an item not watched."
     },
-    "Mark as Unplayed" : {
-      "comment" : "Button and menu item that marks an item not played."
+    "Mark as Watched" : {
+      "comment" : "Button and menu item that marks an item watched."
     },
-    "Marked as played" : {
-      "comment" : "Spoken once an item is marked played."
+    "Marked as unwatched" : {
+      "comment" : "Spoken once an item is marked unwatched."
     },
-    "Marked as unplayed" : {
-      "comment" : "Spoken once an item is marked unplayed."
+    "Marked as watched" : {
+      "comment" : "Spoken once an item is marked watched."
     },
     "Maximum" : {
       "comment" : "Streaming quality: no cap."
@@ -921,14 +921,11 @@
     "Unlock with Touch ID" : {
       "comment" : "Lock screen button."
     },
-    "Unplayed" : {
-      "comment" : "Library filter: hide played items."
-    },
     "Unrecognized Certificate" : {
       "comment" : "Title when a certificate isn't trusted."
     },
     "Unwatched" : {
-      "comment" : "Library Browse row and grid of everything not yet watched."
+      "comment" : "Unwatched: the library filter chip, and the Library tab's Browse row and grid."
     },
     "Username" : {
       "comment" : "Label of the username field."

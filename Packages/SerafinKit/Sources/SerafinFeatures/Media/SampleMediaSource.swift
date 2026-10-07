@@ -57,6 +57,10 @@ struct SampleMediaSource: MediaSource {
 
     func refreshMetadata(of item: MediaItem) async throws {}
 
+    func cover(of library: MediaLibrary) async -> MediaItem? {
+        nil
+    }
+
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
         let cards = Self.cards(in: scope, options: options)
         let page = cards.dropFirst(start).prefix(limit)
