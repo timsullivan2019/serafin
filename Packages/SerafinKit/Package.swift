@@ -63,7 +63,10 @@ let package = Package(
             dependencies: ["SerafinPlayback", "SerafinCore"],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "SerafinFeaturesTests", dependencies: ["SerafinFeatures", "SerafinCore", "SerafinDesign"]),
+        .testTarget(
+            name: "SerafinFeaturesTests",
+            dependencies: ["SerafinFeatures", "SerafinCore", "SerafinDesign", "SerafinPlayback"]
+        ),
         .testTarget(name: "SerafinDesignTests", dependencies: ["SerafinDesign"]),
     ],
     // Swift 6 language mode enforces complete strict concurrency checking.

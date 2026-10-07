@@ -1,6 +1,7 @@
 import Foundation
 import JellyfinAPI
 import SerafinDesign
+import SerafinPlayback
 import Testing
 
 @testable import SerafinFeatures
@@ -229,5 +230,15 @@ import Testing
         #expect(PlaybackDelivery(.directPlay) == .directPlay)
         #expect(PlaybackDelivery(.directStream) == .repackaged)
         #expect(PlaybackDelivery(.transcode) == .transcoding)
+    }
+}
+
+@Suite struct SkipPillMappingTests {
+    @Test func everyMarkedStretchGetsItsOwnPill() {
+        #expect(SkipPill.Kind(PlaybackSegment.Kind.intro) == .intro)
+        #expect(SkipPill.Kind(PlaybackSegment.Kind.recap) == .recap)
+        #expect(SkipPill.Kind(PlaybackSegment.Kind.credits) == .credits)
+        #expect(SkipPill.Kind(PlaybackSegment.Kind.preview) == .preview)
+        #expect(SkipPill.Kind(PlaybackSegment.Kind.advert) == .advert)
     }
 }

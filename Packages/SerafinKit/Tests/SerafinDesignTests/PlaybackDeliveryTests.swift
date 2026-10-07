@@ -17,3 +17,13 @@ import Testing
         }
     }
 }
+
+@Suite struct SkipPillWordingTests {
+    @Test func eachStretchSaysWhatItSkips() {
+        #expect(SkipPill.Kind.intro.title == "Skip Intro")
+        #expect(SkipPill.Kind.recap.title == "Skip Recap")
+        #expect(SkipPill.Kind.credits.title == "Skip Credits")
+        #expect(SkipPill.Kind.preview.title == "Skip Preview")
+        #expect(SkipPill.Kind.advert.title == "Skip Ad")
+    }
+}
