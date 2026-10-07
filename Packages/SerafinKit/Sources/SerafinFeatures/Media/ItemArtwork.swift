@@ -73,7 +73,7 @@ struct ItemArtwork<Content: View>: View {
     private var sampleImage: Image? {
         switch role {
         case .poster: MockMedia.posterImage(for: item.card)
-        case .landscape, .backdrop: MockMedia.backdropImage(for: item.card)
+        case .landscape, .backdrop, .watching: MockMedia.backdropImage(for: item.card)
         case .logo: nil
         }
     }

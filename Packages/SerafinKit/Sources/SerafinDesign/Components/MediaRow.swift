@@ -8,8 +8,9 @@ public enum MediaRowStyle: Sendable {
     /// Posters: a little over three across on iPhone, six on an 11-inch iPad in portrait.
     case posters
     /// Landscape thumbnails: one large card with the next peeking in on iPhone, three on an 11-inch iPad in portrait.
+    /// On a phone every style shows the same slice of the next card.
     case landscape
-    /// Cast and crew: three and a half across on iPhone, seven on an 11-inch iPad in portrait.
+    /// Cast and crew: a little over three across on iPhone, seven on an 11-inch iPad in portrait.
     case people
 }
 
@@ -122,11 +123,12 @@ struct RowSizing: Equatable {
             case (.posters, false, true): (200, 0.6)
             case (.posters, true, false): (116, 0.3)
             case (.posters, true, true): (220, 0.3)
-            case (.landscape, false, false): (240, 0.15)
+            // Every row on a phone shows the same slice of its next card, so no row looks unlike the others.
+            case (.landscape, false, false): (240, 0.3)
             case (.landscape, false, true): (240, 0.05)
             case (.landscape, true, false): (230, 0.2)
             case (.landscape, true, true): (320, 0.2)
-            case (.people, false, false): (92, 0.6)
+            case (.people, false, false): (92, 0.3)
             case (.people, false, true): (140, 0.1)
             case (.people, true, false): (96, 0.3)
             case (.people, true, true): (200, 0.6)
