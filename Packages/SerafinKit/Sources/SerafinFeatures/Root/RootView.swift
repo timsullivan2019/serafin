@@ -10,6 +10,7 @@ public struct RootView: View {
     @Environment(AppSession.self) private var session
     @Environment(AppLock.self) private var lock: AppLock?
     @Environment(AppRequests.self) private var requests: AppRequests?
+    @AppStorage(Accent.storageKey) private var accent = Accent.standard
 
     /// Creates the root view. It expects the app's ``AppSession`` in the environment.
     public init() {}
@@ -41,7 +42,9 @@ public struct RootView: View {
                 }
             }
         }
-        .tint(.accentFallback)
+        // The accent chosen in Settings, for system controls and for the controls that set their own tint.
+        .tint(accent.color)
+        .environment(\.accent, accent.color)
         .appLock(lock)
         // Here rather than on the tabs, so a result tapped while the app is still starting isn't lost.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in

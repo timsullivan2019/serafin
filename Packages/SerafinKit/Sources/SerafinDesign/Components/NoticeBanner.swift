@@ -13,6 +13,7 @@ public struct NoticeBanner: View {
     private let action: StateAction?
     private let isBusy: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accent) private var accent
 
     /// Creates a notice banner.
     ///
@@ -91,7 +92,7 @@ public struct NoticeBanner: View {
                     }
             }
             .buttonStyle(.bordered)
-            .tint(.accentFallback)
+            .tint(accent)
             .disabled(isBusy)
             .accessibilityLabel(action.title)
         }

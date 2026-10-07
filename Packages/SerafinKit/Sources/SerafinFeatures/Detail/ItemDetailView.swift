@@ -7,6 +7,7 @@ struct ItemDetailView: View {
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.accent) private var accent
     private let zoomSource: String
     private let arrivesFromHomeHero: Bool
 
@@ -49,7 +50,8 @@ struct ItemDetailView: View {
                 DetailToolbar(item: item)
             }
         }
-        .tint(model.tint)
+        // The artwork's colour once it has loaded, the chosen accent until then.
+        .tint(model.tint ?? accent)
     }
 }
 
@@ -62,6 +64,7 @@ private struct DetailContent: View {
     @State private var heroSize: CGSize = .zero
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.playerZoomNamespace) private var playerZoom
+    @Environment(\.accent) private var accent
 
     var body: some View {
         ScrollView {
@@ -119,7 +122,7 @@ private struct DetailContent: View {
                     card: playCard,
                     backdrop: backdrop,
                     logo: logo,
-                    tint: model.tint,
+                    tint: model.tint ?? accent,
                     playZoomNamespace: playerZoom,
                     startOver: {
                         playback.play(details.playable ?? details.item, from: .beginning, zoomSource: pillZoom)

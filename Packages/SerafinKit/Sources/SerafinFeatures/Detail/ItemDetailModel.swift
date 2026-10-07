@@ -12,8 +12,8 @@ import SwiftUI
 
     let id: String
     private(set) var phase = Phase.loading
-    /// The screen's accent, taken from its backdrop once that loads.
-    var tint = Color.accentFallback
+    /// The screen's accent, taken from its backdrop once that loads, or nil until then.
+    var tint: Color?
 
     init(id: String) {
         self.id = id

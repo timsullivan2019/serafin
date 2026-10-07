@@ -24,6 +24,7 @@ public struct EmptyState: View {
     private let message: String?
     private let systemImage: String
     private let action: StateAction?
+    @Environment(\.accent) private var accent
 
     /// Creates an empty state.
     ///
@@ -50,7 +51,7 @@ public struct EmptyState: View {
             if let action {
                 Button(action.title, action: action.perform)
                     .buttonStyle(.bordered)
-                    .tint(.accentFallback)
+                    .tint(accent)
             }
         }
     }
@@ -62,6 +63,7 @@ public struct ErrorState: View {
     private let message: String?
     private let systemImage: String
     private let retry: (() -> Void)?
+    @Environment(\.accent) private var accent
 
     /// Creates an error state.
     ///
@@ -96,7 +98,7 @@ public struct ErrorState: View {
                     action: retry
                 )
                 .buttonStyle(.borderedProminent)
-                .tint(.accentFallback)
+                .tint(accent)
             }
         }
     }

@@ -95,6 +95,9 @@
     "About" : {
       "comment" : "Settings section header."
     },
+    "Accent Colour" : {
+      "comment" : "Settings row for the colour of buttons, links and selections."
+    },
     "Add Account" : {
       "comment" : "Settings row: sign in another user."
     },
@@ -134,6 +137,9 @@
     "Any Language" : {
       "comment" : "Subtitle language: none in particular."
     },
+    "Appearance" : {
+      "comment" : "Settings section header."
+    },
     "Ascending" : {
       "comment" : "VoiceOver value of the current sort."
     },
@@ -151,6 +157,9 @@
     },
     "Browse" : {
       "comment" : "Library tab section of other ways in."
+    },
+    "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are." : {
+      "comment" : "Settings footer under the accent colour choices."
     },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."

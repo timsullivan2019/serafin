@@ -42,6 +42,7 @@
                         }
                     }
                     GallerySection("GlassChip") { GalleryChips() }
+                    GallerySection("AccentPicker") { GalleryAccents() }
                     GallerySection("PlayerControls") { GalleryPlayer() }
                     GallerySection("EmptyState · ErrorState · LoadingState") { GalleryStates() }
                 }
@@ -89,6 +90,15 @@
                     PreviewMenuItems()
                 }
             }
+        }
+    }
+
+    private struct GalleryAccents: View {
+        @State private var accent = Accent.standard
+
+        var body: some View {
+            AccentPicker(selection: $accent)
+                .padding(.horizontal, Spacing.medium)
         }
     }
 
