@@ -130,3 +130,19 @@ import Testing
         #expect(!rewatching.accessibilityLabel(locale: english, includesPlayed: false).contains("Played"))
     }
 }
+
+@Suite struct HeroScrollTests {
+    @Test func aPageIsPastItsHeroOnceTheHeroIsNearlyUnderTheBar() {
+        #expect(!HomeHeroLayout.isPastHero(heroBottom: 400, wasPast: false))
+        #expect(!HomeHeroLayout.isPastHero(heroBottom: 120, wasPast: false))
+        #expect(HomeHeroLayout.isPastHero(heroBottom: 99, wasPast: false))
+        #expect(HomeHeroLayout.isPastHero(heroBottom: -300, wasPast: false))
+    }
+
+    @Test func restingBetweenTheThresholdsKeepsTheLastAnswer() {
+        #expect(HomeHeroLayout.isPastHero(heroBottom: 120, wasPast: true))
+        #expect(HomeHeroLayout.isPastHero(heroBottom: 140, wasPast: true))
+        #expect(!HomeHeroLayout.isPastHero(heroBottom: 141, wasPast: true))
+        #expect(!HomeHeroLayout.isPastHero(heroBottom: 100, wasPast: false))
+    }
+}

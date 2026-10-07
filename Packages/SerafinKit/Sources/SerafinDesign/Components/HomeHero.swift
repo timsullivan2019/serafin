@@ -24,6 +24,19 @@ public enum HomeHeroLayout {
     /// How far the first row under the hero rises into its fade, so the page reads as one piece.
     public static let rowOverlap: CGFloat = Spacing.xLarge
 
+    /// Whether a page with a hero at its top has scrolled past it, so rows rather than artwork pass under the
+    /// navigation bar and the bar's edge effect should soften them. Home and the detail screen both ask this.
+    ///
+    /// The page counts as past the hero once the hero's bottom is less than 100 points from the top of the screen,
+    /// and back over it once that's more than 140. The gap means resting near either never flips back and forth.
+    ///
+    /// - Parameters:
+    ///   - heroBottom: How far the hero's bottom is from the top of the screen, in points.
+    ///   - wasPast: The answer last time.
+    public static func isPastHero(heroBottom: CGFloat, wasPast: Bool) -> Bool {
+        wasPast ? heroBottom <= 140 : heroBottom < 100
+    }
+
     /// The source a featured item's detail screen zooms in from, distinct from the item's cards in the rows below.
     ///
     /// - Parameter id: The featured card's identifier.
