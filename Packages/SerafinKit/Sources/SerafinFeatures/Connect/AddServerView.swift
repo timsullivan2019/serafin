@@ -35,7 +35,7 @@ struct AddServerView: View {
                         Button {
                             Task { if let saved = await model.connect(to: server, with: session) { onServer(saved) } }
                         } label: {
-                            LabeledContent(server.name, value: server.url.host() ?? "")
+                            LabeledContent(server.displayName, value: server.url.host() ?? "")
                         }
                         .disabled(model.isConnecting)
                     }
@@ -166,7 +166,7 @@ private struct SavedServersSection: View {
                         Task { try? await session.switchTo(SessionKey(serverID: server.id, userID: user.id)) }
                     } label: {
                         LabeledContent {
-                            Text(server.name)
+                            Text(server.displayName)
                         } label: {
                             Label(
                                 String(
@@ -187,7 +187,7 @@ private struct SavedServersSection: View {
                     } label: {
                         Label(
                             String(
-                                localized: "Sign In to \(server.name)",
+                                localized: "Sign In to \(server.displayName)",
                                 bundle: .module,
                                 comment: "Button that opens sign-in for a saved server."
                             ),

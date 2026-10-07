@@ -9,6 +9,11 @@ public struct DiscoveredServer: Hashable, Identifiable, Sendable {
     public let name: String
     /// The address it advertised, already checked against Serafin's transport rules.
     public let url: URL
+
+    /// The name to show for the server, which is its host name when it reports a generated one. See ``ServerName``.
+    public var displayName: String {
+        ServerName.display(name, at: url)
+    }
 }
 
 /// Finds Jellyfin servers on the local network with Jellyfin's UDP discovery on port 7359.

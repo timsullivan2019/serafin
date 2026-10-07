@@ -22,7 +22,7 @@ struct SignInView: View {
             }
         }
         .background(Color.background)
-        .navigationTitle(model.server.name)
+        .navigationTitle(model.server.displayName)
         .navigationBarTitleDisplayModeInline()
     }
 }

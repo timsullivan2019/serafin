@@ -117,6 +117,25 @@ public actor Accounts {
         return server
     }
 
+    /// Asks the server with `serverID` for its name again, and saves it if the server has been renamed.
+    ///
+    /// The server is reached at its saved address with its pinned certificate, as for any other request. When it
+    /// can't be reached, or another server now answers at that address, the saved name stays.
+    ///
+    /// - Returns: Whether the name changed.
+    public func refreshName(ofServer serverID: String) async -> Bool {
+        guard let saved = try? await serverStore.server(id: serverID),
+            let connected = try? await connector.connect(to: saved.url),
+            connected.server.id == saved.id, connected.server.name != saved.name
+        else { return false }
+        do {
+            try await serverStore.setName(connected.server.name, forServer: serverID)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Signs every user out of a server and forgets it. Its certificate pin goes too, unless another saved server
     /// uses the same host.
     public func remove(serverID: String) async throws {

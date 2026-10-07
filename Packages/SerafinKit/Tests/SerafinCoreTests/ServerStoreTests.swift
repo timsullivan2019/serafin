@@ -67,3 +67,46 @@ import Testing
         }
     }
 }
+
+@Suite struct ServerNameTests {
+    private func name(_ reported: String, at address: String) throws -> String {
+        Server(id: "s", name: reported, url: try #require(URL(string: address))).displayName
+    }
+
+    @Test func aNameSomeoneChoseIsShownAsItIs() throws {
+        #expect(try name("Living Room", at: "https://media.example.com") == "Living Room")
+        #expect(try name("cafe", at: "http://192.168.1.20:8096") == "cafe")
+    }
+
+    @Test(arguments: ["3f9a1c07be52", "3F9A1C07BE52", "", "  ", String(repeating: "ab", count: 16)])
+    func aGeneratedNameGivesWayToTheHostName(reported: String) throws {
+        #expect(try name(reported, at: "http://nas:8096") == "nas")
+        #expect(try name(reported, at: "https://media.example.com/jellyfin") == "media.example.com")
+    }
+
+    @Test func anAddressGivesNoBetterNameThanJellyfin() throws {
+        #expect(try name("3f9a1c07be52", at: "http://192.168.1.20:8096") == "Jellyfin")
+        #expect(try name("3f9a1c07be52", at: "http://[fd7a:115c:a1e0::1]:8096") == "Jellyfin")
+    }
+
+    @Test func serversFoundNearbyFollowTheSameRule() throws {
+        let url = try #require(URL(string: "http://192.168.1.20:8096"))
+        #expect(DiscoveredServer(id: "s", name: "3f9a1c07be52", url: url).displayName == "Jellyfin")
+        #expect(DiscoveredServer(id: "s", name: "Den", url: url).displayName == "Den")
+    }
+
+    @Test func aRenameIsSavedAndKeepsTheUsers() async throws {
+        let fileURL = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)/servers.json")
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+        let store = ServerStore(fileURL: fileURL)
+        let url = try #require(URL(string: "https://a.example.com"))
+        try await store.save(
+            Server(id: "a", name: "3f9a1c07be52", url: url, users: [ServerUser(id: "u", name: "Alice")]))
+        try await store.setName("Living Room", forServer: "a")
+        try await store.setName("Ignored", forServer: "missing")
+
+        let saved = try await ServerStore(fileURL: fileURL).servers()
+        #expect(saved.map(\.name) == ["Living Room"])
+        #expect(saved.first?.users.map(\.id) == ["u"])
+    }
+}

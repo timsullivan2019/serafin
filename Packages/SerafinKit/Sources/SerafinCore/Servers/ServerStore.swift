@@ -67,6 +67,14 @@ public actor ServerStore {
         try write(try servers().filter { $0.id != id })
     }
 
+    /// Renames the server with `serverID`, when the server reports a new name. Renaming a server that is not saved
+    /// does nothing.
+    public func setName(_ name: String, forServer serverID: String) throws {
+        guard var server = try server(id: serverID), server.name != name else { return }
+        server.name = name
+        try save(server)
+    }
+
     /// Records which user signed in to a server most recently.
     public func setLastUser(_ userID: String?, forServer serverID: String) throws {
         guard var server = try server(id: serverID) else { return }

@@ -339,6 +339,50 @@ private struct Harness {
         #expect(try await harness.accounts.current()?.server.url == saved.url)
     }
 
+    @Test func aRenamedServerTakesItsNewName() async throws {
+        let harness = try Harness()
+        let server = try harness.server(on: "renamed.example.com")
+        _ = try await harness.signIn(to: server)
+        StubURLProtocol.stub(
+            "renamed.example.com:443",
+            path: "/System/Info/Public",
+            .json(
+                200,
+                #"{"Id":"\#(server.id)","ServerName":"Living Room","Version":"10.10.7","ProductName":"Jellyfin Server"}"#
+            )
+        )
+
+        #expect(await harness.accounts.refreshName(ofServer: server.id))
+        let saved = try #require(try await harness.accounts.servers().first)
+        #expect(saved.name == "Living Room")
+        #expect(saved.users.map(\.id) == ["user-1"])
+        #expect(await harness.accounts.refreshName(ofServer: server.id) == false)
+    }
+
+    @Test func anotherServerAtTheAddressLeavesTheNameAlone() async throws {
+        let harness = try Harness()
+        let server = try harness.server(on: "replaced.example.com")
+        _ = try await harness.signIn(to: server)
+        StubURLProtocol.stub(
+            "replaced.example.com:443",
+            path: "/System/Info/Public",
+            .json(
+                200, #"{"Id":"someone-else","ServerName":"Other","Version":"10.10.7","ProductName":"Jellyfin Server"}"#)
+        )
+
+        #expect(await harness.accounts.refreshName(ofServer: server.id) == false)
+        #expect(try await harness.accounts.servers().first?.name == "Home")
+    }
+
+    @Test func anUnreachableServerKeepsItsName() async throws {
+        let harness = try Harness()
+        let server = try harness.server(on: "unreachable-rename.example.com")
+        _ = try await harness.signIn(to: server)
+
+        #expect(await harness.accounts.refreshName(ofServer: server.id) == false)
+        #expect(try await harness.accounts.servers().first?.name == "Home")
+    }
+
     @Test func eachAccountHasOneLibraryUntilItSignsOut() async throws {
         let harness = try Harness()
         let account = try await harness.signIn(to: try harness.server(on: "library.example.com"))

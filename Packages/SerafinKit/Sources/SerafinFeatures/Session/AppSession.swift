@@ -103,6 +103,22 @@ import os
         PlaybackQuality.forget(server: server.id, in: .standard)
     }
 
+    /// Asks every saved server for its name again, so a server renamed since it was added shows its new name.
+    /// Servers that can't be reached keep the name they had.
+    ///
+    /// Only the names change: the current account's library and player carry on as they are.
+    public func refreshServerNames() async {
+        var renamed = false
+        for server in servers where await accounts.refreshName(ofServer: server.id) {
+            renamed = true
+        }
+        guard renamed, let saved = try? await accounts.servers() else { return }
+        servers = saved
+        if let account, let server = saved.first(where: { $0.id == account.server.id }) {
+            state = .signedIn(Account(server: server, user: account.user))
+        }
+    }
+
     // MARK: - Signing in
 
     /// Asks `server` for a Quick Connect code to show the user.

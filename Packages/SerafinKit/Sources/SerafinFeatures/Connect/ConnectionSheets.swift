@@ -19,7 +19,7 @@ struct UnencryptedConnectionSheet: View {
             ),
             message: String(
                 localized:
-                    "\(server.name) uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi.",
+                    "\(server.displayName) uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi.",
                 bundle: .module,
                 comment: "Warning before connecting over plain HTTP. The argument is the server's name."
             ),
