@@ -17,6 +17,8 @@ public struct Skeleton: View {
         case thumbnailGrid(columnMinimum: CGFloat)
         /// A detail screen: the hero, the overview and a row of posters.
         case detail
+        /// The Library tab: library tiles, then the Browse list.
+        case libraries
     }
 
     private let layout: Layout
@@ -48,6 +50,8 @@ public struct Skeleton: View {
             SkeletonGrid(columnMinimum: columnMinimum, aspectRatio: 16 / 9, spacing: Spacing.medium)
         case .detail:
             SkeletonDetail()
+        case .libraries:
+            SkeletonLibraries()
         }
     }
 }
@@ -186,6 +190,45 @@ struct SkeletonHome: View {
             }
         }
         .ignoresSafeArea(edges: .top)
+    }
+}
+
+/// The Library tab's skeleton: two rows of 16:9 tiles, then Browse rows with their icons.
+struct SkeletonLibraries: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        List {
+            Section {
+                let columns = sizeClass == .regular ? 3 : 2
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.small), count: columns),
+                    spacing: Spacing.small
+                ) {
+                    ForEach(0..<(columns * 2), id: \.self) { _ in
+                        Rectangle()
+                            .fill(.surface)
+                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .clipShape(.rounded(.small))
+                    }
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+            Section {
+                ForEach(0..<5, id: \.self) { _ in
+                    HStack(spacing: Spacing.small) {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(.textSecondary.opacity(0.25))
+                            .frame(width: 29, height: 29)
+                        SkeletonText("Placeholder row", style: .body)
+                    }
+                }
+            } header: {
+                SkeletonText("Browse", style: .caption)
+            }
+        }
+        .modifier(SkeletonShade())
     }
 }
 

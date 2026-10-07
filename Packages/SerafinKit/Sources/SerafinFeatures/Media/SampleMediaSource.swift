@@ -51,6 +51,10 @@ struct SampleMediaSource: MediaSource {
         MockLibrary.libraries
     }
 
+    func cover(of library: MediaLibrary) async -> MediaItem? {
+        nil
+    }
+
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
         let cards = Self.cards(in: scope, options: options)
         let page = cards.dropFirst(start).prefix(limit)
@@ -87,6 +91,7 @@ struct SampleMediaSource: MediaSource {
                 (MockMedia.movies + MockMedia.series).filter { genres[$0.id]?.contains(genre.name) == true }
             case .collections: MockMedia.collections
             case .collection(let id, _): MockMedia.collections.first { $0.id == id }.map(MockMedia.members) ?? []
+            case .shortcut: MockMedia.movies + MockMedia.series
             }
         var cards = all.filter { card in
             (!options.unplayedOnly || !card.isPlayed) && (!options.favouritesOnly || card.isFavourite)

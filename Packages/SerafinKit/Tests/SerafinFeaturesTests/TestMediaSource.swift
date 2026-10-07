@@ -42,6 +42,8 @@ struct TestMediaSource: MediaSource {
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
 
+    func cover(of library: MediaLibrary) async -> MediaItem? { await samples.cover(of: library) }
+
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
         guard let cards = cards(options) else {
             return try await samples.page(of: scope, options: options, start: start, limit: limit)

@@ -46,8 +46,31 @@
     "%lld Mbps" : {
       "comment" : "Streaming quality cap in megabits per second, such as 8 Mbps."
     },
+    "%lld movies" : {
+      "comment" : "How many movies a library holds, under its name on the Library tab.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld movie"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld movies"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld movies and shows" : {
-      "comment" : "A number of movies, shows and episodes, in Shortcuts.",
+      "comment" : "A number of movies and shows: in Shortcuts, and under a library's name on the Library tab.",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -62,6 +85,29 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld movies and shows"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld shows" : {
+      "comment" : "How many shows a library holds, under its name on the Library tab.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld show"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld shows"
                 }
               }
             }
@@ -127,6 +173,9 @@
     },
     "After 5 Minutes" : {
       "comment" : "Lock grace period."
+    },
+    "All Caught Up" : {
+      "comment" : "Title when every movie and show has been watched."
     },
     "All Genres" : {
       "comment" : "Genre filter: no filter."
@@ -254,6 +303,9 @@
     "Episodes" : {
       "comment" : "Search results section."
     },
+    "Every movie and show here has been watched." : {
+      "comment" : "Explanation when every movie and show has been watched."
+    },
     "Everyone signed in to it on this device is signed out." : {
       "comment" : "Message in the remove server dialog."
     },
@@ -261,7 +313,7 @@
       "comment" : "Subtitle size."
     },
     "Favourites" : {
-      "comment" : "Library filter: only favourites."
+      "comment" : "Favourites: the library filter chip, and the Library tab's Browse row and grid."
     },
     "Find movies, shows and episodes by title." : {
       "comment" : "Explanation before anything is searched."
@@ -389,11 +441,17 @@
     "Movies and shows" : {
       "comment" : "Placeholder in the search field."
     },
+    "Movies and shows added to your server appear here, newest first." : {
+      "comment" : "Explanation when no movies or shows have been added."
+    },
     "Movies and shows you add to it on your server appear here." : {
       "comment" : "Explanation for an empty library or collection."
     },
     "Movies and shows you add to your server appear here." : {
       "comment" : "Explanation when the home screen is empty."
+    },
+    "Movies and shows you mark as favourites appear here." : {
+      "comment" : "Explanation when there are no favourites."
     },
     "Movies and shows your server matches to this genre appear here." : {
       "comment" : "Explanation for an empty genre."
@@ -407,6 +465,9 @@
     "No Collections" : {
       "comment" : "Title when there are no collections."
     },
+    "No Favourites" : {
+      "comment" : "Title when there are no favourites."
+    },
     "No Genres" : {
       "comment" : "Title when the server lists no genres."
     },
@@ -418,6 +479,9 @@
     },
     "No Next Episodes" : {
       "comment" : "Title when Next Up's screen has nothing in it."
+    },
+    "Nothing Added Yet" : {
+      "comment" : "Title when no movies or shows have been added."
     },
     "Nothing Here Yet" : {
       "comment" : "Title when the home screen is empty."
@@ -503,6 +567,9 @@
     },
     "Rating" : {
       "comment" : "Library sort option: highest rated first."
+    },
+    "Recently Added" : {
+      "comment" : "Library Browse row and grid of the newest additions."
     },
     "Release Date" : {
       "comment" : "Library sort option: newest releases first."
@@ -758,6 +825,9 @@
     },
     "Unrecognized Certificate" : {
       "comment" : "Title when a certificate isn't trusted."
+    },
+    "Unwatched" : {
+      "comment" : "Library Browse row and grid of everything not yet watched."
     },
     "Use Quick Connect Instead" : {
       "comment" : "Button that switches back to Quick Connect."
