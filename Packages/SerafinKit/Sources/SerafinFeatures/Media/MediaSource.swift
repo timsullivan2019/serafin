@@ -245,8 +245,6 @@ protocol MediaSource: Sendable {
     func item(_ id: String) async throws -> MediaItem
     /// The user's movie and TV libraries.
     func libraries() async throws -> [MediaLibrary]
-    /// A library's own picture, when the server has one, for its tile on the Library tab.
-    func cover(of library: MediaLibrary) async -> MediaItem?
     /// One page of a grid.
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage
     /// The genres and years in a grid, for its filter menus. Only a library's grid has them.

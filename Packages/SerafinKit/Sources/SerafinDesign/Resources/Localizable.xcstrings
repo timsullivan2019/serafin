@@ -235,6 +235,9 @@
     },
     "Violet" : {
       "comment" : "Accent colour."
+    },
+    "and %lld more" : {
+      "comment" : "Link after the first few items of a list, such as languages, that shows the rest: and 4 more."
     }
   },
   "version" : "1.0"

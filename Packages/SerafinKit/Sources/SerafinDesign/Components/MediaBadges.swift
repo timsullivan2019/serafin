@@ -105,6 +105,7 @@ public struct ThumbnailCard: View {
     private let title: String
     private let caption: String?
     private let image: Image?
+    private let number: Int?
 
     /// Creates a card.
     ///
@@ -112,10 +113,12 @@ public struct ThumbnailCard: View {
     ///   - title: The trailer's or chapter's name.
     ///   - caption: A line under it, such as a chapter's start time.
     ///   - image: The picture, or nil while it loads or when there is none.
-    public init(title: String, caption: String?, image: Image?) {
+    ///   - number: For a chapter that has no picture, its number, drawn large on a dark tile in its place.
+    public init(title: String, caption: String?, image: Image?, number: Int? = nil) {
         self.title = title
         self.caption = caption
         self.image = image
+        self.number = number
     }
 
     public var body: some View {
@@ -124,19 +127,25 @@ public struct ThumbnailCard: View {
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .overlay {
                     ZStack {
-                        Rectangle().fill(.surface)
                         if let image {
+                            Rectangle().fill(.surface)
                             image.resizable().scaledToFill().transition(.opacity)
+                        } else if let number {
+                            NumberTile(number: number)
+                        } else {
+                            Rectangle().fill(.surface)
                         }
                     }
                     .animation(.easeOut(duration: 0.25), value: image != nil)
                 }
                 .overlay {
-                    Image(systemName: "play.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .padding(Spacing.small)
-                        .background(.black.opacity(0.35), in: .circle)
+                    if image != nil || number == nil {
+                        Image(systemName: "play.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .padding(Spacing.small)
+                            .background(.black.opacity(0.35), in: .circle)
+                    }
                 }
                 .clipShape(.rounded(.small))
                 .cardHoverEffect()
@@ -159,6 +168,24 @@ public struct ThumbnailCard: View {
     }
 }
 
+/// A chapter's number on a dark tile, standing in for a picture the file doesn't have.
+private struct NumberTile: View {
+    let number: Int
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(Color(white: 0.11))
+            Text(number, format: .number)
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.85))
+                .minimumScaleFactor(0.5)
+                .padding(Spacing.small)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 #if DEBUG
     private struct MediaBadgesSample: View {
         var body: some View {
@@ -168,10 +195,11 @@ public struct ThumbnailCard: View {
                     .padding()
                     .background(.black)
                 MediaBadgeRow(badges: ["HD", "HDR", "Lossless", "CC"])
-                ThumbnailCard(
-                    title: "Chapter 3", caption: "12:40", image: MockMedia.backdropImage(for: MockMedia.movies[2])
-                )
-                .frame(width: 240)
+                HStack(alignment: .top, spacing: Spacing.small) {
+                    ThumbnailCard(
+                        title: "Chapter 3", caption: "12:40", image: MockMedia.backdropImage(for: MockMedia.movies[2]))
+                    ThumbnailCard(title: "Chapter 4", caption: "18:05", image: nil, number: 4)
+                }
             }
             .padding()
             .background(Color.background)

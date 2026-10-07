@@ -259,7 +259,10 @@ private struct ChapterLink: View {
             playback.play(item, from: .position(chapter.start))
         } label: {
             picture { image in
-                ThumbnailCard(title: chapter.name, caption: chapter.startText, image: image)
+                ThumbnailCard(
+                    title: chapter.name, caption: chapter.startText, image: image,
+                    // A chapter the file has no picture for shows its number instead.
+                    number: chapter.imageTag == nil ? chapter.index + 1 : nil)
             }
             .onGeometryChange(for: CGFloat.self) {
                 $0.size.width
@@ -281,8 +284,6 @@ private struct ChapterLink: View {
         {
             LazyImage(request: request) { state in content(state.image) }
                 .pipeline(artwork.pipeline)
-        } else if item.source == nil {
-            content(MockMedia.backdropImage(for: item.card))
         } else {
             content(nil)
         }

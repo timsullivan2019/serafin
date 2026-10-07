@@ -5,12 +5,13 @@ import SerafinDesign
 /// The facts at the foot of a detail screen, in three columns: when it came out and how long it runs, its languages,
 /// and the format of its video and audio.
 enum ItemInformation {
-    /// The columns for `item`, whose card is `card`. Columns without any facts are dropped by the view.
+    /// The columns for `item`, whose card is `card`. Rows with nothing to say are left out, and columns without any
+    /// rows are dropped by the view.
     static func columns(for item: BaseItemDto, card: MediaCard, locale: Locale = .current)
         -> [InformationColumns.Column]
     {
         let streams = item.mediaSources?.first?.mediaStreams ?? item.mediaStreams ?? []
-        return [
+        let columns = [
             InformationColumns.Column(
                 title: String(localized: "Information", bundle: .module, comment: "Detail screen column heading."),
                 rows: facts(of: item, card: card, locale: locale)
@@ -28,6 +29,11 @@ enum ItemInformation {
                 rows: format(of: streams, defaultAudio: item.mediaSources?.first?.defaultAudioStreamIndex)
             ),
         ]
+        return columns.map { column in
+            var column = column
+            column.rows.removeAll { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            return column
+        }
     }
 
     /// Release date, running time, rating, genres and studio.
@@ -44,11 +50,18 @@ enum ItemInformation {
         } else if let year = card.year {
             rows.append(InformationColumns.Row(label: released, value: String(year)))
         }
-        if let runtime = card.runtimeText {
+        // A server that never measured a file says zero, which isn't worth a row. A show's run time is how long its
+        // episodes run, which the server gives as their average.
+        if let runtime = card.runtime, runtime > .zero, let text = card.runtimeText {
             rows.append(
                 InformationColumns.Row(
                     label: String(localized: "Run Time", bundle: .module, comment: "Detail fact: running time."),
-                    value: runtime
+                    value: card.kind == .series
+                        ? String(
+                            localized: "\(text) per episode", bundle: .module,
+                            comment:
+                                "A show's run time: how long its episodes run on average, such as 45 min per episode.")
+                        : text
                 )
             )
         }
@@ -97,7 +110,8 @@ enum ItemInformation {
                 InformationColumns.Row(
                     label: String(
                         localized: "Audio", bundle: .module, comment: "Detail fact: the audio's languages or format."),
-                    value: audio.formatted(.list(type: .and, width: .narrow).locale(locale))
+                    items: audio,
+                    locale: locale
                 )
             )
         }
@@ -110,7 +124,8 @@ enum ItemInformation {
                         comment:
                             "Subtitles: a detail fact listing subtitle languages, and the Settings row for when subtitles show."
                     ),
-                    value: subtitles.formatted(.list(type: .and, width: .narrow).locale(locale))
+                    items: subtitles,
+                    locale: locale
                 )
             )
         }
@@ -132,7 +147,7 @@ enum ItemInformation {
         let audio =
             streams.first { $0.type == .audio && $0.index == defaultAudio }
             ?? streams.first { $0.type == .audio }
-        if let audio, let codec = audio.codec {
+        if let audio, let codec = audio.codec, !codec.isEmpty {
             let parts = [TrackChoices.formatName(codec), audio.channelLayout.map(TrackChoices.channelsName)]
                 .compactMap { $0 }
             rows.append(

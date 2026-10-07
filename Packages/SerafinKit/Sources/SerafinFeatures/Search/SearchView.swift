@@ -9,6 +9,7 @@ struct SearchView: View {
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
     @Environment(AppSession.self) private var session: AppSession?
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.searchRequest) private var request
     @State private var answeredRequest = 0
     @State private var isSearchPresented = false
@@ -19,14 +20,9 @@ struct SearchView: View {
             .navigationTitle(String(localized: "Search", bundle: .module, comment: "Title of the search tab."))
             .profileToolbar()
             .searchable(
-                text: $model.query,
-                isPresented: $isSearchPresented,
-                placement: Self.fieldPlacement,
+                text: $model.query, isPresented: $isSearchPresented, placement: fieldPlacement,
                 prompt: String(
-                    localized: "Movies, shows and people",
-                    bundle: .module,
-                    comment: "Placeholder in the search field."
-                )
+                    localized: "Movies, shows and people", bundle: .module, comment: "Placeholder in the search field.")
             )
             .onSubmit(of: .search) { model.remember() }
             // A task rather than onChange, so the request that first opens this tab isn't missed.
@@ -48,11 +44,12 @@ struct SearchView: View {
             }
     }
 
-    /// Under the title at every width. On iPad the default folds the field into a toolbar button, which takes a
-    /// second tap after choosing Search and which Command-F can't open.
-    private static var fieldPlacement: SearchFieldPlacement {
+    /// The system's own place for it on iPhone: with the tabs' search activation, the search tab becomes a field at
+    /// the bottom of the screen, within reach of a thumb. On iPad it sits under the title, since there the default
+    /// folds it into a toolbar button, which takes a second tap after choosing Search and which Command-F can't open.
+    private var fieldPlacement: SearchFieldPlacement {
         #if os(iOS)
-            .navigationBarDrawer(displayMode: .always)
+            sizeClass == .regular ? .navigationBarDrawer(displayMode: .always) : .automatic
         #else
             .automatic
         #endif

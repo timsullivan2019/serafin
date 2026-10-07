@@ -42,8 +42,6 @@ struct TestMediaSource: MediaSource {
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
 
-    func cover(of library: MediaLibrary) async -> MediaItem? { await samples.cover(of: library) }
-
     func canRefreshMetadata() async -> Bool { false }
 
     func refreshMetadata(of item: MediaItem) async throws {}

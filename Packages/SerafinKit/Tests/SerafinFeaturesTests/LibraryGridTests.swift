@@ -184,3 +184,21 @@ private let longGrid: [String] = {
         #expect(collection.slots.map { $0?.card.title } == ["Nosferatu", "The General"])
     }
 }
+
+@Suite struct SortMenuTests {
+    @Test func eachSortOffersItsNaturalOrderFirst() {
+        #expect(LibraryQuery.Sort.name.directions == [true, false])
+        #expect(LibraryQuery.Sort.dateAdded.directions == [false, true])
+        #expect(LibraryQuery.Sort.premiereDate.directions == [false, true])
+        #expect(LibraryQuery.Sort.rating.directions == [false, true])
+    }
+
+    @Test func eachOrderIsNamedForWhatItSorts() {
+        #expect(LibraryQuery.Sort.name.directionTitle(ascending: true) == "A to Z")
+        #expect(LibraryQuery.Sort.name.directionTitle(ascending: false) == "Z to A")
+        #expect(LibraryQuery.Sort.dateAdded.directionTitle(ascending: false) == "Newest First")
+        #expect(LibraryQuery.Sort.premiereDate.directionTitle(ascending: true) == "Oldest First")
+        #expect(LibraryQuery.Sort.rating.directionTitle(ascending: false) == "Highest First")
+        #expect(LibraryQuery.Sort.rating.directionTitle(ascending: true) == "Lowest First")
+    }
+}

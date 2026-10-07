@@ -97,6 +97,7 @@ struct MainTabs: View {
     @State private var showsSettings = false
     @State private var settingsPath: [Route] = []
     @State private var searchRequest = SearchRequest()
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
     @Namespace private var playerZoom
@@ -145,6 +146,9 @@ struct MainTabs: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        // On iPhone the search tab sits apart at the end of the tab bar and, chosen, becomes the system's search field
+        // at the bottom of the screen. On iPad the search screen keeps its field under its title.
+        .tabViewSearchActivation(sizeClass == .regular ? .automatic : .searchTabSelection)
         .background {
             TabShortcuts(selection: $selection, searchRequest: $searchRequest, showsSettings: $showsSettings)
         }
@@ -351,8 +355,11 @@ private struct SettingsSheet: View {
         TabStack(path: $path) {
             SettingsView()
                 .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(role: .confirm) { dismiss() }
+                    // A plain glass circle with an xmark: Settings saves as it goes, so there's nothing to confirm.
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(role: .close) { dismiss() }
+                            // The label's own colour, not the accent: a plain close button, as iOS draws them.
+                            .tint(.primary)
                     }
                 }
         }

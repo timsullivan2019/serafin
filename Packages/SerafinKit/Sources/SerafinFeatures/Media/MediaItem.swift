@@ -69,7 +69,8 @@ extension MediaItem {
             kind: kind,
             title: item.name ?? "",
             year: item.productionYear,
-            runtime: item.runTimeTicks.map { .milliseconds($0 / 10_000) },
+            // Zero means the server never measured the file, not that it's empty.
+            runtime: item.runTimeTicks.flatMap { $0 > 0 ? .milliseconds($0 / 10_000) : nil },
             rating: item.officialRating,
             progress: progress,
             isPlayed: userData?.isPlayed ?? false,
