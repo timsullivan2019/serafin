@@ -94,6 +94,27 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(PlaybackNegotiator.copiesVideoAndAudio(url, from: source, audioStreamIndex: nil) == copies)
     }
 
+    @Test(arguments: [
+        // A text subtitle the server converts and adds to the HLS stream: the video is still copied.
+        ("SubtitleCodecNotSupported", "&SubtitleMethod=Hls", true),
+        ("ContainerNotSupported,SubtitleCodecNotSupported", "&SubtitleMethod=Hls", true),
+        // A subtitle burned into the picture: the server converts the video.
+        ("SubtitleCodecNotSupported", "&SubtitleMethod=Encode", false),
+        // No word on how the subtitle is delivered: nothing to say the video is copied.
+        ("SubtitleCodecNotSupported", "", false),
+    ])
+    func subtitlesTheServerAddsAreRepackaging(reasons: String, method: String, copies: Bool) throws {
+        let response = try JSONDecoder().decode(
+            PlaybackInfoResponse.self,
+            from: Data(try Fixture.json("PlaybackInfoDirectStream").utf8)
+        )
+        let source = try #require(response.mediaSources?.first)
+        let url =
+            "/videos/6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f/master.m3u8?VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1"
+            + "&SubtitleStreamIndex=2\(method)&api_key=token-1&TranscodeReasons=\(reasons)"
+        #expect(PlaybackNegotiator.copiesVideoAndAudio(url, from: source, audioStreamIndex: nil) == copies)
+    }
+
     @Test func aFileAVPlayerCantDecodeIsTranscoded() async throws {
         let host = "transcode.example.com"
         let item = "7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"

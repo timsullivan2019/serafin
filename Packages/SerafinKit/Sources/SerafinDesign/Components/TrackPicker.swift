@@ -18,8 +18,9 @@ public struct TrackChoice: Identifiable, Hashable, Sendable {
 }
 
 /// The audio and subtitle picker the player opens in a sheet: the audio tracks, then the subtitles with Off first,
-/// each current choice checked.
+/// each current choice checked. Under its title it says how the video reaches the player, such as "Direct play".
 public struct TrackPicker: View {
+    private let delivery: PlaybackDelivery?
     private let audio: [TrackChoice]
     private let selectedAudio: Int?
     private let subtitles: [TrackChoice]
@@ -31,6 +32,7 @@ public struct TrackPicker: View {
     /// Creates the picker.
     ///
     /// - Parameters:
+    ///   - delivery: How the video reaches the player, shown under the title, or nil while that isn't known.
     ///   - audio: The audio tracks.
     ///   - selectedAudio: The ``TrackChoice/id`` of the audio playing.
     ///   - subtitles: The subtitle tracks.
@@ -38,6 +40,7 @@ public struct TrackPicker: View {
     ///   - selectAudio: Called with the ``TrackChoice/id`` of the audio picked.
     ///   - selectSubtitle: Called with the ``TrackChoice/id`` of the subtitles picked, or nil for Off.
     public init(
+        delivery: PlaybackDelivery? = nil,
         audio: [TrackChoice],
         selectedAudio: Int?,
         subtitles: [TrackChoice],
@@ -45,6 +48,7 @@ public struct TrackPicker: View {
         selectAudio: @escaping (Int) -> Void,
         selectSubtitle: @escaping (Int?) -> Void
     ) {
+        self.delivery = delivery
         self.audio = audio
         self.selectedAudio = selectedAudio
         self.subtitles = subtitles
@@ -87,6 +91,7 @@ public struct TrackPicker: View {
                     comment: "Button that opens the audio and subtitle picker."
                 )
             )
+            .modifier(DeliverySubtitle(delivery: delivery))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -95,6 +100,19 @@ public struct TrackPicker: View {
                     Button(role: .close) { dismiss() }
                 }
             }
+        }
+    }
+}
+
+/// How the video reaches the player, under the picker's title, once it is known.
+private struct DeliverySubtitle: ViewModifier {
+    let delivery: PlaybackDelivery?
+
+    func body(content: Content) -> some View {
+        if let delivery {
+            content.navigationSubtitle(delivery.title)
+        } else {
+            content
         }
     }
 }
@@ -143,6 +161,7 @@ private struct TrackRow: View {
                 .ignoresSafeArea()
                 .sheet(isPresented: .constant(true)) {
                     TrackPicker(
+                        delivery: .repackaged,
                         audio: [
                             TrackChoice(id: 1, title: "English", detail: "AAC · Stereo"),
                             TrackChoice(id: 2, title: "English", detail: "Dolby Digital Plus · 5.1"),
