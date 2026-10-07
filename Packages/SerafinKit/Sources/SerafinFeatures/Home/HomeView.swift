@@ -4,12 +4,12 @@ import SwiftUI
 
 /// The first tab: featured items at the top, then Continue Watching, Next Up and the newest items in each library.
 ///
-/// The hero is the top of the screen, under the status bar, so the title shows only once the hero has scrolled
-/// away. When the server can't be reached, Home shows the rows it last had, under a banner saying so. After a
+/// The hero is the top of the screen, under the status bar, with no navigation bar over it; the top edge blurs once
+/// the hero has scrolled away. When the server can't be reached, Home shows the rows it last had, under a banner saying so. After a
 /// failure it asks again when the device joins a network or Serafin comes back to the foreground.
 struct HomeView: View {
     @State private var model = HomeModel()
-    /// Whether the hero has scrolled up under the navigation bar, which brings the title back.
+    /// Whether the hero has scrolled away under the status bar, which brings back the top edge's blur.
     @State private var isPastHero = false
     /// The hero's size, for prefetching the next page's artwork at the size it's drawn.
     @State private var heroSize: CGSize = .zero
@@ -145,11 +145,16 @@ struct HomeView: View {
         }
         // The hero runs under the status bar; without one, the rows start under the bar as usual.
         .ignoresSafeArea(edges: hasHero ? .top : [])
-        .onScrollGeometryChange(for: Bool.self) { geometry in
-            let heroHeight = geometry.containerSize.height * heroFraction
-            return hasHero && geometry.contentOffset.y + geometry.contentInsets.top > heroHeight - 120
-        } action: { _, isPast in
-            isPastHero = isPast
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            // How far the hero's bottom is from the top of the screen.
+            geometry.containerSize.height * heroFraction - geometry.contentOffset.y - geometry.contentInsets.top
+        } action: { _, heroBottom in
+            // A gap between the two thresholds, so resting near one never flips back and forth.
+            if !isPastHero, heroBottom < 100 {
+                isPastHero = true
+            } else if isPastHero, heroBottom > 140 {
+                isPastHero = false
+            }
         }
         .scrollEdgeEffectHidden(hasHero && !isPastHero, for: .top)
         .refreshable {
@@ -161,11 +166,12 @@ struct HomeView: View {
 
     private var hero: HomeHeroModel { model.hero }
 
-    /// Whether the navigation bar shows: not over the hero or its skeleton, and otherwise always.
+    /// Whether the navigation bar shows: never with the hero or its skeleton, since Home has no buttons in it, so
+    /// the whole artwork takes swipes and nothing about the bar changes while scrolling.
     private var showsBar: Bool {
         switch model.phase {
         case .loading: false
-        case .loaded: hero.entries.isEmpty || isPastHero
+        case .loaded: hero.entries.isEmpty
         case .failed: true
         }
     }

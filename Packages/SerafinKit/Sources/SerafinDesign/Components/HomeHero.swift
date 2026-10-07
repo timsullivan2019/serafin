@@ -418,6 +418,7 @@ private struct HeroPageBackdrop: View {
 
     var body: some View {
         let moves = !reduceMotion
+        // The page's frame comes from the clear colour; the artwork filling it spills past its sides.
         Color.clear
             .overlay {
                 ZStack {
@@ -430,18 +431,19 @@ private struct HeroPageBackdrop: View {
                     statusBarScrim
                 }
                 .animation(.easeOut(duration: 0.3), value: image != nil)
-                .visualEffect { content, proxy in
-                    let minY = proxy.frame(in: .scrollView(axis: .vertical)).minY
-                    let height = max(proxy.size.height, 1)
-                    return
-                        content
-                        // Slower than the scroll going up; stretched to fill the gap when pulled down.
-                        .offset(y: moves && minY < 0 ? -minY * 0.3 : 0)
-                        .scaleEffect(moves && minY > 0 ? (height + minY) / height : 1, anchor: .bottom)
-                }
-                // Clipped at the bottom only, so the stretch can reach the top of the screen.
-                .mask { Rectangle().padding(.top, -2000) }
             }
+            .visualEffect { content, proxy in
+                let minY = proxy.frame(in: .scrollView(axis: .vertical)).minY
+                let height = max(proxy.size.height, 1)
+                return
+                    content
+                    // Slower than the scroll going up; stretched to fill the gap when pulled down.
+                    .offset(y: moves && minY < 0 ? -minY * 0.3 : 0)
+                    .scaleEffect(moves && minY > 0 ? (height + minY) / height : 1, anchor: .bottom)
+            }
+            // Clipped to the page's sides and bottom, so it never covers the next page while swiping, but open at the
+            // top, so the stretch can reach the top of the screen.
+            .mask { Rectangle().padding(.top, -2000) }
             .overlay { fade }
             .accessibilityHidden(true)
     }
