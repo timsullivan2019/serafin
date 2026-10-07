@@ -95,7 +95,8 @@ struct Trailer: Identifiable, Hashable, Sendable {
             guard let id = trailer.id else { return nil }
             let name = trailer.name.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
             let card = MediaCard(
-                id: id, kind: .movie, title: name, runtime: trailer.runTimeTicks.map { .milliseconds($0 / 10_000) })
+                id: id, kind: .movie, title: name,
+                runtime: trailer.runTimeTicks.flatMap { $0 > 0 ? .milliseconds($0 / 10_000) : nil })
             return Trailer(id: "local-\(id)", name: name, source: .local(MediaItem(card: card, source: trailer)))
         }
         return files + web

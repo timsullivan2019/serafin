@@ -98,9 +98,7 @@ struct CardMenuItems: View {
                 playback.play(item)
             } label: {
                 Label(
-                    String(
-                        localized: "Play", bundle: .module,
-                        comment: "Starts playback: a menu item, and a sample button in the accent colour preview."),
+                    String(localized: "Play", bundle: .module, comment: "Menu item that starts playback."),
                     systemImage: "play.fill"
                 )
             }

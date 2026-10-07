@@ -43,55 +43,51 @@ struct AccentColourView: View {
     }
 }
 
-/// A play button, a favourite button, a progress bar and a selection, drawn in the accent colour. They don't respond
-/// to touch: they're only there to show the colour.
+/// The accent on what takes it: a detail screen's play pill with the tab bar over it, then a Settings value as its
+/// row shows it. None of it responds to touch.
 private struct AccentSample: View {
     let accent: Accent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.medium) {
-            GlassEffectContainer {
-                HStack(spacing: Spacing.small) {
-                    Button {
-                    } label: {
-                        // Not a Label: a list row tints a label's icon with the accent, which would hide it here.
-                        HStack(spacing: Spacing.xxSmall) {
-                            Image(systemName: "play.fill")
-                            Text(
-                                String(
-                                    localized: "Play", bundle: .module,
-                                    comment:
-                                        "Starts playback: a menu item, and a sample button in the accent colour preview."
-                                )
-                            )
-                        }
-                    }
-                    .buttonStyle(.glassProminent)
-                    Button {
-                    } label: {
-                        Image(systemName: "heart.fill")
-                    }
-                    .buttonStyle(.glass)
-                }
-            }
-            ProgressView(value: 0.4)
-            Label {
-                Text(accent.name)
-                    .foregroundStyle(.textPrimary)
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.tint)
-            }
-        }
-        .padding(.vertical, Spacing.xSmall)
-        .allowsHitTesting(false)
+        AccentPreview(
+            card: Self.card,
+            artwork: MockMedia.backdropImage(for: Self.card),
+            tabs: [
+                AccentPreview.TabItem(
+                    title: String(localized: "Home", bundle: .module, comment: "Title of the home tab."),
+                    systemImage: "house"),
+                AccentPreview.TabItem(
+                    title: String(localized: "Library", bundle: .module, comment: "Title of the library tab."),
+                    systemImage: "square.grid.2x2"),
+            ],
+            searchTitle: String(localized: "Search", bundle: .module, comment: "Title of the search tab.")
+        )
+        .environment(\.accent, accent.color)
+        .listRowInsets(EdgeInsets())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             String(
-                localized: "Buttons, progress and selections in \(accent.name)", bundle: .module,
-                comment: "Spoken for the accent colour preview, such as Buttons, progress and selections in Red.")
+                localized: "The play button, the selected tab and a Settings value in \(accent.name)", bundle: .module,
+                comment:
+                    "Spoken for the accent colour preview, such as The play button, the selected tab and a Settings value in Red."
+            )
         )
+        LabeledContent {
+            HStack(spacing: Spacing.xxSmall) {
+                Text(PlaybackQuality.maximum.title)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.footnote.weight(.semibold))
+            }
+            .foregroundStyle(accent.color)
+        } label: {
+            Text(String(localized: "Quality on Wi-Fi", bundle: .module, comment: "Settings row."))
+        }
+        // The card above already says what the preview shows.
+        .accessibilityHidden(true)
     }
+
+    /// A film part watched, so the pill reads "Resume" with its progress line.
+    private static let card = MockMedia.movies.first(where: \.isInProgress) ?? MockMedia.movies[0]
 }
 
 #if DEBUG

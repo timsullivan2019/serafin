@@ -18,6 +18,9 @@
         }
       }
     },
+    "%@ per episode" : {
+      "comment" : "A show's run time: how long its episodes run on average, such as 45 min per episode."
+    },
     "%@ uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi." : {
       "comment" : "Warning before connecting over plain HTTP. The argument is the server's name."
     },
@@ -28,6 +31,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@" : {
+      "comment" : "Spoken value of a library's sort button: what it sorts by, then which way, such as Name, A to Z.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
           }
         }
       }
@@ -138,6 +152,9 @@
         }
       }
     },
+    "A to Z" : {
+      "comment" : "Library sort direction for names."
+    },
     "About" : {
       "comment" : "Settings section header."
     },
@@ -192,9 +209,6 @@
     "Appearance" : {
       "comment" : "Settings section header."
     },
-    "Ascending" : {
-      "comment" : "VoiceOver value of the current sort."
-    },
     "Audio" : {
       "comment" : "Detail fact: the audio's languages or format."
     },
@@ -212,9 +226,6 @@
     },
     "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are." : {
       "comment" : "Settings footer under the accent colour choices."
-    },
-    "Buttons, progress and selections in %@" : {
-      "comment" : "Spoken for the accent colour preview, such as Buttons, progress and selections in Red."
     },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
@@ -306,9 +317,6 @@
     "Date Added" : {
       "comment" : "Library sort option: newest additions first."
     },
-    "Descending" : {
-      "comment" : "VoiceOver value of the current sort."
-    },
     "Director" : {
       "comment" : "A crew member's job on a detail screen."
     },
@@ -378,6 +386,9 @@
     "Go to Show" : {
       "comment" : "Menu item on an episode that opens the show it belongs to."
     },
+    "Highest First" : {
+      "comment" : "Library sort direction for ratings."
+    },
     "Home" : {
       "comment" : "Title of the home tab."
     },
@@ -425,6 +436,9 @@
     },
     "Lower caps use less data. The server converts anything above the cap." : {
       "comment" : "Settings footer under the streaming quality caps."
+    },
+    "Lowest First" : {
+      "comment" : "Library sort direction for ratings."
     },
     "Mark as Played" : {
       "comment" : "Button and menu item that marks an item played."
@@ -489,6 +503,9 @@
     "Name" : {
       "comment" : "Library sort option: alphabetical."
     },
+    "Newest First" : {
+      "comment" : "Library sort direction for dates."
+    },
     "Next Up" : {
       "comment" : "Home row of next episodes."
     },
@@ -537,6 +554,9 @@
     "Off" : {
       "comment" : "Subtitle mode: only when turned on."
     },
+    "Oldest First" : {
+      "comment" : "Library sort direction for dates."
+    },
     "On This Network" : {
       "comment" : "Servers found nearby."
     },
@@ -549,6 +569,9 @@
     "Open Movie or Show" : {
       "comment" : "Title of the shortcut that opens a title's page."
     },
+    "Order" : {
+      "comment" : "Heading of a library's sort directions."
+    },
     "Password" : {
       "comment" : "Label of the password field."
     },
@@ -556,7 +579,7 @@
       "comment" : "Search results section."
     },
     "Play" : {
-      "comment" : "Starts playback: a menu item, and a sample button in the accent colour preview."
+      "comment" : "Menu item that starts playback."
     },
     "Play ${item}" : {},
     "Play Movie or Show" : {
@@ -763,6 +786,12 @@
     "Something went wrong playing this. Try again, or lower the streaming quality in Settings." : {
       "comment" : "Explanation when the player can't play a stream."
     },
+    "Sort" : {
+      "comment" : "Toolbar button that opens a library's sort menu."
+    },
+    "Sort By" : {
+      "comment" : "Heading of the sort options in a library."
+    },
     "Source Code" : {
       "comment" : "Link to a package's source."
     },
@@ -813,6 +842,9 @@
     },
     "The next episode of each show you're watching appears here." : {
       "comment" : "Explanation when Next Up's screen has nothing in it."
+    },
+    "The play button, the selected tab and a Settings value in %@" : {
+      "comment" : "Spoken for the accent colour preview, such as The play button, the selected tab and a Settings value in Red."
     },
     "The player's Audio and Subtitles sheet shows which one is happening." : {
       "comment" : "Settings footer under the ways a video can play."
@@ -951,6 +983,9 @@
     },
     "Your server is already playing as many streams as it allows. Try again when one ends." : {
       "comment" : "Explanation when the server is already playing as many streams as it allows."
+    },
+    "Z to A" : {
+      "comment" : "Library sort direction for names."
     },
     "iOS Blocked This Connection" : {
       "comment" : "Title when iOS refuses plain HTTP to an address."

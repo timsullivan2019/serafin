@@ -29,6 +29,13 @@ import Testing
         #expect(card.overview == "A real estate agent travels to Transylvania.")
     }
 
+    @Test func aRunTimeOfZeroIsUnknown() throws {
+        let item = BaseItemDto(id: "aaaa1111", name: "Earth", runTimeTicks: 0, type: .movie)
+        let card = try #require(MediaItem(item)).card
+        #expect(card.runtime == nil)
+        #expect(card.runtimeText == nil)
+    }
+
     @Test func progressFallsBackToThePlaybackPosition() throws {
         let item = BaseItemDto(
             id: "bbbb2222",

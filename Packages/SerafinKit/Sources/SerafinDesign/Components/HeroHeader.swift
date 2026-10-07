@@ -174,34 +174,11 @@ public struct HeroHeader: View {
             playCount += 1
             play()
         } label: {
-            Label {
-                Text(playTitle)
-            } icon: {
-                Image(systemName: "play.fill")
-            }
-            .typography(.headline)
-            .foregroundStyle(.white)
-            .padding(.horizontal, Spacing.large)
-            .padding(.vertical, Spacing.small)
-            .frame(minHeight: 50)
-            .overlay(alignment: .bottom) {
-                if card.isInProgress {
-                    // How far in, as a thin line inside the pill.
-                    Capsule()
-                        .fill(.white.opacity(0.3))
-                        .overlay(alignment: .leading) {
-                            GeometryReader { proxy in
-                                Capsule().fill(.white).frame(width: proxy.size.width * card.progress)
-                            }
-                        }
-                        .frame(height: 3)
-                        .padding(.horizontal, Spacing.large)
-                        .padding(.bottom, 7)
-                        .accessibilityHidden(true)
-                }
-            }
-            .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
-            .contentShape(.capsule)
+            PlayPill(
+                title: Self.playTitle(for: card, nextEpisode: nextEpisode),
+                progress: card.isInProgress ? card.progress : nil,
+                tint: tint
+            )
         }
         .buttonStyle(.plain)
         .modifier(PlayZoomSource(id: Self.playZoomID(for: card.id), namespace: playZoomNamespace))
@@ -209,7 +186,9 @@ public struct HeroHeader: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: playCount)
     }
 
-    private var playTitle: String {
+    /// What the play pill says for `card`: "Resume · 32 min left" while it's in progress, "Play S2 E4" for an episode
+    /// or, given `nextEpisode`, a show's next one, and otherwise "Play".
+    public static func playTitle(for card: MediaCard, nextEpisode: MediaCard? = nil) -> String {
         guard let remaining = card.remainingText else {
             if let code = (nextEpisode ?? card).episodeCode {
                 return String(
@@ -228,7 +207,7 @@ public struct HeroHeader: View {
     }
 
     private var playAccessibilityLabel: String {
-        guard let remaining = card.remainingText else { return playTitle }
+        guard let remaining = card.remainingText else { return Self.playTitle(for: card, nextEpisode: nextEpisode) }
         return String(
             localized: "Resume, \(remaining)",
             bundle: .module,

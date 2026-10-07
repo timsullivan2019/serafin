@@ -101,7 +101,10 @@ enum LibraryTilesLayout {
     }
 }
 
-/// One library's tile: its own picture, or a collage of its newest posters.
+/// One library's tile: a collage of its newest posters.
+///
+/// Not the library's own picture: the one Jellyfin generates for a library has the library's name drawn across its
+/// middle, which doubled the name the tile already shows.
 private struct LibraryTileArtwork: View {
     let library: MediaLibrary
     let overview: LibrariesModel.Overview?
@@ -111,9 +114,7 @@ private struct LibraryTileArtwork: View {
             name: library.name,
             caption: overview.map { LibrariesModel.caption(total: $0.total, kind: library.kind) }
         ) {
-            if let cover = overview?.cover {
-                ItemArtwork(cover, role: .poster) { CollagePoster(image: $0) }
-            } else if let newest = overview?.newest, newest.count >= LibrariesModel.collageSize {
+            if let newest = overview?.newest, newest.count >= LibrariesModel.collageSize {
                 LibraryCollage { index in
                     ItemArtwork(newest[index], role: .poster) { CollagePoster(image: $0) }
                 }
@@ -211,6 +212,13 @@ struct LibraryView: View {
             }
             .background(Color.background)
             .navigationTitle(model.scope.title)
+            .toolbar {
+                if model.scope.offersChips {
+                    ToolbarItem(placement: .primaryAction) {
+                        SortMenu(model: model)
+                    }
+                }
+            }
             .task(id: ReloadKey(options: model.options, revision: actions.revision)) {
                 await model.reload(from: media)
             }
@@ -423,7 +431,6 @@ private struct LibraryChips: View {
             HStack(spacing: Spacing.xSmall) {
                 toggles
                 menus
-                sorts
             }
             .padding(.horizontal, Spacing.medium)
             .padding(.vertical, Spacing.xSmall)
@@ -469,29 +476,74 @@ private struct LibraryChips: View {
         }
     }
 
-    private var sorts: some View {
-        GlassChipGroup {
-            ForEach(LibraryQuery.Sort.allCases, id: \.self) { sort in
-                GlassChip(
-                    sort.title,
-                    systemImage: model.options.sort == sort
-                        ? (model.options.ascending ? "arrow.up" : "arrow.down") : nil,
-                    isSelected: model.options.sort == sort
-                ) { animate { model.select(sort) } }
-                .accessibilityValue(model.options.sort == sort ? directionDescription : "")
-            }
-        }
-    }
-
     /// Makes a selection change inside Serafin's spring, so the chips and their neighbours move together.
     private func animate(_ change: () -> Void) {
         withAnimation(Motion.animation(reduceMotion: reduceMotion), change)
     }
+}
 
-    private var directionDescription: String {
-        model.options.ascending
-            ? String(localized: "Ascending", bundle: .module, comment: "VoiceOver value of the current sort.")
-            : String(localized: "Descending", bundle: .module, comment: "VoiceOver value of the current sort.")
+/// The grid's order, as a menu in the toolbar: what to sort by, then which way round.
+private struct SortMenu: View {
+    let model: LibraryModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Menu {
+            Picker(selection: sort) {
+                ForEach(LibraryQuery.Sort.allCases, id: \.self) { sort in
+                    Text(sort.title).tag(sort)
+                }
+            } label: {
+                Text(
+                    String(localized: "Sort By", bundle: .module, comment: "Heading of the sort options in a library."))
+            }
+            .pickerStyle(.inline)
+            Picker(selection: ascending) {
+                ForEach(model.options.sort.directions, id: \.self) { isAscending in
+                    Text(model.options.sort.directionTitle(ascending: isAscending)).tag(isAscending)
+                }
+            } label: {
+                Text(String(localized: "Order", bundle: .module, comment: "Heading of a library's sort directions."))
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label(
+                String(localized: "Sort", bundle: .module, comment: "Toolbar button that opens a library's sort menu."),
+                systemImage: "arrow.up.arrow.down"
+            )
+        }
+        .accessibilityValue(
+            String(
+                localized:
+                    "\(model.options.sort.title), \(model.options.sort.directionTitle(ascending: model.options.ascending))",
+                bundle: .module,
+                comment:
+                    "Spoken value of a library's sort button: what it sorts by, then which way, such as Name, A to Z."
+            )
+        )
+    }
+
+    /// What to sort by. Choosing another sort starts it its natural way round: names A to Z, everything else newest
+    /// or highest first.
+    private var sort: Binding<LibraryQuery.Sort> {
+        Binding {
+            model.options.sort
+        } set: { sort in
+            guard sort != model.options.sort else { return }
+            animate { model.select(sort) }
+        }
+    }
+
+    private var ascending: Binding<Bool> {
+        Binding {
+            model.options.ascending
+        } set: { ascending in
+            animate { model.options.ascending = ascending }
+        }
+    }
+
+    private func animate(_ change: () -> Void) {
+        withAnimation(Motion.animation(reduceMotion: reduceMotion), change)
     }
 }
 
@@ -536,7 +588,30 @@ private struct FilterMenu<Option: Hashable>: View {
 }
 
 extension LibraryQuery.Sort {
-    /// The sort's name on its chip.
+    /// The two ways round, the natural one first: names A to Z, everything else newest or highest first.
+    var directions: [Bool] {
+        self == .name ? [true, false] : [false, true]
+    }
+
+    /// The name of one way round for this sort, such as "A to Z" or "Newest First".
+    func directionTitle(ascending: Bool) -> String {
+        switch (self, ascending) {
+        case (.name, true):
+            String(localized: "A to Z", bundle: .module, comment: "Library sort direction for names.")
+        case (.name, false):
+            String(localized: "Z to A", bundle: .module, comment: "Library sort direction for names.")
+        case (.dateAdded, false), (.premiereDate, false):
+            String(localized: "Newest First", bundle: .module, comment: "Library sort direction for dates.")
+        case (.dateAdded, true), (.premiereDate, true):
+            String(localized: "Oldest First", bundle: .module, comment: "Library sort direction for dates.")
+        case (.rating, false):
+            String(localized: "Highest First", bundle: .module, comment: "Library sort direction for ratings.")
+        case (.rating, true):
+            String(localized: "Lowest First", bundle: .module, comment: "Library sort direction for ratings.")
+        }
+    }
+
+    /// The sort's name in the sort menu.
     var title: String {
         switch self {
         case .name:

@@ -15,7 +15,6 @@ import Testing
             let overview = try #require(model.overviews[library.id])
             #expect(overview.total == library.items.count)
             #expect(overview.newest.count == min(LibrariesModel.collageSize, library.items.count))
-            #expect(overview.cover == nil)
         }
     }
 

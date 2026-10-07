@@ -3,8 +3,8 @@ import SwiftUI
 /// A library on the Library tab: a 16:9 picture with the library's name and how many titles it holds over a fade
 /// at the bottom.
 ///
-/// The picture is the library's own when the server has one, otherwise a ``LibraryCollage`` of its newest
-/// posters. Wrap it in a `NavigationLink` with `.buttonStyle(.card)` for the press effect.
+/// The picture is a ``LibraryCollage`` of the library's newest posters, or one backdrop when it has too few. Wrap it
+/// in a `Button` with `.buttonStyle(.card)` for the press effect.
 public struct LibraryTile<Artwork: View>: View {
     private let name: String
     private let caption: String?
@@ -32,9 +32,12 @@ public struct LibraryTile<Artwork: View>: View {
                 }
             }
             .overlay {
+                // Clear over the top half, then darkening quickly under the name to 70% at the edge, so white text
+                // reads over the brightest posters.
                 LinearGradient(
                     stops: [
-                        .init(color: .black.opacity(0), location: 0.35),
+                        .init(color: .black.opacity(0), location: 0.4),
+                        .init(color: .black.opacity(0.45), location: 0.72),
                         .init(color: .black.opacity(0.7), location: 1),
                     ],
                     startPoint: .top,

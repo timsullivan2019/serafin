@@ -51,9 +51,44 @@ import Testing
         let rows = ItemInformation.languages(in: streams, locale: english)
         #expect(
             rows == [
-                InformationColumns.Row(label: "Audio", value: "English, French"),
-                InformationColumns.Row(label: "Subtitles", value: "Spanish, English"),
+                InformationColumns.Row(label: "Audio", items: ["English", "French"], locale: english),
+                InformationColumns.Row(label: "Subtitles", items: ["Spanish", "English"], locale: english),
             ])
+        #expect(rows.map(\.value) == ["English, French", "Spanish, English"])
+    }
+
+    @Test func aRunTimeOfZeroIsLeftOut() throws {
+        let item = BaseItemDto(
+            id: "aaaa1111", name: "Earth", officialRating: "NR", productionYear: 1930, runTimeTicks: 0, type: .movie)
+        let card = try #require(MediaItem(item)).card
+        let rows = ItemInformation.facts(of: item, card: card, locale: english)
+        #expect(rows.map(\.label) == ["Released", "Rated"])
+    }
+
+    @Test func aShowsRunTimeIsHowLongItsEpisodesRun() throws {
+        let item = BaseItemDto(
+            id: "show1111", name: "Sherlock Holmes", productionYear: 1954, runTimeTicks: 26 * 60 * 10_000_000,
+            type: .series)
+        let card = try #require(MediaItem(item)).card
+        let runTime = try #require(ItemInformation.facts(of: item, card: card, locale: english).last)
+        #expect(runTime.label == "Run Time")
+        #expect(runTime.value == "\(try #require(card.runtimeText)) per episode")
+    }
+
+    @Test func rowsWithNothingToSayAreLeftOut() throws {
+        let item = BaseItemDto(
+            genres: ["", " "],
+            id: "aaaa1111",
+            mediaStreams: [MediaStream(codec: "", index: 1, type: .audio)],
+            name: "Earth",
+            officialRating: "",
+            studios: [NameIDPair(id: "s1", name: "")],
+            type: .movie
+        )
+        let card = try #require(MediaItem(item)).card
+        let columns = ItemInformation.columns(for: item, card: card, locale: english)
+        #expect(columns.allSatisfy { column in column.rows.allSatisfy { !$0.value.isEmpty } })
+        #expect(columns.flatMap(\.rows).isEmpty)
     }
 
     @Test func formatDescribesTheVideoAndTheDefaultAudio() {
@@ -114,7 +149,7 @@ import Testing
         let card = try #require(MediaItem(item)).card
         let columns = ItemInformation.columns(for: item, card: card, locale: english)
         #expect(columns.map(\.title) == ["Information", "Languages", "Format"])
-        #expect(columns[1].rows == [InformationColumns.Row(label: "Audio", value: "German")])
+        #expect(columns[1].rows == [InformationColumns.Row(label: "Audio", items: ["German"], locale: english)])
         #expect(columns[2].rows.map(\.value) == ["4K", "Dolby Digital"])
     }
 }
