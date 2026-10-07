@@ -64,10 +64,12 @@
         }
     }
 
-    /// A view that shows an `AVPlayerLayer` filling its bounds, with the picture fitted inside.
+    /// A view that shows an `AVPlayerLayer` filling its bounds, with the picture fitted inside or filling it.
     public final class PlayerLayerView: UIView {
         /// The layer showing the video.
         public let playerLayer = AVPlayerLayer()
+        /// Whether the picture fills the view, cropping what spills past its edges, rather than fitting inside it.
+        public private(set) var fillsBounds = false
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -80,6 +82,23 @@
         @available(*, unavailable)
         required init?(coder: NSCoder) {
             nil
+        }
+
+        /// Fits the picture inside the view, with black bars where its shape differs, or fills the view, cropping
+        /// its edges.
+        ///
+        /// - Parameters:
+        ///   - fills: Whether the picture fills the view.
+        ///   - animated: Whether the picture grows or shrinks into place, rather than jumping.
+        public func setFillsBounds(_ fills: Bool, animated: Bool) {
+            guard fills != fillsBounds else { return }
+            fillsBounds = fills
+            CATransaction.begin()
+            CATransaction.setDisableActions(!animated)
+            CATransaction.setAnimationDuration(0.3)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
+            playerLayer.videoGravity = fills ? .resizeAspectFill : .resizeAspect
+            CATransaction.commit()
         }
 
         override public func layoutSubviews() {

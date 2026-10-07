@@ -134,6 +134,7 @@
                     duration: card.runtime ?? .seconds(6780),
                     buffered: .seconds(1800)
                 ),
+                fillsScreen: false,
                 actions: PlayerControlActions(playPause: { isPlaying.toggle() })
             ) {
                 Image(systemName: "airplay.video")

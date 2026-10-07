@@ -21,6 +21,8 @@ public struct PlayerControlActions {
     public var showTracks: () -> Void
     /// Starts or stops Picture in Picture.
     public var togglePictureInPicture: () -> Void
+    /// Switches the picture between fitting the screen and filling it.
+    public var toggleFill: () -> Void
 
     /// Creates the set of actions.
     public init(
@@ -32,7 +34,8 @@ public struct PlayerControlActions {
         scrubbingChanged: @escaping (Bool) -> Void = { _ in },
         setRate: @escaping @MainActor (Float) -> Void = { _ in },
         showTracks: @escaping () -> Void = {},
-        togglePictureInPicture: @escaping () -> Void = {}
+        togglePictureInPicture: @escaping () -> Void = {},
+        toggleFill: @escaping () -> Void = {}
     ) {
         self.minimize = minimize
         self.playPause = playPause
@@ -43,6 +46,7 @@ public struct PlayerControlActions {
         self.setRate = setRate
         self.showTracks = showTracks
         self.togglePictureInPicture = togglePictureInPicture
+        self.toggleFill = toggleFill
     }
 }
 
@@ -96,7 +100,8 @@ public enum PlaybackSpeed {
     }
 }
 
-/// The player's glass controls, laid over the video: minimize, title, Picture in Picture and AirPlay along the top;
+/// The player's glass controls, laid over the video: minimize, title, fill, Picture in Picture and AirPlay along the
+/// top;
 /// skip back, play or pause and skip forward in the middle; the scrubber, the speed and the audio and subtitle
 /// button along the bottom.
 ///
@@ -114,6 +119,7 @@ public struct PlayerControls<RoutePicker: View>: View {
     private let subtitle: String?
     private let status: PlayerControlsStatus
     private let showsPictureInPicture: Bool
+    private let fillsScreen: Bool?
     private let actions: PlayerControlActions
     private let routePicker: RoutePicker
     @State private var playPauseTaps = 0
@@ -126,6 +132,8 @@ public struct PlayerControls<RoutePicker: View>: View {
     ///   - subtitle: A second line, such as the series and episode code.
     ///   - status: Where playback is and how it is going.
     ///   - showsPictureInPicture: Whether to offer Picture in Picture, which some devices can't do.
+    ///   - fillsScreen: Whether the picture fills the screen, which the fill button shows and switches, or nil for no
+    ///     fill button.
     ///   - actions: What each control does.
     ///   - routePicker: The AirPlay route picker, shown in a glass circle at the top trailing corner.
     public init(
@@ -133,6 +141,7 @@ public struct PlayerControls<RoutePicker: View>: View {
         subtitle: String? = nil,
         status: PlayerControlsStatus,
         showsPictureInPicture: Bool = true,
+        fillsScreen: Bool? = nil,
         actions: PlayerControlActions,
         @ViewBuilder routePicker: () -> RoutePicker
     ) {
@@ -140,6 +149,7 @@ public struct PlayerControls<RoutePicker: View>: View {
         self.subtitle = subtitle
         self.status = status
         self.showsPictureInPicture = showsPictureInPicture
+        self.fillsScreen = fillsScreen
         self.actions = actions
         self.routePicker = routePicker()
     }
@@ -205,6 +215,21 @@ public struct PlayerControls<RoutePicker: View>: View {
             .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
+            if let fillsScreen {
+                GlassIconButton(
+                    systemImage: fillsScreen
+                        ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                    label: fillsScreen
+                        ? String(
+                            localized: "Fit to Screen", bundle: .module,
+                            comment: "Button that shrinks the video to fit inside the screen, with black bars.")
+                        : String(
+                            localized: "Fill Screen", bundle: .module,
+                            comment: "Button that enlarges the video to fill the screen, cropping its edges."),
+                    action: actions.toggleFill
+                )
+                .contentTransition(.symbolEffect(.replace))
+            }
             if showsPictureInPicture {
                 GlassIconButton(
                     systemImage: "pip.enter",
@@ -293,6 +318,7 @@ extension PlayerControls where RoutePicker == EmptyView {
         subtitle: String? = nil,
         status: PlayerControlsStatus,
         showsPictureInPicture: Bool = true,
+        fillsScreen: Bool? = nil,
         actions: PlayerControlActions
     ) {
         self.init(
@@ -300,6 +326,7 @@ extension PlayerControls where RoutePicker == EmptyView {
             subtitle: subtitle,
             status: status,
             showsPictureInPicture: showsPictureInPicture,
+            fillsScreen: fillsScreen,
             actions: actions
         ) { EmptyView() }
     }
@@ -530,6 +557,7 @@ enum ScrubberMath {
         @State private var isPlaying = true
         @State private var elapsed = Duration.seconds(372)
         @State private var rate: Float = 1
+        @State private var fillsScreen = false
         var isBuffering = false
         private let card = MockMedia.movies[1]
 
@@ -545,10 +573,12 @@ enum ScrubberMath {
                     buffered: .seconds(520),
                     rate: rate
                 ),
+                fillsScreen: fillsScreen,
                 actions: PlayerControlActions(
                     playPause: { isPlaying.toggle() },
                     seek: { elapsed = $0 },
-                    setRate: { rate = $0 }
+                    setRate: { rate = $0 },
+                    toggleFill: { fillsScreen.toggle() }
                 )
             ) {
                 Image(systemName: "airplay.video")
