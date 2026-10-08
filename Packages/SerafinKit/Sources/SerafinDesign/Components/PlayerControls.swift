@@ -23,6 +23,8 @@ public struct PlayerControlActions {
     public var togglePictureInPicture: () -> Void
     /// Switches the picture between fitting the screen and filling it.
     public var toggleFill: () -> Void
+    /// Skips the stretch the skip pill offers, such as the intro.
+    public var skipSegment: () -> Void
 
     /// Creates the set of actions.
     public init(
@@ -35,7 +37,8 @@ public struct PlayerControlActions {
         setRate: @escaping @MainActor (Float) -> Void = { _ in },
         showTracks: @escaping () -> Void = {},
         togglePictureInPicture: @escaping () -> Void = {},
-        toggleFill: @escaping () -> Void = {}
+        toggleFill: @escaping () -> Void = {},
+        skipSegment: @escaping () -> Void = {}
     ) {
         self.minimize = minimize
         self.playPause = playPause
@@ -47,7 +50,17 @@ public struct PlayerControlActions {
         self.showTracks = showTracks
         self.togglePictureInPicture = togglePictureInPicture
         self.toggleFill = toggleFill
+        self.skipSegment = skipSegment
     }
+}
+
+/// What the controls offer above the scrubber at the trailing edge while a stretch the server marked plays, whether
+/// or not the other controls show.
+public enum SegmentPrompt: Hashable, Sendable {
+    /// The pill that skips the stretch, such as Skip Intro.
+    case skip(SkipSegmentButton.Kind)
+    /// The brief notice that Serafin skipped one by itself, such as "Skipped intro".
+    case skipped(SkipSegmentButton.Kind)
 }
 
 /// Where playback is and how it is going, as the player's controls show it.
@@ -109,6 +122,11 @@ public enum PlaybackSpeed {
 /// taps through, so a tap on the video still reaches the screen underneath. The AirPlay control is a slot, because
 /// the real route picker is a UIKit view that SerafinPlayback provides.
 ///
+/// Hidden controls fade out but stay in place, so a menu open on one of them stays usable. The skip pill and its
+/// notice sit above the scrubber at the trailing edge, in a glass container of their own, so they stay while the
+/// controls are hidden: glass inside the controls' container keeps showing when only its content fades. They
+/// materialize as a stretch starts and dissolve as it ends.
+///
 /// With a hardware keyboard, Space plays and pauses, the left and right arrows skip 10 seconds, and F leaves the
 /// full-screen player, as in other video players.
 ///
@@ -120,10 +138,13 @@ public struct PlayerControls<RoutePicker: View>: View {
     private let status: PlayerControlsStatus
     private let showsPictureInPicture: Bool
     private let fillsScreen: Bool?
+    private let showsControls: Bool
+    private let segmentPrompt: SegmentPrompt?
     private let actions: PlayerControlActions
     private let routePicker: RoutePicker
     @State private var playPauseTaps = 0
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Creates the player controls.
     ///
@@ -134,6 +155,9 @@ public struct PlayerControls<RoutePicker: View>: View {
     ///   - showsPictureInPicture: Whether to offer Picture in Picture, which some devices can't do.
     ///   - fillsScreen: Whether the picture fills the screen, which the fill button shows and switches, or nil for no
     ///     fill button.
+    ///   - showsControls: Whether the controls show. Hidden, they fade out, and only the skip pill or its notice
+    ///     stays.
+    ///   - segmentPrompt: The skip pill or notice to show above the scrubber, or nil for none.
     ///   - actions: What each control does.
     ///   - routePicker: The AirPlay route picker, shown in a glass circle at the top trailing corner.
     public init(
@@ -142,6 +166,8 @@ public struct PlayerControls<RoutePicker: View>: View {
         status: PlayerControlsStatus,
         showsPictureInPicture: Bool = true,
         fillsScreen: Bool? = nil,
+        showsControls: Bool = true,
+        segmentPrompt: SegmentPrompt? = nil,
         actions: PlayerControlActions,
         @ViewBuilder routePicker: () -> RoutePicker
     ) {
@@ -150,11 +176,34 @@ public struct PlayerControls<RoutePicker: View>: View {
         self.status = status
         self.showsPictureInPicture = showsPictureInPicture
         self.fillsScreen = fillsScreen
+        self.showsControls = showsControls
+        self.segmentPrompt = segmentPrompt
         self.actions = actions
         self.routePicker = routePicker()
     }
 
     public var body: some View {
+        ZStack {
+            controls
+                .shown(showsControls)
+            GlassEffectContainer {
+                prompt
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .padding(.trailing, Spacing.medium)
+            .padding(.bottom, PlayerLayout.bottomBarClearance)
+            .animation(Motion.animation(reduceMotion: reduceMotion), value: segmentPrompt)
+        }
+        .environment(\.colorScheme, .dark)
+        // Symbols and text are white over the video, whatever the app's accent.
+        .tint(.white)
+        // Like the system player, the overlay stops growing at the largest standard size; the buttons offer the
+        // Large Content Viewer instead.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    /// The bars, with the darkening behind them.
+    private var controls: some View {
         GlassEffectContainer(spacing: Spacing.medium) {
             VStack(spacing: 0) {
                 topBar
@@ -179,12 +228,22 @@ public struct PlayerControls<RoutePicker: View>: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
         }
-        .environment(\.colorScheme, .dark)
-        // Symbols and text are white over the video, whatever the app's accent.
-        .tint(.white)
-        // Like the system player, the overlay stops growing at the largest standard size; the buttons offer the
-        // Large Content Viewer instead.
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    /// The skip pill, or the notice that a stretch was skipped, materializing in its glass.
+    @ViewBuilder private var prompt: some View {
+        switch segmentPrompt {
+        case .skip(let kind):
+            SkipSegmentButton(kind, skip: actions.skipSegment)
+                .glassEffectTransition(.materialize)
+                .id(segmentPrompt)
+        case .skipped(let kind):
+            SkippedNotice(kind)
+                .glassEffectTransition(.materialize)
+                .id(segmentPrompt)
+        case nil:
+            EmptyView()
+        }
     }
 
     private var topBar: some View {
@@ -320,6 +379,8 @@ extension PlayerControls where RoutePicker == EmptyView {
         status: PlayerControlsStatus,
         showsPictureInPicture: Bool = true,
         fillsScreen: Bool? = nil,
+        showsControls: Bool = true,
+        segmentPrompt: SegmentPrompt? = nil,
         actions: PlayerControlActions
     ) {
         self.init(
@@ -328,8 +389,20 @@ extension PlayerControls where RoutePicker == EmptyView {
             status: status,
             showsPictureInPicture: showsPictureInPicture,
             fillsScreen: fillsScreen,
+            showsControls: showsControls,
+            segmentPrompt: segmentPrompt,
             actions: actions
         ) { EmptyView() }
+    }
+}
+
+extension View {
+    /// Fades the view out and takes it out of reach of touch and VoiceOver while `isShown` is false, keeping it in
+    /// place, so a menu open on it stays usable. Glass fades with it only when its whole container does.
+    fileprivate func shown(_ isShown: Bool) -> some View {
+        opacity(isShown ? 1 : 0)
+            .allowsHitTesting(isShown)
+            .accessibilityHidden(!isShown)
     }
 }
 
@@ -560,6 +633,8 @@ enum ScrubberMath {
         @State private var rate: Float = 1
         @State private var fillsScreen = false
         var isBuffering = false
+        var showsControls = true
+        var segmentPrompt: SegmentPrompt?
         private let card = MockMedia.movies[1]
 
         var body: some View {
@@ -575,6 +650,8 @@ enum ScrubberMath {
                     rate: rate
                 ),
                 fillsScreen: fillsScreen,
+                showsControls: showsControls,
+                segmentPrompt: segmentPrompt,
                 actions: PlayerControlActions(
                     playPause: { isPlaying.toggle() },
                     seek: { elapsed = $0 },
@@ -610,5 +687,17 @@ enum ScrubberMath {
     #Preview("Largest text") {
         PlayerControlsSample()
             .dynamicTypeSize(.accessibility5)
+    }
+
+    #Preview("Skip Intro", traits: .landscapeLeft) {
+        PlayerControlsSample(segmentPrompt: .skip(.intro))
+    }
+
+    #Preview("Skip Intro, controls hidden", traits: .landscapeLeft) {
+        PlayerControlsSample(showsControls: false, segmentPrompt: .skip(.intro))
+    }
+
+    #Preview("Skipped notice, controls hidden", traits: .landscapeLeft) {
+        PlayerControlsSample(showsControls: false, segmentPrompt: .skipped(.recap))
     }
 #endif

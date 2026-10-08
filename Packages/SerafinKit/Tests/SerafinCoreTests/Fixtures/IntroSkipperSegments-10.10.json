@@ -1,0 +1,4 @@
+{
+  "Introduction": {"EpisodeId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Valid": true, "IntroStart": 31.5, "IntroEnd": 91.25, "ShowSkipPromptAt": 31.5, "HideSkipPromptAt": 88.25},
+  "Credits": {"EpisodeId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Valid": true, "IntroStart": 1240, "IntroEnd": 1320, "ShowSkipPromptAt": 1240, "HideSkipPromptAt": 1317}
+}

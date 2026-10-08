@@ -162,11 +162,13 @@ import SerafinPlayback
         }
     }
 
-    /// The video ended with the player screen away, as in Picture in Picture, where Up Next can't show: an episode with
-    /// a next one carries on into it there, and anything else stops.
+    /// The video ended with the player screen away, as in Picture in Picture, where the next episode's card can't
+    /// show: an episode with a next one carries on into it there, when the account plays next episodes by themselves,
+    /// and anything else stops.
     func endedWithoutThePlayer() {
         guard !isPlayerPresented, nowPlaying != nil else { return }
-        guard let next = engine?.nextItem, let item = MediaItem(next) else {
+        guard let engine, engine.playsNextEpisodeAutomatically, let next = engine.nextItem, let item = MediaItem(next)
+        else {
             stop()
             return
         }

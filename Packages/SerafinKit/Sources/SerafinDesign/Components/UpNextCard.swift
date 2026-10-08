@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// What plays next when an episode ends: the next episode's card, a countdown, Play Now and Cancel.
+/// The next episode, offered over an episode's credits and when it ends: its card, Play Now and Cancel, and a
+/// countdown when it plays by itself.
 ///
-/// It floats over the last frame of the video. The player runs the countdown and passes the seconds left; at zero
-/// it plays the episode itself. Always dark, like the rest of the player.
+/// It floats over the video. The player runs the countdown and passes the seconds left; at zero it plays the
+/// episode itself. Without a countdown, as when the account doesn't play next episodes automatically, it waits for
+/// Play Now. Always dark, like the rest of the player.
 public struct UpNextCard: View {
     private let card: MediaCard
     private let artwork: Image?
-    private let secondsLeft: Int
+    private let secondsLeft: Int?
     private let playNow: () -> Void
     private let cancel: () -> Void
     @State private var playNowTaps = 0
@@ -17,13 +19,13 @@ public struct UpNextCard: View {
     /// - Parameters:
     ///   - card: The next episode.
     ///   - artwork: Its thumbnail, or nil while it loads.
-    ///   - secondsLeft: The seconds before it plays.
+    ///   - secondsLeft: The seconds before it plays by itself, or nil when it waits to be played.
     ///   - playNow: Called when Play Now is tapped.
     ///   - cancel: Called when Cancel is tapped.
     public init(
         card: MediaCard,
         artwork: Image?,
-        secondsLeft: Int,
+        secondsLeft: Int?,
         playNow: @escaping () -> Void,
         cancel: @escaping () -> Void
     ) {
@@ -37,14 +39,16 @@ public struct UpNextCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.small) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(String(localized: "Up Next", bundle: .module, comment: "Heading over the next episode."))
+                Text(String(localized: "Next Episode", bundle: .module, comment: "Heading over the next episode."))
                     .typography(.headline)
                     .foregroundStyle(.textPrimary)
-                Text(countdown)
-                    .typography(.caption)
-                    .foregroundStyle(.textSecondary)
-                    .contentTransition(.numericText(countsDown: true))
-                    .accessibilityHidden(true)
+                if let countdown {
+                    Text(countdown)
+                        .typography(.caption)
+                        .foregroundStyle(.textSecondary)
+                        .contentTransition(.numericText(countsDown: true))
+                        .accessibilityHidden(true)
+                }
             }
             LandscapeCard(card: card, artwork: artwork)
                 .frame(width: 280)
@@ -84,8 +88,9 @@ public struct UpNextCard: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// "Plays in 7 seconds".
-    private var countdown: String {
+    /// "Plays in 7 seconds", or nil without a countdown.
+    private var countdown: String? {
+        guard let secondsLeft else { return nil }
         let seconds = Duration.seconds(max(secondsLeft, 0)).formatted(.units(allowed: [.seconds], width: .wide))
         return String(
             localized: "Plays in \(seconds)",
@@ -129,6 +134,7 @@ public struct SkipIndicator: View {
 
 #if DEBUG
     private struct UpNextSample: View {
+        var secondsLeft: Int? = 7
         private let next = MockMedia.episodes[1]
 
         var body: some View {
@@ -144,7 +150,7 @@ public struct SkipIndicator: View {
                     UpNextCard(
                         card: next,
                         artwork: MockMedia.backdropImage(for: next),
-                        secondsLeft: 7,
+                        secondsLeft: secondsLeft,
                         playNow: {},
                         cancel: {}
                     )
@@ -166,5 +172,9 @@ public struct SkipIndicator: View {
     #Preview("Largest text", traits: .landscapeLeft) {
         UpNextSample()
             .dynamicTypeSize(.accessibility5)
+    }
+
+    #Preview("Without countdown", traits: .landscapeLeft) {
+        UpNextSample(secondsLeft: nil)
     }
 #endif

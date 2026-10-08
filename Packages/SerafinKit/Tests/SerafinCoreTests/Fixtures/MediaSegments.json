@@ -1,0 +1,11 @@
+{
+  "Items": [
+    {"Id": "a3f1c8e2b7d94f6a8c5e1b2d3f4a5b6c", "ItemId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Type": "Outro", "StartTicks": 12000000000, "EndTicks": 13200000000},
+    {"Id": "b4e2d9f3c8a05b7b9d6f2c3e4a5b6c7d", "ItemId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Type": "Intro", "StartTicks": 300000000, "EndTicks": 900000000},
+    {"Id": "c5f3eaf4d9b16c8cae7a3d4f5b6c7d8e", "ItemId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Type": "Recap", "StartTicks": 0, "EndTicks": 200000000},
+    {"Id": "d6a4fba5eac27d9dbf8b4e5a6c7d8e9f", "ItemId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Type": "Unknown", "StartTicks": 6000000000, "EndTicks": 6300000000},
+    {"Id": "e7b5acb6fbd38eaeca9c5f6b7d8e9fa0", "ItemId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Type": "Preview", "StartTicks": 9000000000, "EndTicks": 8000000000}
+  ],
+  "TotalRecordCount": 5,
+  "StartIndex": 0
+}

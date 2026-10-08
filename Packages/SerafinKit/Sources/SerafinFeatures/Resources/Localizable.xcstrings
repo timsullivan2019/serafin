@@ -202,6 +202,9 @@
     "Added to Favorites" : {
       "comment" : "Spoken once a favorite is added."
     },
+    "Ads" : {
+      "comment" : "Settings switch: skip adverts by themselves."
+    },
     "After 1 Hour" : {
       "comment" : "Lock grace period."
     },
@@ -337,6 +340,9 @@
     "Created from the audio" : {
       "comment" : "Detail of subtitles the device generates from a video's audio."
     },
+    "Credits" : {
+      "comment" : "Settings switch: skip credits by themselves."
+    },
     "Date Added" : {
       "comment" : "Library sort option: newest additions first."
     },
@@ -432,6 +438,9 @@
     },
     "Information" : {
       "comment" : "Detail screen column heading."
+    },
+    "Intros" : {
+      "comment" : "Settings switch: skip intros by themselves."
     },
     "It may have been removed from your library." : {
       "comment" : "Explanation when an item is missing."
@@ -601,6 +610,9 @@
     "Order" : {
       "comment" : "Heading of a library's sort directions."
     },
+    "Other Segments" : {
+      "comment" : "Settings switch: skip stretches the server marked without naming them."
+    },
     "Password" : {
       "comment" : "Label of the password field."
     },
@@ -638,6 +650,9 @@
     "Preview" : {
       "comment" : "Header over sample controls in the chosen accent colour."
     },
+    "Previews" : {
+      "comment" : "Settings switch: skip previews by themselves."
+    },
     "Privacy" : {
       "comment" : "Settings section header."
     },
@@ -661,6 +676,9 @@
     },
     "Rating" : {
       "comment" : "Library sort option: highest rated first."
+    },
+    "Recaps" : {
+      "comment" : "Settings switch: skip recaps by themselves."
     },
     "Recent" : {
       "comment" : "Heading over recent searches."
@@ -752,6 +770,9 @@
     "Serafin only uses unencrypted connections on your own network. Use the server's https:// address instead." : {
       "comment" : "Explanation when plain HTTP to a public server is refused."
     },
+    "Serafin skips these when the server marks them, and says so briefly. Otherwise it offers to skip them. Credits offer the next episode, which plays by itself when your account plays the next episode automatically." : {
+      "comment" : "Settings footer under the stretches the player skips without asking."
+    },
     "Serafin works with Jellyfin 10.10 or newer. This server runs %@." : {
       "comment" : "Explanation when the server is too old. The argument is its version, such as 10.9.11."
     },
@@ -802,6 +823,12 @@
     },
     "Signs in" : {
       "comment" : "Hint on a user picture on the sign-in screen, for a user without a password."
+    },
+    "Skip Automatically" : {
+      "comment" : "Settings section header: stretches the player skips without asking."
+    },
+    "Skip Segments" : {
+      "comment" : "Title of the settings for skipping marked stretches, such as intros, and its row in Settings."
     },
     "Small" : {
       "comment" : "Subtitle size."

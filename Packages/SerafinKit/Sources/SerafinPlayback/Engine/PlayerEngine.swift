@@ -52,7 +52,11 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var failure: (any Error)?
     /// The episode after the one playing, for autoplay. Nil for movies and last episodes.
     public private(set) var nextItem: BaseItemDto?
-    /// The stretches the server marked in the item, such as its intro, in order. Empty when it marked none.
+    /// Whether the next episode plays by itself after a countdown, as the account's Play Next Episode Automatically
+    /// setting says. On until the account says otherwise.
+    public private(set) var playsNextEpisodeAutomatically = true
+    /// The stretches the server marked in the item, such as its intro, in order and without overlaps. Empty when it
+    /// marked none.
     public private(set) var segments: [PlaybackSegment] = []
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
@@ -90,10 +94,11 @@ public enum PlaybackState: Equatable, Sendable {
     private let client: JellyfinClient
     private let negotiator: PlaybackNegotiator
     private let nextEpisode: NextEpisode
-    private let mediaSegments: MediaSegments
+    private let segmentRepository: SegmentRepository
     private let streamLoader: StreamLoader
-    /// Reads the account's language preferences, for Settings' subtitle mode, or nil to leave subtitles to the server.
-    private let languagePreferences: (@Sendable () async throws -> LanguagePreferences)?
+    /// Reads the account's playback preferences, for Settings' subtitle mode and autoplay, or nil to leave subtitles
+    /// to the server and play next episodes by themselves.
+    private let playbackPreferences: (@Sendable () async throws -> PlaybackPreferences)?
     /// Settings' subtitle rules for what's playing, or nil when the account's settings couldn't be read.
     @ObservationIgnored private var subtitleRules: SubtitleRules?
     /// The languages the viewer reads, most wanted first: Settings' subtitle language, or the device's languages.
@@ -173,20 +178,20 @@ public enum PlaybackState: Equatable, Sendable {
     ///   - client: The account's client.
     ///   - userID: The account's user ID.
     ///   - pinning: The certificate pins to accept for streams, so a pinned self-signed server plays.
-    ///   - languagePreferences: Reads the account's language preferences, for the subtitles each video starts with.
-    ///     Nil leaves that to the server.
+    ///   - playbackPreferences: Reads the account's playback preferences, for the subtitles each video starts with
+    ///     and whether next episodes play by themselves. Nil leaves subtitles to the server, with autoplay on.
     public init(
         client: JellyfinClient,
         userID: String,
         pinning: PinningDelegate?,
-        languagePreferences: (@Sendable () async throws -> LanguagePreferences)? = nil
+        playbackPreferences: (@Sendable () async throws -> PlaybackPreferences)? = nil
     ) {
         self.client = client
         self.negotiator = PlaybackNegotiator(client: client, userID: userID)
         self.nextEpisode = NextEpisode(client: client, userID: userID)
-        self.mediaSegments = MediaSegments(client: client)
+        self.segmentRepository = SegmentRepository(client: client)
         self.streamLoader = StreamLoader(pinning: pinning)
-        self.languagePreferences = languagePreferences
+        self.playbackPreferences = playbackPreferences
         diagnosticsSession = URLSession(configuration: .ephemeral, delegate: pinning, delegateQueue: nil)
         player.allowsExternalPlayback = true
         // Every subtitle selection is the engine's own. Left on, AVPlayer picks subtitles by itself, such as the ones
@@ -256,13 +261,15 @@ public enum PlaybackState: Equatable, Sendable {
             guard let itemID = item.id else { throw PlaybackError.notPlayable }
             // Asked for alongside the plan, so an intro at the very start can be skipped from its first seconds, but
             // waited for only once playback has started, so a slow answer never holds the picture up.
-            async let marked = try? mediaSegments.of(itemID)
-            async let preferences = Self.read(languagePreferences)
+            async let marked = segmentRepository.segments(of: itemID, isEpisode: item.type == .episode)
+            async let preferences = Self.read(playbackPreferences)
             var plan = try await negotiator.plan(for: itemID, options: options)
             guard load == generation else { return }
-            let rules = await preferences.map { SubtitleRules(preferences: $0) }
+            let account = await preferences
             guard load == generation else { return }
+            let rules = account.map { SubtitleRules(preferences: $0.languages) }
             subtitleRules = rules
+            playsNextEpisodeAutomatically = account?.playsNextEpisodeAutomatically ?? true
             let subtitles = Self.startingSubtitles(carrying: subtitleChoice, rules: rules, in: plan)
             // The server picked by its own defaults, so it's asked again when the subtitles need another stream.
             if subtitles.serverIndex != (plan.subtitleStreamIndex ?? -1) {
@@ -283,7 +290,7 @@ public enum PlaybackState: Equatable, Sendable {
             reporter = ProgressReporter(client: client, plan: plan)
             await reporter?.start(at: options.startPosition, isPaused: false)
             startReporting()
-            let found = await marked ?? []
+            let found = await marked
             guard load == generation else { return }
             segments = found
         } catch is CancellationError {
@@ -1167,14 +1174,14 @@ public enum PlaybackState: Equatable, Sendable {
     /// Reads the account's language preferences with `read`, or nil when there's nothing to read them with or they
     /// can't be read.
     private nonisolated static func read(
-        _ read: (@Sendable () async throws -> LanguagePreferences)?
-    ) async -> LanguagePreferences? {
+        _ read: (@Sendable () async throws -> PlaybackPreferences)?
+    ) async -> PlaybackPreferences? {
         guard let read else { return nil }
         do {
             return try await read()
         } catch {
             Logger.playback.error(
-                "Could not read the language preferences: \(error.localizedDescription, privacy: .private)")
+                "Could not read the playback preferences: \(error.localizedDescription, privacy: .private)")
             return nil
         }
     }

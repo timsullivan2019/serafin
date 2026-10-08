@@ -68,8 +68,8 @@ private struct AppearanceSection: View {
     }
 }
 
-/// Audio and subtitles, the current server's streaming caps on Wi-Fi and cellular, and whether putting the player
-/// away carries a playing video on in Picture in Picture.
+/// Audio and subtitles, which marked stretches skip by themselves, the current server's streaming caps on Wi-Fi and
+/// cellular, and whether putting the player away carries a playing video on in Picture in Picture.
 private struct PlaybackSection: View {
     let server: Server?
     let isOneOfSeveral: Bool
@@ -100,6 +100,9 @@ private struct PlaybackSection: View {
         Section {
             NavigationLink(value: Route.audioAndSubtitles) {
                 Text(AudioAndSubtitlesView.title)
+            }
+            NavigationLink(value: Route.skipSegments) {
+                Text(SkipSegmentsView.title)
             }
             Picker(
                 String(localized: "Quality on Wi-Fi", bundle: .module, comment: "Settings row."),
