@@ -62,7 +62,8 @@ public enum PlaybackState: Equatable, Sendable {
     /// Subtitles picked in the sheet that are on their way in a new stream from the server, or nil.
     public private(set) var pendingSubtitleSelection: SubtitleSelection?
     /// The subtitles iOS generates from what's playing, or nil where iOS doesn't offer them. They only show when
-    /// picked.
+    /// picked. iOS doesn't offer them in a stream that carries text subtitles in their language, so once it has offered
+    /// them for a video they stay on offer, and picking them loads the video again without its text subtitles.
     public private(set) var generatedSubtitles: GeneratedSubtitles?
     /// The subtitles picked in the player for what's playing, or nil while Settings' choice stands. An episode that
     /// plays on from the one before keeps them.
@@ -99,6 +100,9 @@ public enum PlaybackState: Equatable, Sendable {
     private var viewerLanguages: [String] {
         subtitleRules?.languages ?? Locale.preferredLanguages.compactMap(SubtitleRules.language)
     }
+    /// The generated subtitles a stream of the video playing has offered the viewer, so they stay on offer in a
+    /// stream that doesn't offer them, as one with text subtitles in their language.
+    @ObservationIgnored private var offeredGenerated: GeneratedSubtitles?
     /// The legible option the engine selected in the current item, so a change made by anything else is undone.
     @ObservationIgnored private var legible: LegibleSelection?
     /// How many times a legible selection the engine didn't make has been undone in the current item.
@@ -237,6 +241,7 @@ public enum PlaybackState: Equatable, Sendable {
         subtitleSelection = .off
         pendingSubtitleSelection = nil
         generatedSubtitles = nil
+        offeredGenerated = nil
         if !keepsSubtitleChoice {
             subtitleChoice = nil
         }
@@ -319,6 +324,7 @@ public enum PlaybackState: Equatable, Sendable {
         subtitleSelection = .off
         pendingSubtitleSelection = nil
         generatedSubtitles = nil
+        offeredGenerated = nil
         nextItem = nil
         segments = []
         state = .idle
@@ -849,18 +855,19 @@ public enum PlaybackState: Equatable, Sendable {
         reassertions = 0
         guard let group else {
             legible = nil
-            generatedSubtitles = nil
+            generatedSubtitles = offeredGenerated
             // With nothing for the player to draw, only subtitles burned into the picture can show.
             return Self.isBurnedIn(subtitles.serverIndex, in: plan.streams(.subtitle)) ? subtitles : .off
         }
         let options = Self.legibleOptions(of: group, in: playerItem)
         let generated = Self.generatedPosition(
             among: options, audioLanguage: plan.audioLanguage, viewerLanguages: viewerLanguages)
-        generatedSubtitles = generated.map { position in
-            GeneratedSubtitles(
-                languageTag: group.options[position].extendedLanguageTag,
-                isTranslation: Self.isTranslation(options[position], audioLanguage: plan.audioLanguage))
+        if let generated {
+            offeredGenerated = GeneratedSubtitles(
+                languageTag: group.options[generated].extendedLanguageTag,
+                isTranslation: Self.isTranslation(options[generated], audioLanguage: plan.audioLanguage))
         }
+        generatedSubtitles = offeredGenerated ?? Self.withheldGenerated(among: options, in: plan)
         let (position, shown) = Self.legiblePosition(
             for: subtitles, in: plan, among: options, viewerLanguages: viewerLanguages)
         let option = position.map { group.options[$0] }
@@ -1135,6 +1142,20 @@ public enum PlaybackState: Equatable, Sendable {
         }
         guard let language = option.language, let audio = SubtitleRules.language(audioLanguage) else { return false }
         return language != audio
+    }
+
+    /// The subtitles iOS would generate from the audio in a stream without text subtitles, when iOS holds them back
+    /// from this one: it offers subtitles generated in another language, but none in the audio's, which `plan`'s
+    /// stream carries as text. Nil otherwise.
+    nonisolated static func withheldGenerated(among options: [LegibleOption], in plan: PlaybackPlan)
+        -> GeneratedSubtitles?
+    {
+        guard let audio = SubtitleRules.language(plan.audioLanguage),
+            options.contains(where: { $0.isGenerated && $0.language != audio }),
+            !options.contains(where: { $0.isGenerated && $0.language == audio }),
+            carriedSubtitles(of: plan).contains(where: { SubtitleRules.language($0.language) == audio })
+        else { return nil }
+        return GeneratedSubtitles(languageTag: audio)
     }
 
     /// Whether the subtitles `streamIndex` names are burned into the picture.
