@@ -103,11 +103,18 @@ struct TrackChoices: Equatable {
         }
     }
 
-    /// The generated subtitles' row: "Generated", with their language and where they come from.
+    /// The generated subtitles' row: "Generated", with their language and where they come from: written down from
+    /// the audio, or translated from it.
     static func choice(for generated: GeneratedSubtitles, locale: Locale) -> TrackChoice {
-        let from = String(
-            localized: "Created from the audio", bundle: .module,
-            comment: "Detail of subtitles the device generates from a video's audio.")
+        let from =
+            generated.isTranslation
+            ? String(
+                localized: "Translated from the audio", bundle: .module,
+                comment:
+                    "Detail of subtitles the device generates by translating a video's audio into another language.")
+            : String(
+                localized: "Created from the audio", bundle: .module,
+                comment: "Detail of subtitles the device generates from a video's audio.")
         let language = SubtitleRules.language(generated.languageTag).flatMap {
             locale.localizedString(forLanguageCode: $0)
         }

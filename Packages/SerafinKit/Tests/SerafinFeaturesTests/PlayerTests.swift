@@ -146,6 +146,9 @@ import Testing
         #expect(choices.selectedSubtitles == .generated)
         let unknown = TrackChoices.choice(for: GeneratedSubtitles(languageTag: nil), locale: english)
         #expect(unknown.detail == "Created from the audio")
+        let translated = TrackChoices.choice(
+            for: GeneratedSubtitles(languageTag: "es-MX", isTranslation: true), locale: english)
+        #expect(translated.detail == "Spanish · Translated from the audio")
     }
 
     @Test func channelLayoutsReadTheWayPeopleSayThem() {

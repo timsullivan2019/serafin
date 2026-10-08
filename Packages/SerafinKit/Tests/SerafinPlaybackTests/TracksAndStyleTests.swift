@@ -192,6 +192,40 @@ import Testing
         #expect(PlayerEngine.legiblePosition(for: .generated, in: off, among: unselectable) == (nil, .off))
     }
 
+    @Test func iOSsTranslationIntoAnotherLanguageIsntOffered() throws {
+        // As on the owner's phone: an English show with English subtitles of its own, for which iOS offers only a
+        // Spanish translation.
+        let translated = [
+            LegibleOption(language: "en"), LegibleOption(),
+            LegibleOption(isGenerated: true, language: "es"),
+        ]
+        #expect(PlayerEngine.generatedPosition(among: translated, audioLanguage: "eng", viewerLanguages: ["en"]) == nil)
+        #expect(
+            PlayerEngine.legiblePosition(
+                for: .generated, in: try plan(subtitle: 3), among: translated, viewerLanguages: ["en"])
+                == (nil, .off))
+        // A viewer who reads Spanish gets it, as a translation.
+        #expect(
+            PlayerEngine.generatedPosition(among: translated, audioLanguage: "eng", viewerLanguages: ["en", "es"]) == 2)
+        #expect(PlayerEngine.isTranslation(translated[2], audioLanguage: "eng"))
+    }
+
+    @Test func generatedSubtitlesInTheViewersLanguageComeFirstThenTheAudios() {
+        // A French film: iOS writes down the French and translates it into English.
+        let french = [
+            LegibleOption(isGenerated: true, language: "fr"),
+            LegibleOption(isGenerated: true, language: "en"),
+        ]
+        #expect(PlayerEngine.generatedPosition(among: french, audioLanguage: "fre", viewerLanguages: ["en"]) == 1)
+        #expect(PlayerEngine.isTranslation(french[1], audioLanguage: "fre"))
+        #expect(!PlayerEngine.isTranslation(french[0], audioLanguage: "fre"))
+        // Without one in the viewer's language, the audio's own.
+        #expect(PlayerEngine.generatedPosition(among: [french[0]], audioLanguage: "fre", viewerLanguages: ["en"]) == 0)
+        // iOS's own mark counts even where the audio's language is unknown.
+        #expect(PlayerEngine.isTranslation(LegibleOption(isGenerated: true, isTranslation: true), audioLanguage: nil))
+        #expect(!PlayerEngine.isTranslation(LegibleOption(isGenerated: true, language: "en"), audioLanguage: nil))
+    }
+
     @Test func aVideoStartsWithWhatSettingsSayUnlessPlayingOnFromAPick() throws {
         // The server remembered English PGS from an earlier playback, but Settings say Off.
         let remembered = try plan(subtitle: 2)
