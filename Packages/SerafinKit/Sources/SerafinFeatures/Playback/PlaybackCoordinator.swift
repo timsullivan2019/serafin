@@ -119,8 +119,11 @@ import SerafinPlayback
     ///   - zoomSource: The control the player grows out of, or nil to slide up as usual.
     ///   - presentsPlayer: Whether the full-screen player shows. An episode that follows on in Picture in Picture
     ///     stays there.
+    ///   - continuing: Whether this carries on from what was playing, as the next episode or a retry, so subtitles
+    ///     picked in the player stay as they were rather than going back to Settings' default.
     func play(
-        _ item: MediaItem, from start: Start = .resume, zoomSource: String? = nil, presentsPlayer: Bool = true
+        _ item: MediaItem, from start: Start = .resume, zoomSource: String? = nil, presentsPlayer: Bool = true,
+        continuing: Bool = false
     ) {
         guard item.card.kind == .movie || item.card.kind == .episode else { return }
         nowPlaying = item
@@ -153,7 +156,7 @@ import SerafinPlayback
         engine.describe(title: card.title, subtitle: subtitle, artwork: nil)
         loading?.cancel()
         loading = Task { [artwork] in
-            await engine.load(source, options: options)
+            await engine.load(source, options: options, keepsSubtitleChoice: continuing)
             guard !Task.isCancelled, let jpeg = await Self.lockScreenArtwork(for: source, from: artwork) else { return }
             engine.describe(title: card.title, subtitle: subtitle, artwork: jpeg)
         }
@@ -167,22 +170,22 @@ import SerafinPlayback
             stop()
             return
         }
-        play(item, from: .beginning, presentsPlayer: false)
+        play(item, from: .beginning, presentsPlayer: false, continuing: true)
     }
 
-    /// Plays the episode after the one that just ended.
+    /// Plays the episode after the one that just ended, with the subtitles picked in the player for it.
     func playNext() {
         guard let next = engine?.nextItem, let item = MediaItem(next) else {
             stop()
             return
         }
-        play(item, from: .beginning)
+        play(item, from: .beginning, continuing: true)
     }
 
     /// Tries the item again from where playback was.
     func retry() {
         guard let nowPlaying else { return }
-        play(nowPlaying, from: engine.map { .position($0.elapsed) } ?? .resume)
+        play(nowPlaying, from: engine.map { .position($0.elapsed) } ?? .resume, continuing: true)
     }
 
     /// Pauses or resumes.

@@ -49,6 +49,86 @@ import Testing
     }
 }
 
+@Suite struct SubtitleChoiceTests {
+    /// English subtitles the server sends in its stream, English SDH, French, and an English image subtitle the server
+    /// burns into the picture.
+    private let source = MediaSourceInfo(
+        id: "source-1",
+        mediaStreams: [
+            MediaStream(index: 0, type: .video),
+            MediaStream(index: 1, language: "eng", type: .audio),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 2, language: "eng", type: .subtitle),
+            MediaStream(
+                codec: "subrip", deliveryMethod: .hls, index: 3, isHearingImpaired: true, language: "eng",
+                type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 4, language: "fre", type: .subtitle),
+            MediaStream(codec: "pgssub", deliveryMethod: .encode, index: 5, language: "eng", type: .subtitle),
+        ]
+    )
+
+    private func plan(_ method: PlaybackPlan.Method, subtitle: Int?, source: MediaSourceInfo? = nil) throws
+        -> PlaybackPlan
+    {
+        PlaybackPlan(
+            itemID: "item-1",
+            mediaSource: source ?? self.source,
+            url: try #require(URL(string: "https://example.com/stream")),
+            method: method,
+            playSessionID: nil,
+            startPosition: .zero,
+            audioStreamIndex: 1,
+            subtitleStreamIndex: subtitle
+        )
+    }
+
+    @Test func burnedInSubtitlesOnlyChangeWithANewStream() throws {
+        let burnedIn = try plan(.transcode, subtitle: 5)
+        #expect(PlayerEngine.needsNewStream(toShow: nil, in: burnedIn))
+        // The stream carries the English text too, but switching to it would leave the old ones in the picture.
+        #expect(PlayerEngine.needsNewStream(toShow: 2, in: burnedIn))
+
+        let text = try plan(.directStream, subtitle: 2)
+        #expect(!PlayerEngine.needsNewStream(toShow: nil, in: text))
+        #expect(!PlayerEngine.needsNewStream(toShow: 4, in: text))
+        #expect(PlayerEngine.needsNewStream(toShow: 5, in: text))
+    }
+
+    @Test func askingAgainNamesTheVersionSoTheServerKeepsTheChoice() throws {
+        let off = PlayerEngine.optionsAskingAgain(
+            PlaybackOptions(subtitleStreamIndex: -1), for: try plan(.transcode, subtitle: 5))
+        #expect(off.mediaSourceID == "source-1")
+        #expect(off.subtitleStreamIndex == -1)
+    }
+
+    @Test func aChoiceCarriesOnToTheNextEpisodeByLanguageAndKind() throws {
+        let next = try plan(.directStream, subtitle: 2)
+        #expect(PlayerEngine.choice(showing: nil, in: next) == .off)
+        #expect(PlayerEngine.choice(showing: 3, in: next) == .language("eng", isForced: false, isHearingImpaired: true))
+        #expect(PlayerEngine.streamIndex(for: .off, in: next) == -1)
+        #expect(
+            PlayerEngine.streamIndex(for: .language("eng", isForced: false, isHearingImpaired: true), in: next) == 3)
+        #expect(
+            PlayerEngine.streamIndex(for: .language("fre", isForced: false, isHearingImpaired: true), in: next) == 4)
+        // No German, so Settings' default stands.
+        #expect(
+            PlayerEngine.streamIndex(for: .language("ger", isForced: false, isHearingImpaired: false), in: next) == nil)
+    }
+
+    @Test func onlyATextTrackInsideAnMP4PlaysFromTheOriginalFile() throws {
+        let file = MediaSourceInfo(
+            id: "source-2",
+            mediaStreams: [
+                MediaStream(codec: "mov_text", index: 2, type: .subtitle),
+                MediaStream(codec: "subrip", index: 3, isExternal: true, type: .subtitle),
+            ]
+        )
+        let plan = try plan(.directPlay, subtitle: nil, source: file)
+        #expect(PlayerEngine.allowsDirectPlay(showing: -1, in: plan))
+        #expect(PlayerEngine.allowsDirectPlay(showing: 2, in: plan))
+        #expect(!PlayerEngine.allowsDirectPlay(showing: 3, in: plan))
+    }
+}
+
 @Suite struct SubtitleStyleTests {
     @Test func theStandardSizeLeavesTheSystemsStyleAlone() {
         #expect(SubtitleStyle.standard.textMarkupAttributes.isEmpty)

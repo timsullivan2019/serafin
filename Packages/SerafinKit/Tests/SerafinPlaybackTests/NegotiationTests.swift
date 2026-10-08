@@ -151,6 +151,19 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(profile["MaxStreamingBitrate"] as? Int == 8_000_000)
     }
 
+    @Test func askingAgainForAVersionNamesIt() async throws {
+        // Jellyfin keeps a chosen subtitle or audio stream only when the request names the version it belongs to.
+        let host = "again.example.com"
+        var options = PlaybackOptions(subtitleStreamIndex: -1)
+        options.mediaSourceID = movie
+        _ = try await negotiate(on: host, item: movie, fixture: "PlaybackInfoDirectPlay", options: options)
+        let request = try #require(
+            StubURLProtocol.requests(to: "\(host):443", path: "/Items/\(movie)/PlaybackInfo").first)
+        let json = try body(of: request)
+        #expect(json["MediaSourceId"] as? String == movie)
+        #expect(json["SubtitleStreamIndex"] as? Int == -1)
+    }
+
     @Test func theProfileSaysWhatThisDevicePlays() async throws {
         let host = "av1-request.example.com"
         StubURLProtocol.stub(
