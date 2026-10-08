@@ -67,42 +67,6 @@ enum MediaBadges {
     }
 }
 
-/// A trailer on a detail screen: a link the server lists, such as on YouTube, or a file stored with the item.
-struct Trailer: Identifiable, Hashable, Sendable {
-    enum Source: Hashable, Sendable {
-        /// A web page, opened in Safari inside the app. Always `https`.
-        case web(URL)
-        /// A file on the server, played in the normal player.
-        case local(MediaItem)
-    }
-
-    let id: String
-    /// The trailer's name, as the server gives it.
-    let name: String
-    let source: Source
-
-    /// The trailers the server lists for `item`: its web links, keeping only `https` ones, then `local`.
-    static func trailers(for item: BaseItemDto, local: [BaseItemDto]) -> [Trailer] {
-        let fallbackName = String(localized: "Trailer", bundle: .module, comment: "The name of a trailer with none.")
-        let web: [Trailer] = (item.remoteTrailers ?? []).enumerated().compactMap { index, trailer in
-            guard let text = trailer.url, let url = URL(string: text), url.scheme?.lowercased() == "https",
-                url.host() != nil
-            else { return nil }
-            let name = trailer.name.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
-            return Trailer(id: "web-\(index)", name: name, source: .web(url))
-        }
-        let files: [Trailer] = local.compactMap { trailer in
-            guard let id = trailer.id else { return nil }
-            let name = trailer.name.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName
-            let card = MediaCard(
-                id: id, kind: .movie, title: name,
-                runtime: trailer.runTimeTicks.flatMap { $0 > 0 ? .milliseconds($0 / 10_000) : nil })
-            return Trailer(id: "local-\(id)", name: name, source: .local(MediaItem(card: card, source: trailer)))
-        }
-        return files + web
-    }
-}
-
 /// A chapter of a movie or episode, for its detail screen's Chapters row.
 struct Chapter: Identifiable, Hashable, Sendable {
     /// The chapter's place among the item's chapters, from 0, which its picture's address uses.

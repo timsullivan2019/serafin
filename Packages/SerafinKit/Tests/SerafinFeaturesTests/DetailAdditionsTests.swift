@@ -65,31 +65,7 @@ private func item(_ streams: [MediaStream], defaultAudio: Int? = nil) -> BaseIte
     }
 }
 
-@Suite struct TrailerAndChapterTests {
-    @Test func onlyHTTPSWebTrailersAreKeptAndStoredOnesComeFirst() {
-        var source = BaseItemDto(id: "aaaa1111")
-        source.remoteTrailers = [
-            NamedURL(name: "Trailer", url: "https://www.youtube.com/watch?v=abc"),
-            NamedURL(name: "Plain", url: "http://example.com/trailer"),
-            NamedURL(name: "Script", url: "javascript:alert(1)"),
-            NamedURL(name: "", url: "https://archive.org/details/x"),
-        ]
-        let local = [BaseItemDto(id: "bbbb2222", name: "Teaser", runTimeTicks: 600_000_000)]
-        let trailers = Trailer.trailers(for: source, local: local)
-        #expect(trailers.map(\.name) == ["Teaser", "Trailer", "Trailer"])
-        guard case .local(let file) = trailers[0].source else {
-            Issue.record("The stored trailer isn't first")
-            return
-        }
-        #expect(file.card.kind == .movie)
-        #expect(file.card.runtime == .seconds(60))
-        guard case .web(let url) = trailers[1].source else {
-            Issue.record("The web trailer is missing")
-            return
-        }
-        #expect(url.host() == "www.youtube.com")
-    }
-
+@Suite struct ChapterAndShareTests {
     @Test func chaptersKeepTheirOrderStartsAndNames() {
         var source = BaseItemDto(id: "aaaa1111")
         source.chapters = [

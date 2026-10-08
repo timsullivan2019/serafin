@@ -97,11 +97,11 @@ Acceptance: no empty space below the fold on an iPhone 17 with two libraries; ti
 
 - **Badges row** under the metadata line, built from `mediaStreams`: height ≥ 2160 → 4K, ≥ 720 → HD; `videoRangeType` → HDR, HDR10+, Dolby Vision; audio codec and channels → Dolby Atmos (eac3 with Atmos flag or truehd), 5.1, 7.1, Lossless (flac, alac, truehd); subtitle streams with SDH or forced flags → SDH / CC.
 - **Play pill state**: "Resume · 42 min left" with a thin progress line inside the pill when `userData.playbackPositionTicks > 0`; long-press menu offers "Play from beginning". Episodes of a series show "Play S2 E4" with the next episode's title in the metadata line.
-- **Trailers row** when `remoteTrailers` is non-empty: 16:9 cards; tapping opens the URL in `SFSafariViewController` (YouTube links) or plays local trailers (`localTrailerCount > 0`, via `/Users/{id}/Items/{id}/LocalTrailers`) in the normal player.
+- **No trailers.** A Trailers row was built here and removed on 2026-10-08 at the owner's request: the links a server lists can point to anything, one was a fan edit, so the app shows no trailers anywhere.
 - **Chapters row** when `chapters` is non-empty: 16:9 chapter thumbnails from `/Items/{id}/Images/Chapter/{index}` with the chapter name and start time; tapping starts playback at that position.
 - Toolbar: keep the glass capsule with played and favourite; add a `Menu` (ellipsis) with Mark Unplayed, Refresh Metadata (admin only), Share (link to the item on the server's web UI).
 
-Acceptance: badges match the Jellyfin web client's media info for five test items; chapter and trailer rows hide cleanly when absent.
+Acceptance: badges match the Jellyfin web client's media info for five test items; the chapter row hides cleanly when absent.
 
 ### 3.5.5 Settings fixes
 
@@ -156,7 +156,7 @@ One PR, plus a short screen recording.
 2. Overview clamped to three lines with an inline "More".
 3. Replace the Seasons poster row with a season `Menu` in the section header ("Season 2" with the up/down chevron glyph), listing all seasons with episode counts, Specials last, defaulting to the season of the pill's episode.
 4. Under it, episodes as a horizontal row of landscape cards on iPhone (card width about 80% of the content width with the next card peeking), a two-column grid on iPad: thumbnail with play glyph and runtime, "EPISODE n" caption, title, two-line synopsis, progress bar, watched check. The row initially scrolls to the next unwatched episode. Tap plays; long-press and an ellipsis button open a context menu with Episode Details, Mark as Watched/Unwatched, Favorite, Go to Season.
-5. Section order after episodes: Trailers, Cast & Crew, More Like This, Information.
+5. Section order after episodes: Cast & Crew, More Like This, Information. (Trailers came first until they were removed from the app; see 3.5.4.)
 6. Home: Continue Watching and Next Up cards play on tap; their context menu gains "Go to Show" and "Episode Details". Movie cards keep opening the movie page.
 7. Remove the Season screen from the UI; keep its route for deep links. The episode detail page is unchanged and reachable from the menus, Search and Chapters.
 8. Previews with `MockMedia` for a one-season show, a sixteen-season show and a show with Specials; VoiceOver labels on cards include episode number, title, runtime and watched state. Record play-from-Home and play-from-show-page for the gate review.

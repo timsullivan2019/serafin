@@ -117,8 +117,6 @@ struct LiveMediaSource: MediaSource {
         var details = ItemDetails(item: item, cast: cast(of: source), playable: item)
         details.information = ItemInformation.columns(for: source, card: item.card)
         details.badges = MediaBadges.badges(for: source)
-        let localTrailers = (source.localTrailerCount ?? 0) > 0 ? (try? await library.localTrailers(of: id)) ?? [] : []
-        details.trailers = Trailer.trailers(for: source, local: localTrailers)
         if item.card.kind == .movie || item.card.kind == .episode {
             details.chapters = Chapter.chapters(of: source)
         }

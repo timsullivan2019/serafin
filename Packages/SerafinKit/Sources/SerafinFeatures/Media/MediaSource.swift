@@ -244,8 +244,6 @@ struct ItemDetails: Sendable {
     var information: [InformationColumns.Column] = []
     /// The media badges under the hero's details, such as 4K and Dolby Atmos.
     var badges: [String] = []
-    /// Trailers, stored with the item or linked on the web.
-    var trailers: [Trailer] = []
     /// A movie's or an episode's chapters.
     var chapters: [Chapter] = []
 }

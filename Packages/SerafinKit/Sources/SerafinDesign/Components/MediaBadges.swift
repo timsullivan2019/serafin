@@ -99,8 +99,8 @@ private struct FlowingBadges: Layout {
     }
 }
 
-/// A 16:9 picture with a title and a line under it, for a detail screen's trailers and chapters. A play symbol sits
-/// on the picture, since tapping one plays it.
+/// A 16:9 picture with a title and a line under it, for a detail screen's chapters. A play symbol sits on the
+/// picture, since tapping one plays it.
 public struct ThumbnailCard: View {
     private let title: String
     private let caption: String?
@@ -110,7 +110,7 @@ public struct ThumbnailCard: View {
     /// Creates a card.
     ///
     /// - Parameters:
-    ///   - title: The trailer's or chapter's name.
+    ///   - title: The chapter's name.
     ///   - caption: A line under it, such as a chapter's start time.
     ///   - image: The picture, or nil while it loads or when there is none.
     ///   - number: For a chapter that has no picture, its number, drawn large on a dark tile in its place.

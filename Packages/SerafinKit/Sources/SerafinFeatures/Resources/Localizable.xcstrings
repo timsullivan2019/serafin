@@ -911,12 +911,6 @@
     "Track %lld" : {
       "comment" : "A track with no language or name."
     },
-    "Trailer" : {
-      "comment" : "The name of a trailer with none."
-    },
-    "Trailers" : {
-      "comment" : "Row of an item's trailers."
-    },
     "Trust This Certificate" : {
       "comment" : "Button that pins a certificate."
     },

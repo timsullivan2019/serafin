@@ -5,8 +5,8 @@ import SwiftUI
 
 /// A movie, show or episode: the hero header, the overview, then the rows below.
 ///
-/// A show's page follows the TV app: its episodes come first, one season at a time under a season menu, then
-/// trailers, cast and crew, similar titles and the information columns.
+/// A show's page follows the TV app: its episodes come first, one season at a time under a season menu, then cast and
+/// crew, similar titles and the information columns.
 struct ItemDetailView: View {
     @State private var model: ItemDetailModel
     @Environment(\.media) private var media
@@ -90,8 +90,6 @@ private struct DetailContent: View {
     /// Where the top safe area ends, below the navigation bar, which the hero's text and pill fade out before
     /// reaching.
     @State private var safeAreaTop: CGFloat = 0
-    /// A trailer's web page, showing in Safari inside the app.
-    @State private var webTrailer: WebPage?
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.playerZoomNamespace) private var playerZoom
     @Environment(\.media) private var media
@@ -106,11 +104,9 @@ private struct DetailContent: View {
                 about
                 if isSeries {
                     episodes
-                    trailers
                     cast
                     similar
                 } else {
-                    trailers
                     chapters
                     cast
                     moreEpisodes
@@ -142,10 +138,6 @@ private struct DetailContent: View {
         // the top, and while the screen zooms in the effect would show as a band across the top, so it stays hidden.
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollEdgeEffectHidden(!isScrolled, for: .top)
-        .sheet(item: $webTrailer) { page in
-            WebPageView(url: page.url)
-                .ignoresSafeArea()
-        }
         // Each season's picture downloads ahead, at the hero's size, so picking a season never waits for it.
         .task(id: SeasonPrefetch(seasons: details.seasons.map(\.id), hero: heroGeometry)) {
             model.prefetchSeasonArtwork(artwork: artwork, hero: heroGeometry)
@@ -250,18 +242,6 @@ private struct DetailContent: View {
                 model: model
             ) {
                 model.followSelectedSeason(from: media, artwork: artwork, hero: heroGeometry)
-            }
-        }
-    }
-
-    @ViewBuilder private var trailers: some View {
-        if !details.trailers.isEmpty {
-            MediaRow(
-                String(localized: "Trailers", bundle: .module, comment: "Row of an item's trailers."),
-                style: .landscape,
-                items: details.trailers
-            ) { trailer in
-                TrailerLink(trailer: trailer, item: details.item) { webTrailer = WebPage(url: $0) }
             }
         }
     }
@@ -493,35 +473,6 @@ private struct SeasonFailure: View {
     }
 }
 
-/// A trailer's card: the item's art with the trailer's name. A web trailer opens in Safari inside the app; one stored
-/// with the item plays in the normal player.
-private struct TrailerLink: View {
-    let trailer: Trailer
-    let item: MediaItem
-    let openWeb: (URL) -> Void
-    @Environment(PlaybackCoordinator.self) private var playback
-
-    var body: some View {
-        Button {
-            switch trailer.source {
-            case .web(let url): openWeb(url)
-            case .local(let file): playback.play(file)
-            }
-        } label: {
-            ItemArtwork(item, role: .watching) { image in
-                ThumbnailCard(title: trailer.name, caption: caption, image: image)
-            }
-        }
-        .buttonStyle(.card)
-    }
-
-    private var caption: String? {
-        guard case .web(let url) = trailer.source else { return nil }
-        // Where it opens, such as youtube.com.
-        return url.host()?.replacing(/^www\./, with: "")
-    }
-}
-
 /// A chapter's card, which plays the item from the chapter's start.
 private struct ChapterLink: View {
     let chapter: Chapter
@@ -565,12 +516,6 @@ private struct ChapterLink: View {
             content(nil)
         }
     }
-}
-
-/// A web address shown in a sheet, for a trailer.
-private struct WebPage: Identifiable {
-    let url: URL
-    var id: URL { url }
 }
 
 /// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched,
