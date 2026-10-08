@@ -11,36 +11,90 @@ struct TrackChoices: Equatable {
     var selectedAudio: Int?
     /// The subtitle tracks.
     var subtitles: [TrackChoice]
-    /// The server's number for the subtitles showing, or nil when they are off.
-    var selectedSubtitle: Int?
+    /// The device's generated subtitles, as their row shows them, or nil when it offers none.
+    var generatedSubtitles: TrackChoice?
+    /// The subtitles showing.
+    var selectedSubtitles: SubtitlePick
+    /// Subtitles picked that are still on their way, or nil.
+    var pendingSubtitles: SubtitlePick?
 
-    /// The tracks of the version `plan` plays, with its current choices.
-    init(plan: PlaybackPlan, locale: Locale = .current) {
-        let audio = plan.audioStreamIndex ?? plan.mediaSource.defaultAudioStreamIndex
-        let subtitle = plan.subtitleStreamIndex ?? plan.mediaSource.defaultSubtitleStreamIndex
+    /// The tracks of the version `plan` plays, with the subtitles the player shows.
+    ///
+    /// - Parameters:
+    ///   - plan: How the version plays.
+    ///   - subtitles: The subtitles showing.
+    ///   - pending: Subtitles picked that are still on their way, or nil.
+    ///   - generated: The generated subtitles the device offers, or nil.
+    ///   - locale: The language names are in.
+    init(
+        plan: PlaybackPlan,
+        subtitles: SubtitleSelection,
+        pending: SubtitleSelection? = nil,
+        generated: GeneratedSubtitles? = nil,
+        locale: Locale = .current
+    ) {
         self.init(
             audioStreams: plan.streams(.audio),
             subtitleStreams: plan.streams(.subtitle),
-            selectedAudio: audio,
-            selectedSubtitle: subtitle,
+            selectedAudio: plan.audioStreamIndex ?? plan.mediaSource.defaultAudioStreamIndex,
+            subtitles: subtitles,
+            pending: pending,
+            generated: generated,
             locale: locale
         )
     }
 
     /// The tracks among `audioStreams` and `subtitleStreams`.
-    ///
-    /// - Parameter selectedSubtitle: The subtitles showing, where -1 or nil means off.
     init(
         audioStreams: [MediaStream],
         subtitleStreams: [MediaStream],
         selectedAudio: Int?,
-        selectedSubtitle: Int?,
+        subtitles selection: SubtitleSelection,
+        pending: SubtitleSelection? = nil,
+        generated: GeneratedSubtitles? = nil,
         locale: Locale = .current
     ) {
         audio = audioStreams.compactMap { Self.choice(for: $0, locale: locale) }
         subtitles = subtitleStreams.compactMap { Self.choice(for: $0, locale: locale) }
+        generatedSubtitles = generated.map { Self.choice(for: $0, locale: locale) }
         self.selectedAudio = selectedAudio
-        self.selectedSubtitle = selectedSubtitle.flatMap { $0 >= 0 ? $0 : nil }
+        selectedSubtitles = Self.pick(selection)
+        pendingSubtitles = pending.map(Self.pick)
+    }
+
+    /// The picker's form of the subtitles the player shows.
+    static func pick(_ selection: SubtitleSelection) -> SubtitlePick {
+        switch selection {
+        case .off: .off
+        case .stream(let index): .track(index)
+        case .generated: .generated
+        }
+    }
+
+    /// The subtitles the player shows for a pick in the picker.
+    static func selection(_ pick: SubtitlePick) -> SubtitleSelection {
+        switch pick {
+        case .off: .off
+        case .track(let index): .stream(index)
+        case .generated: .generated
+        }
+    }
+
+    /// The generated subtitles' row: "Generated", with their language and where they come from.
+    static func choice(for generated: GeneratedSubtitles, locale: Locale) -> TrackChoice {
+        let from = String(
+            localized: "Created from the audio", bundle: .module,
+            comment: "Detail of subtitles the device generates from a video's audio.")
+        let language = SubtitleRules.language(generated.languageTag).flatMap {
+            locale.localizedString(forLanguageCode: $0)
+        }
+        return TrackChoice(
+            id: -1,
+            title: String(
+                localized: "Generated", bundle: .module,
+                comment: "Choice in the player for subtitles the device generates from the audio."),
+            detail: language.map { "\($0) · \(from)" } ?? from
+        )
     }
 
     /// A stream as the picker lists it: its language as the title, then its own name, format and channels.
@@ -55,20 +109,21 @@ struct TrackChoices: Equatable {
         if let name, name != title {
             details.append(name)
         }
+        // A track's own name often already says what it is, as in "English Forced" or "Surround 5.1".
+        let alreadySaid = { (detail: String) in name?.localizedCaseInsensitiveContains(detail) == true }
         if stream.type == .subtitle {
-            if stream.isForced == true {
-                details.append(
-                    String(localized: "Forced", bundle: .module, comment: "Subtitles shown only for foreign speech."))
+            let forced = String(
+                localized: "Forced", bundle: .module, comment: "Subtitles shown only for foreign speech.")
+            if stream.isForced == true, !alreadySaid(forced) {
+                details.append(forced)
             }
-            if stream.isHearingImpaired == true {
-                details.append(
-                    String(
-                        localized: "SDH", bundle: .module,
-                        comment: "Subtitles for the deaf and hard of hearing, as a short label."))
+            let hearingImpaired = String(
+                localized: "SDH", bundle: .module,
+                comment: "Subtitles for the deaf and hard of hearing, as a short label.")
+            if stream.isHearingImpaired == true, !alreadySaid(hearingImpaired) {
+                details.append(hearingImpaired)
             }
         }
-        // A track's own name often already says its format or channels, as in "Surround 5.1".
-        let alreadySaid = { (detail: String) in name?.localizedCaseInsensitiveContains(detail) == true }
         if let codec = stream.codec, !alreadySaid(Self.formatName(codec)) {
             details.append(Self.formatName(codec))
         }

@@ -17,16 +17,29 @@ public struct TrackChoice: Identifiable, Hashable, Sendable {
     }
 }
 
-/// The audio and subtitle picker the player opens in a sheet: the audio tracks, then the subtitles with Off first,
-/// each current choice checked. Under its title it says how the video reaches the player, such as "Direct play".
+/// Subtitles the picker can show as chosen.
+public enum SubtitlePick: Hashable, Sendable {
+    /// None.
+    case off
+    /// The subtitle track with this ``TrackChoice/id``.
+    case track(Int)
+    /// Subtitles the device generates from the audio.
+    case generated
+}
+
+/// The audio and subtitle picker the player opens in a sheet: the audio tracks, then the subtitles with Off first and
+/// the device's generated subtitles last, where it offers them. What's showing is checked, and a pick still on its
+/// way shows a spinner. Under its title it says how the video reaches the player, such as "Direct play".
 public struct TrackPicker: View {
     private let delivery: PlaybackDelivery?
     private let audio: [TrackChoice]
     private let selectedAudio: Int?
     private let subtitles: [TrackChoice]
-    private let selectedSubtitle: Int?
+    private let generatedSubtitles: TrackChoice?
+    private let selectedSubtitles: SubtitlePick
+    private let pendingSubtitles: SubtitlePick?
     private let selectAudio: (Int) -> Void
-    private let selectSubtitle: (Int?) -> Void
+    private let selectSubtitles: (SubtitlePick) -> Void
     @Environment(\.dismiss) private var dismiss
 
     /// Creates the picker.
@@ -36,53 +49,44 @@ public struct TrackPicker: View {
     ///   - audio: The audio tracks.
     ///   - selectedAudio: The ``TrackChoice/id`` of the audio playing.
     ///   - subtitles: The subtitle tracks.
-    ///   - selectedSubtitle: The ``TrackChoice/id`` of the subtitles showing, or nil when they are off.
+    ///   - generatedSubtitles: The device's generated subtitles, as their row shows them, or nil when it offers none.
+    ///     Their ``TrackChoice/id`` isn't used.
+    ///   - selectedSubtitles: The subtitles showing.
+    ///   - pendingSubtitles: Subtitles picked that are still on their way, or nil.
     ///   - selectAudio: Called with the ``TrackChoice/id`` of the audio picked.
-    ///   - selectSubtitle: Called with the ``TrackChoice/id`` of the subtitles picked, or nil for Off.
+    ///   - selectSubtitles: Called with the subtitles picked.
     public init(
         delivery: PlaybackDelivery? = nil,
         audio: [TrackChoice],
         selectedAudio: Int?,
         subtitles: [TrackChoice],
-        selectedSubtitle: Int?,
+        generatedSubtitles: TrackChoice? = nil,
+        selectedSubtitles: SubtitlePick,
+        pendingSubtitles: SubtitlePick? = nil,
         selectAudio: @escaping (Int) -> Void,
-        selectSubtitle: @escaping (Int?) -> Void
+        selectSubtitles: @escaping (SubtitlePick) -> Void
     ) {
         self.delivery = delivery
         self.audio = audio
         self.selectedAudio = selectedAudio
         self.subtitles = subtitles
-        self.selectedSubtitle = selectedSubtitle
+        self.generatedSubtitles = generatedSubtitles
+        self.selectedSubtitles = selectedSubtitles
+        self.pendingSubtitles = pendingSubtitles
         self.selectAudio = selectAudio
-        self.selectSubtitle = selectSubtitle
+        self.selectSubtitles = selectSubtitles
     }
 
     public var body: some View {
         NavigationStack {
-            List {
-                if !audio.isEmpty {
-                    Section(String(localized: "Audio", bundle: .module, comment: "Heading of the audio tracks.")) {
-                        ForEach(audio) { track in
-                            TrackRow(title: track.title, detail: track.detail, isSelected: track.id == selectedAudio) {
-                                selectAudio(track.id)
-                            }
+            ScrollViewReader { scroller in
+                list
+                    .onAppear {
+                        // The subtitles showing are in view as the sheet opens, even far down a long list.
+                        if selectedSubtitles != .off {
+                            scroller.scrollTo(selectedSubtitles, anchor: .center)
                         }
                     }
-                }
-                Section(String(localized: "Subtitles", bundle: .module, comment: "Heading of the subtitle tracks.")) {
-                    TrackRow(
-                        title: String(localized: "Off", bundle: .module, comment: "Choice that turns subtitles off."),
-                        detail: nil,
-                        isSelected: selectedSubtitle == nil
-                    ) {
-                        selectSubtitle(nil)
-                    }
-                    ForEach(subtitles) { track in
-                        TrackRow(title: track.title, detail: track.detail, isSelected: track.id == selectedSubtitle) {
-                            selectSubtitle(track.id)
-                        }
-                    }
-                }
             }
             .navigationTitle(
                 String(
@@ -102,6 +106,45 @@ public struct TrackPicker: View {
             }
         }
     }
+
+    private var list: some View {
+        List {
+            if !audio.isEmpty {
+                Section(String(localized: "Audio", bundle: .module, comment: "Heading of the audio tracks.")) {
+                    ForEach(audio) { track in
+                        TrackRow(title: track.title, detail: track.detail, isSelected: track.id == selectedAudio) {
+                            selectAudio(track.id)
+                        }
+                    }
+                }
+            }
+            Section(String(localized: "Subtitles", bundle: .module, comment: "Heading of the subtitle tracks.")) {
+                subtitleRow(
+                    .off,
+                    title: String(localized: "Off", bundle: .module, comment: "Choice that turns subtitles off."),
+                    detail: nil
+                )
+                ForEach(subtitles) { track in
+                    subtitleRow(.track(track.id), title: track.title, detail: track.detail)
+                }
+                if let generatedSubtitles {
+                    subtitleRow(.generated, title: generatedSubtitles.title, detail: generatedSubtitles.detail)
+                }
+            }
+        }
+    }
+
+    private func subtitleRow(_ pick: SubtitlePick, title: String, detail: String?) -> some View {
+        TrackRow(
+            title: title,
+            detail: detail,
+            isSelected: pick == selectedSubtitles,
+            isPending: pick == pendingSubtitles && pick != selectedSubtitles
+        ) {
+            selectSubtitles(pick)
+        }
+        .id(pick)
+    }
 }
 
 /// How the video reaches the player, under the picker's title, once it is known.
@@ -117,11 +160,12 @@ private struct DeliverySubtitle: ViewModifier {
     }
 }
 
-/// One track, with a checkmark when it is the current choice.
+/// One track, with a checkmark when it is the current choice, or a spinner while it's on its way.
 private struct TrackRow: View {
     let title: String
     let detail: String?
     let isSelected: Bool
+    var isPending = false
     let select: () -> Void
 
     var body: some View {
@@ -141,6 +185,8 @@ private struct TrackRow: View {
                     Image(systemName: "checkmark")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.tint)
+                } else if isPending {
+                    ProgressView()
                 }
             }
             .contentShape(.rect)
@@ -148,13 +194,16 @@ private struct TrackRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(
+            isPending ? String(localized: "Loading", bundle: .module, comment: "Spoken while content loads.") : ""
+        )
     }
 }
 
 #if DEBUG
     private struct TrackPickerSample: View {
         @State private var audio = 1
-        @State private var subtitle: Int? = 4
+        @State private var subtitles = SubtitlePick.track(4)
 
         var body: some View {
             Color.black
@@ -169,12 +218,16 @@ private struct TrackRow: View {
                         ],
                         selectedAudio: audio,
                         subtitles: [
-                            TrackChoice(id: 4, title: "English", detail: "SDH"),
-                            TrackChoice(id: 5, title: "Spanish"),
+                            TrackChoice(id: 4, title: "English", detail: "SDH · SRT"),
+                            TrackChoice(id: 5, title: "English", detail: "PGS"),
+                            TrackChoice(id: 6, title: "Spanish", detail: "SRT"),
                         ],
-                        selectedSubtitle: subtitle,
+                        generatedSubtitles: TrackChoice(
+                            id: 0, title: "Generated", detail: "English · Created from the audio"),
+                        selectedSubtitles: subtitles,
+                        pendingSubtitles: .track(5),
                         selectAudio: { audio = $0 },
-                        selectSubtitle: { subtitle = $0 }
+                        selectSubtitles: { subtitles = $0 }
                     )
                     .presentationDetents([.medium, .large])
                 }

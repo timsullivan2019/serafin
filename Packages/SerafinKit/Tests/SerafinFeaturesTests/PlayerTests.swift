@@ -97,17 +97,35 @@ import Testing
         #expect(TrackChoices.choice(for: MediaStream(type: .audio), locale: english) == nil)
     }
 
-    @Test func subtitlesOffReadAsNoSelection() {
+    @Test func thePickerChecksTheSubtitlesShowing() {
+        let streams = [MediaStream(index: 2, type: .subtitle)]
+        let off = TrackChoices(
+            audioStreams: [MediaStream(index: 1, type: .audio)], subtitleStreams: streams, selectedAudio: 1,
+            subtitles: .off, locale: english)
+        #expect(off.selectedAudio == 1)
+        #expect(off.selectedSubtitles == .off)
+        #expect(off.subtitles.map(\.id) == [2])
+        #expect(off.generatedSubtitles == nil)
+        // A track on its way shows as pending while the one before stays checked.
+        let switching = TrackChoices(
+            audioStreams: [], subtitleStreams: streams, selectedAudio: nil, subtitles: .off, pending: .stream(2),
+            locale: english)
+        #expect(switching.selectedSubtitles == .off)
+        #expect(switching.pendingSubtitles == .track(2))
+        #expect(TrackChoices.selection(.track(2)) == .stream(2))
+        #expect(TrackChoices.selection(.generated) == .generated)
+    }
+
+    @Test func generatedSubtitlesOfferOneRowNamingTheirLanguage() throws {
         let choices = TrackChoices(
-            audioStreams: [MediaStream(index: 1, type: .audio)],
-            subtitleStreams: [MediaStream(index: 2, type: .subtitle)],
-            selectedAudio: 1,
-            selectedSubtitle: -1,
-            locale: english
-        )
-        #expect(choices.selectedAudio == 1)
-        #expect(choices.selectedSubtitle == nil)
-        #expect(choices.subtitles.map(\.id) == [2])
+            audioStreams: [], subtitleStreams: [], selectedAudio: nil, subtitles: .generated,
+            generated: GeneratedSubtitles(languageTag: "en-US"), locale: english)
+        let row = try #require(choices.generatedSubtitles)
+        #expect(row.title == "Generated")
+        #expect(row.detail == "English · Created from the audio")
+        #expect(choices.selectedSubtitles == .generated)
+        let unknown = TrackChoices.choice(for: GeneratedSubtitles(languageTag: nil), locale: english)
+        #expect(unknown.detail == "Created from the audio")
     }
 
     @Test func channelLayoutsReadTheWayPeopleSayThem() {

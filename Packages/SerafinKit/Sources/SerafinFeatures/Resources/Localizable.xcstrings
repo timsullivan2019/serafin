@@ -226,9 +226,6 @@
     "Always" : {
       "comment" : "Subtitle mode: always on."
     },
-    "Any Language" : {
-      "comment" : "Subtitle language: none in particular."
-    },
     "Appearance" : {
       "comment" : "Settings section header."
     },
@@ -337,8 +334,14 @@
     "Continue as %@" : {
       "comment" : "Button that signs back in as a saved user, such as Continue as Alice."
     },
+    "Created from the audio" : {
+      "comment" : "Detail of subtitles the device generates from a video's audio."
+    },
     "Date Added" : {
       "comment" : "Library sort option: newest additions first."
+    },
+    "Device Language" : {
+      "comment" : "Subtitle language: none chosen, so the languages the device is set to."
     },
     "Director" : {
       "comment" : "A crew member's job on a detail screen."
@@ -393,6 +396,9 @@
     },
     "Format" : {
       "comment" : "Detail screen column heading."
+    },
+    "Generated" : {
+      "comment" : "Choice in the player for subtitles the device generates from the audio."
     },
     "Genre" : {
       "comment" : "Library filter menu."
@@ -586,7 +592,7 @@
     "On a phone, computer or TV where you're signed in to Jellyfin, open your profile, choose Quick Connect, and enter this code." : {
       "comment" : "How to approve a Quick Connect code."
     },
-    "Only subtitles marked as forced show, such as for signs or foreign speech." : {
+    "Only forced subtitles in the audio's language show, such as for signs or foreign speech." : {
       "comment" : "Explanation of the forced-only subtitle mode."
     },
     "Open Movie or Show" : {
@@ -848,11 +854,11 @@
     "Subtitles in your language show when the audio is in another." : {
       "comment" : "Explanation of the subtitle mode for other languages."
     },
+    "Subtitles in your language show when the audio is in another. Otherwise only forced subtitles show, such as for signs or foreign speech." : {
+      "comment" : "Explanation of the automatic subtitle mode."
+    },
     "Subtitles show only when you turn them on." : {
       "comment" : "Explanation of the subtitle mode that leaves them off."
-    },
-    "Subtitles show when a video marks them to." : {
-      "comment" : "Explanation of the automatic subtitle mode."
     },
     "Suggested" : {
       "comment" : "Heading over titles the user hasn't watched, on the search tab before anything is typed."

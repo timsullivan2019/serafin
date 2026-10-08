@@ -141,8 +141,9 @@ extension SubtitlePlaybackMode {
         switch self {
         case .default:
             String(
-                localized: "Subtitles show when a video marks them to.", bundle: .module,
-                comment: "Explanation of the automatic subtitle mode.")
+                localized:
+                    "Subtitles in your language show when the audio is in another. Otherwise only forced subtitles show, such as for signs or foreign speech.",
+                bundle: .module, comment: "Explanation of the automatic subtitle mode.")
         case .smart:
             String(
                 localized: "Subtitles in your language show when the audio is in another.", bundle: .module,
@@ -153,7 +154,8 @@ extension SubtitlePlaybackMode {
                 comment: "Explanation of the always-on subtitle mode.")
         case .onlyForced:
             String(
-                localized: "Only subtitles marked as forced show, such as for signs or foreign speech.",
+                localized:
+                    "Only forced subtitles in the audio's language show, such as for signs or foreign speech.",
                 bundle: .module, comment: "Explanation of the forced-only subtitle mode.")
         case .none:
             String(

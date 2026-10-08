@@ -49,6 +49,11 @@ public actor ProgressReporter {
         await send("stop") { [client] in try await client.send(Paths.reportPlaybackStopped(info)) }
     }
 
+    /// Takes in a change the player made without a new stream, such as other subtitles, for the next report.
+    public func update(_ plan: PlaybackPlan) {
+        self.plan = plan
+    }
+
     /// Switches to a new plan after the player renegotiated, such as for another audio track. The server sees the
     /// old playback stop and the new one start.
     public func replace(with plan: PlaybackPlan, at position: Duration, isPaused: Bool) async {

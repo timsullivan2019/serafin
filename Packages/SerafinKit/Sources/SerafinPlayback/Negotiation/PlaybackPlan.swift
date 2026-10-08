@@ -49,6 +49,12 @@ public struct PlaybackPlan: Sendable {
     public func streams(_ type: MediaStreamType) -> [MediaStream] {
         (mediaSource.mediaStreams ?? []).filter { $0.type == type }
     }
+
+    /// The language of the audio playing, as the server names it, such as "eng", or nil when it's unknown.
+    public var audioLanguage: String? {
+        let index = audioStreamIndex ?? mediaSource.defaultAudioStreamIndex
+        return streams(.audio).first { $0.index == index }?.language
+    }
 }
 
 /// What to ask the server for when negotiating playback.

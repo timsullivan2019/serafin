@@ -206,13 +206,15 @@ import os
                 return
             }
             if current != account || library == nil || artwork == nil || player == nil {
-                library = try await accounts.library(for: current)
+                let library = try await accounts.library(for: current)
+                self.library = library
                 artwork = try await accounts.artwork(for: current)
                 let previous = player
                 player = PlayerEngine(
                     client: try await accounts.client(for: current),
                     userID: current.user.id,
-                    pinning: accounts.pinning
+                    pinning: accounts.pinning,
+                    languagePreferences: { try await library.languagePreferences() }
                 )
                 await previous?.stop()
             }
