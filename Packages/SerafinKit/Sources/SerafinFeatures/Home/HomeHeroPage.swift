@@ -37,7 +37,7 @@ struct HomeHeroPage: View {
                     zoomNamespace: zoom,
                     playZoomNamespace: playerZoom,
                     play: play,
-                    showDetails: { navigate(.featured(entry.item, playable: entry.playable)) }
+                    showDetails: openDetails
                 ) {
                     CardMenuItems(item: entry.item)
                 }
@@ -98,9 +98,28 @@ struct HomeHeroPage: View {
                 playback.play(episode, zoomSource: zoomSource)
             } else {
                 // Without its episode, as when the server can't be reached, the show's own screen says why.
-                navigate(.featured(entry.item, playable: entry.playable))
+                openDetails()
             }
         }
+    }
+
+    /// Opens the featured item's screen, taking the hero's tint along, so the screen starts in the hero's colour.
+    private func openDetails() {
+        let route = Self.detailsRoute(for: entry)
+        if case .featured(let shown, _, _) = route, shown.id != entry.id, let tint = ArtworkMemory.tint(for: entry.id) {
+            ArtworkMemory.remember(tint, for: shown.id)
+        }
+        navigate(route)
+    }
+
+    /// Where tapping a featured item goes: its own screen, or for an episode its show's, on the episode's season with
+    /// the episode on Play, since a show's page is where its seasons are, as everywhere else in the app. An episode
+    /// that doesn't name its show opens its own screen.
+    static func detailsRoute(for entry: HomeHeroModel.Entry) -> Route {
+        if entry.item.card.kind == .episode, let show = entry.item.show {
+            return .featured(show, playable: entry.item, heroID: entry.id)
+        }
+        return .featured(entry.item, playable: entry.playable, heroID: entry.id)
     }
 
     /// Whether `source` or its show has a backdrop.

@@ -40,11 +40,12 @@ struct ItemDetailView: View {
     /// Creates the screen for an item featured in Home's hero, which it zooms in from, showing the item at once.
     ///
     /// - Parameters:
-    ///   - item: The featured movie, show or episode.
+    ///   - item: The featured movie or show, or the show of a featured episode.
     ///   - playable: For a show, the episode its Play button starts, when the hero knows it.
-    init(featured item: MediaItem, playable: MediaItem?) {
+    ///   - heroID: The hero page the screen zooms out of: the featured item's identifier.
+    init(featured item: MediaItem, playable: MediaItem?, heroID: String) {
         _model = State(initialValue: ItemDetailModel(showing: item, playable: playable))
-        zoomSource = HomeHeroLayout.zoomID(for: item.id)
+        zoomSource = HomeHeroLayout.zoomID(for: heroID)
         arrivesFromHomeHero = true
     }
 

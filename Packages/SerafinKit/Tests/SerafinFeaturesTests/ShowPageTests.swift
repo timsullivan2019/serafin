@@ -147,6 +147,45 @@ private let phoneHero = ItemDetailModel.HeroGeometry(size: CGSize(width: 402, he
         #expect(model.episodes["series-sherlock-holmes-s1"]?.count == 6)
     }
 
+    @Test func aShowOpenedForAnEpisodeOpensOnItsSeasonWithItOnPlay() async {
+        let oz = MediaItem(card: MockMedia.series[3], source: nil)
+        let episode = MediaItem(card: MockMedia.seasons(of: MockMedia.series[3])[2].episodes[1], source: nil)
+        let model = ItemDetailModel(showing: oz, playable: episode)
+        await model.load(from: SampleMediaSource())
+        #expect(model.selectedSeasonID == "series-oz-s3")
+        // Next Up would say Season 1, but Play keeps the episode the page was opened for.
+        #expect(model.playable?.id == "series-oz-s3e2")
+        #expect(model.heroSeasonID == nil)
+    }
+
+    @Test func aFeaturedEpisodeOpensItsShowOnItsSeason() {
+        let episode = MediaItem(card: MockMedia.seasons(of: MockMedia.series[1])[1].episodes[0], source: nil)
+        let sherlock = MediaItem(card: MockMedia.series[1], source: nil)
+        #expect(
+            HomeHeroPage.detailsRoute(for: HomeHeroModel.Entry(item: episode))
+                == .featured(sherlock, playable: episode, heroID: episode.id))
+        // A featured show opens itself, zooming out of its own page.
+        let caminandes = MediaItem(card: MockMedia.series[0], source: nil)
+        #expect(
+            HomeHeroPage.detailsRoute(for: HomeHeroModel.Entry(item: caminandes))
+                == .featured(caminandes, playable: nil, heroID: caminandes.id))
+    }
+
+    @Test func anEpisodeFromTheServerKnowsItsShowAndSeason() throws {
+        let source = BaseItemDto(
+            id: "e1", name: "Pilot", parentBackdropImageTags: ["b"], parentBackdropItemID: "show1", seasonID: "season1",
+            seriesID: "show1", seriesName: "The Show", type: .episode)
+        let episode = try #require(MediaItem(source))
+        let show = try #require(episode.show)
+        #expect(show.id == "show1")
+        #expect(show.card.kind == .series)
+        #expect(show.card.title == "The Show")
+        #expect(show.source?.parentBackdropItemID == "show1")
+        #expect(episode.seasonID == "season1")
+        // Without a name for its show there's nothing to open.
+        #expect(MediaItem(BaseItemDto(id: "e2", seriesID: "show1", type: .episode))?.show == nil)
+    }
+
     @Test func aReloadKeepsThePickedSeasonAndItsEpisodes() async {
         let media = SampleMediaSource()
         let model = ItemDetailModel(id: "series-oz")
