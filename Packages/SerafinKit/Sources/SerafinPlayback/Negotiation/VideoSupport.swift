@@ -30,14 +30,20 @@ public struct VideoSupport: Equatable, Sendable {
     /// Neither AV1 nor Dolby Vision, so the server converts both.
     public static let none = VideoSupport()
 
-    /// What this device plays, read the first time it's asked for.
+    /// What this device plays, read the first time it's asked for, which ``prepare()`` does ahead of the first video.
     public static let current: VideoSupport = {
-        let support = detect()
+        var support = VideoSupport.none
+        let took = ContinuousClock().measure { support = detect() }
         logger.debug(
-            "AV1 up to level \(support.av1Level.map(String.init) ?? "none", privacy: .public), Dolby Vision \(support.dolbyVision, privacy: .public), in AV1 \(support.dolbyVisionInAV1, privacy: .public)"
+            "AV1 up to level \(support.av1Level.map(String.init) ?? "none", privacy: .public), Dolby Vision \(support.dolbyVision, privacy: .public), in AV1 \(support.dolbyVisionInAV1, privacy: .public), read in \(took.loggedSeconds, privacy: .public)"
         )
         return support
     }()
+
+    /// Reads ``current`` in the background, so the first video doesn't wait while the device is asked.
+    public static func prepare() {
+        Task.detached(priority: .utility) { _ = current }
+    }
 
     /// The AV1 levels asked about, highest first: 6.3 down to 4.0.
     static let av1Levels = [19, 18, 17, 16, 15, 14, 13, 12, 9, 8]
@@ -50,8 +56,12 @@ public struct VideoSupport: Equatable, Sendable {
     ///   - decodesInHardware: Whether the device's chip decodes a codec.
     ///   - plays: Whether AVPlayer plays MP4 video in a codec string, such as `dvh1.05.06`.
     static func detect(
-        decodesInHardware: (CMVideoCodecType) -> Bool = VTIsHardwareDecodeSupported,
-        plays: (String) -> Bool = { AVURLAsset.isPlayableExtendedMIMEType("video/mp4; codecs=\"\($0)\"") }
+        decodesInHardware: (CMVideoCodecType) -> Bool = { codec in
+            timed("a hardware decoder for \(fourCharacters(codec))") { VTIsHardwareDecodeSupported(codec) }
+        },
+        plays: (String) -> Bool = { codecs in
+            timed(codecs) { AVURLAsset.isPlayableExtendedMIMEType("video/mp4; codecs=\"\(codecs)\"") }
+        }
     ) -> VideoSupport {
         // Dolby Vision is HEVC with extra metadata, and Apple's devices play profiles 5 and 8 alike, so either codec
         // string counts for both.
@@ -70,5 +80,24 @@ public struct VideoSupport: Equatable, Sendable {
             dolbyVision: dolbyVision,
             dolbyVisionInAV1: dolbyVision && av1Level != nil && plays("dav1.10.06")
         )
+    }
+
+    /// The device's answer to `ask`, logging how long it took when it took more than a tenth of a second.
+    ///
+    /// - Parameters:
+    ///   - question: What's asked, such as a codec string, for the log.
+    ///   - ask: Asks it.
+    static func timed(_ question: String, _ ask: () -> Bool) -> Bool {
+        var answer = false
+        let took = ContinuousClock().measure { answer = ask() }
+        if took > .milliseconds(100) {
+            logger.debug("Asked about \(question, privacy: .public) in \(took.loggedSeconds, privacy: .public)")
+        }
+        return answer
+    }
+
+    /// A codec type's four characters, such as "hvc1".
+    static func fourCharacters(_ code: CMVideoCodecType) -> String {
+        String(decoding: [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: code >> $0) }, as: UTF8.self)
     }
 }

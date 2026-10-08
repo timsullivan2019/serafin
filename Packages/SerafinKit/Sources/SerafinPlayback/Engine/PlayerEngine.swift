@@ -233,6 +233,7 @@ public enum PlaybackState: Equatable, Sendable {
     ///   - keepsSubtitleChoice: Whether the subtitles picked in the player for what played before carry on, as for an
     ///     episode playing on from the last. Otherwise Settings' choice applies again.
     public func load(_ item: BaseItemDto, options: PlaybackOptions, keepsSubtitleChoice: Bool = false) async {
+        let asked = ContinuousClock.now
         generation += 1
         let load = generation
         // A stream still on its way for what played before is no longer wanted.
@@ -280,7 +281,9 @@ public enum PlaybackState: Equatable, Sendable {
                 guard load == generation else { return }
                 self.options = chosen
             }
-            Self.logger.debug("Playing by \(String(describing: plan.method), privacy: .public)")
+            Self.logger.debug(
+                "Playing by \(String(describing: plan.method), privacy: .public), planned in \((ContinuousClock.now - asked).loggedSeconds, privacy: .public)"
+            )
             guard
                 await install(
                     plan, subtitles: subtitles, startingAt: options.startPosition, playing: true, request: request)
