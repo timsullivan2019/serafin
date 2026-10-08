@@ -46,9 +46,12 @@ import Testing
     func episodesPointBackToTheirSeriesAndSeason(series: MediaCard) throws {
         let seasons = MockMedia.seasons(of: series)
         try #require(!seasons.isEmpty)
-        for (seasonIndex, season) in seasons.enumerated() {
+        // Numbered seasons count up from 1, and Specials, season 0, come after them.
+        let numbered = seasons.prefix { $0.number > 0 }
+        #expect(numbered.map(\.number) == Array(1...numbered.count))
+        #expect(seasons.dropFirst(numbered.count).allSatisfy { $0.number == 0 && $0.title == "Specials" })
+        for season in seasons {
             #expect(season.seriesID == series.id)
-            #expect(season.number == seasonIndex + 1)
             #expect(!season.episodes.isEmpty)
             for (episodeIndex, episode) in season.episodes.enumerated() {
                 let info = try #require(episode.episode)
@@ -65,6 +68,15 @@ import Testing
     @Test func onlyEpisodesCarrySeriesDetails() {
         #expect((MockMedia.movies + MockMedia.series).allSatisfy { $0.episode == nil })
         #expect(MockMedia.episodes.allSatisfy { $0.episode != nil })
+    }
+
+    @Test func theSeriesCoverOneSeasonSixteenAndSpecials() {
+        #expect(MockMedia.seasons(of: MockMedia.series[0]).count == 1)
+        #expect(MockMedia.seasons(of: MockMedia.series[3]).count == 16)
+        #expect(MockMedia.seasons(of: MockMedia.series[1]).last?.number == 0)
+        // Some episodes have a synopsis for the episode cards, and some don't.
+        #expect(MockMedia.episodes.contains { $0.overview != nil })
+        #expect(MockMedia.episodes.contains { $0.overview == nil })
     }
 
     @Test func seasonsOfSomethingThatIsNotASeriesAreEmpty() {
@@ -90,6 +102,8 @@ import Testing
         #expect(MockLibrary.nextUp.allSatisfy { $0.kind == .episode && !$0.isPlayed && $0.progress == 0 })
         let seriesIDs = MockLibrary.nextUp.compactMap(\.episode?.seriesID)
         #expect(Set(seriesIDs).count == seriesIDs.count)
+        // Specials are never next, as on a server.
+        #expect(MockLibrary.nextUp.allSatisfy { $0.episode?.seasonNumber != 0 })
     }
 
     @Test func latestResolvesEveryEntry() {

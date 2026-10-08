@@ -20,6 +20,15 @@ extension ButtonStyle where Self == CardButtonStyle {
     public static var card: CardButtonStyle { CardButtonStyle() }
 }
 
+/// Where the player grows from when a card starts playback, rather than opening the item's screen: an episode on its
+/// show's page, or in Continue Watching and Next Up.
+public enum CardPlayZoom {
+    /// The ID under which the artwork of the card showing `cardID` is the source of the player's zoom.
+    public static func id(for cardID: String) -> String {
+        "card-play-\(cardID)"
+    }
+}
+
 /// A card's artwork at a fixed aspect ratio, with the progress bar and played badge drawn over it.
 struct CardArtwork: View {
     let card: MediaCard

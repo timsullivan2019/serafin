@@ -44,6 +44,69 @@ struct LandscapeLink: View {
     }
 }
 
+/// A card in Continue Watching or Next Up. An episode plays when tapped, the player growing out of its artwork, and
+/// its menu opens the episode's page or its show's. A movie opens its page, like any other card.
+struct WatchingLink: View {
+    let item: MediaItem
+    /// Whether a played item shows its check, which Continue Watching leaves off.
+    var showsPlayedBadge = true
+    @State private var playCount = 0
+    @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.playerZoomNamespace) private var playerZoom
+
+    var body: some View {
+        if item.card.kind == .episode {
+            Button {
+                playCount += 1
+                playback.play(item, zoomSource: CardPlayZoom.id(for: item.id))
+            } label: {
+                ItemArtwork(item, role: .watching) { image in
+                    LandscapeCard(
+                        card: item.card, artwork: image, zoomNamespace: zoom, playZoomNamespace: playerZoom,
+                        showsPlayedBadge: showsPlayedBadge
+                    ) {
+                        CardMenuItems(item: item, tapPlays: true)
+                    }
+                }
+            }
+            .buttonStyle(.card)
+            .sensoryFeedback(.impact(weight: .medium), trigger: playCount)
+            .accessibilityHint(
+                String(
+                    localized: "Plays the episode", bundle: .module,
+                    comment: "Hint on an episode card that plays when tapped.")
+            )
+        } else {
+            LandscapeLink(item: item, showsPlayedBadge: showsPlayedBadge, role: .watching)
+        }
+    }
+}
+
+/// An episode on its show's page. Tapping plays it, the player growing out of its still; its menu opens the episode's
+/// own page, marks it watched or adds it to the favorites.
+struct EpisodeLink: View {
+    let item: MediaItem
+    /// Whether the card keeps room for a full title and synopsis, so it's as tall as the others in its season.
+    var reservesSynopsisSpace = false
+    @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.playerZoomNamespace) private var playerZoom
+
+    var body: some View {
+        ItemArtwork(item, role: .landscape) { image in
+            EpisodeCard(
+                card: item.card, artwork: image, zoomNamespace: zoom, playZoomNamespace: playerZoom,
+                reservesSynopsisSpace: reservesSynopsisSpace
+            ) {
+                playback.play(item, zoomSource: CardPlayZoom.id(for: item.id))
+            } menu: {
+                CardMenuItems(item: item, tapPlays: true, offersShow: false)
+            }
+        }
+    }
+}
+
 /// A cast or crew member, or a person search found, that opens their page. A person the server gave no ID for
 /// can't have a page, so their card stays still.
 struct PersonLink: View {

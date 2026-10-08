@@ -186,14 +186,54 @@ struct CastMember: Identifiable, Hashable, Sendable {
     }
 }
 
+/// One of a show's seasons, as its page's season menu lists it.
+struct ShowSeason: Identifiable, Hashable, Sendable {
+    /// The season, for its name and artwork.
+    let item: MediaItem
+    /// The season's number: 1 for the first, 0 for Specials, or nil when the server doesn't say.
+    let number: Int?
+    /// How many episodes it has, when the server says.
+    let episodeCount: Int?
+    /// Whether the season has a backdrop of its own, rather than only its show's.
+    let hasBackdrop: Bool
+    /// Whether the season has a poster of its own.
+    let hasPoster: Bool
+
+    var id: String { item.id }
+
+    /// The season's name, such as "Season 2" or "Specials".
+    var title: String { item.card.title }
+
+    /// Whether these are the show's Specials, which aren't one of its seasons and come last.
+    var isSpecials: Bool { number == 0 }
+
+    /// The seasons in the order the menu lists them: numbered seasons in the server's order, then Specials, which the
+    /// server lists first.
+    static func ordered(_ seasons: [ShowSeason]) -> [ShowSeason] {
+        seasons.filter { !$0.isSpecials } + seasons.filter(\.isSpecials)
+    }
+
+    /// Which of the season's pictures the hero shows once the season is picked, or nil to keep the show's: the
+    /// season's backdrop, or on a compact width, where a poster fills the hero well, its poster.
+    func heroRole(isCompact: Bool) -> ImageRole? {
+        if hasBackdrop { return .backdrop }
+        if isCompact, hasPoster { return .poster }
+        return nil
+    }
+}
+
 /// Everything a detail screen shows about a movie, show or episode.
 struct ItemDetails: Sendable {
     /// The item itself.
     var item: MediaItem
     /// Its cast and crew, in the server's order.
     var cast: [CastMember] = []
-    /// A show's seasons.
-    var seasons: [MediaItem] = []
+    /// A show's seasons, in the order its season menu lists them, Specials last.
+    var seasons: [ShowSeason] = []
+    /// The season a show's page opens on: the one holding the episode Play starts.
+    var openingSeasonID: String?
+    /// The episodes of the season a show's page opens on, in order. The page loads other seasons' as they're picked.
+    var openingEpisodes: [MediaItem] = []
     /// The other episodes of an episode's season.
     var seasonEpisodes: [MediaItem] = []
     /// Titles like this one.
@@ -208,16 +248,6 @@ struct ItemDetails: Sendable {
     var trailers: [Trailer] = []
     /// A movie's or an episode's chapters.
     var chapters: [Chapter] = []
-}
-
-/// A season's episodes, with the titles its screen shows.
-struct SeasonContent: Sendable {
-    /// The season's name, such as "Season 1".
-    let title: String
-    /// The show's name.
-    let seriesTitle: String
-    /// The episodes, in order.
-    let episodes: [MediaItem]
 }
 
 /// Search matches, grouped the way the results screen shows them.
@@ -265,8 +295,8 @@ protocol MediaSource: Sendable {
     func hasCollections() async throws -> Bool
     /// Everything a detail screen shows about an item.
     func details(of id: String) async throws -> ItemDetails
-    /// A season's episodes.
-    func season(_ id: String, of seriesID: String) async throws -> SeasonContent
+    /// The episodes of one of a show's seasons, in order.
+    func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem]
     /// Movies, shows, episodes, people and collections matching `term`.
     func search(_ term: String) async throws -> MediaSearchResults
     /// A few movies and shows the user hasn't watched, for the search tab to suggest before anything is typed.

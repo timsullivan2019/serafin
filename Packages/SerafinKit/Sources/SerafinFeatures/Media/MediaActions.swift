@@ -86,16 +86,34 @@ import SwiftUI
 }
 
 /// The items in a card's context menu: Play, Go to Show for an episode, Mark as Watched and Favourite.
+///
+/// A card that plays when tapped, as an episode does on its show's page and in Continue Watching and Next Up, offers
+/// Episode Details in place of Play.
 struct CardMenuItems: View {
     let item: MediaItem
+    /// Whether tapping the card plays the item, so the menu opens its page instead.
+    var tapPlays = false
+    /// Whether an episode's menu offers Go to Show: not on the show's own page.
+    var offersShow = true
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(MediaActions.self) private var actions
     @Environment(\.media) private var media
     @Environment(\.navigate) private var navigate
 
     var body: some View {
-        // A show or season plays from its page, which knows the episode to start.
-        if item.card.kind == .movie || item.card.kind == .episode {
+        if tapPlays {
+            Button {
+                navigate(.item(id: item.id))
+            } label: {
+                Label(
+                    String(
+                        localized: "Episode Details", bundle: .module,
+                        comment: "Menu item on an episode card that plays when tapped, which opens the episode's page."),
+                    systemImage: "info.circle"
+                )
+            }
+        } else if item.card.kind == .movie || item.card.kind == .episode {
+            // A show or season plays from its page, which knows the episode to start.
             Button {
                 playback.play(item)
             } label: {
@@ -105,7 +123,7 @@ struct CardMenuItems: View {
                 )
             }
         }
-        if let show = item.showRoute {
+        if offersShow, let show = item.showRoute {
             Button {
                 navigate(show)
             } label: {

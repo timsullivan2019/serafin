@@ -28,7 +28,7 @@ struct SampleMediaSource: MediaSource {
 
     func playable(ofSeries id: String) async throws -> MediaItem? {
         guard let series = MockMedia.series.first(where: { $0.id == id }) else { return nil }
-        let episodes = MockMedia.seasons(of: series).flatMap(\.episodes)
+        let episodes = MockMedia.seasons(of: series).filter { $0.number > 0 }.flatMap(\.episodes)
         return (episodes.first(where: \.isInProgress) ?? episodes.first { !$0.isPlayed } ?? episodes.first)
             .map(Self.item)
     }
@@ -157,9 +157,16 @@ struct SampleMediaSource: MediaSource {
         switch card.kind {
         case .series:
             let seasons = MockMedia.seasons(of: card)
-            details.seasons = seasons.map { Self.item($0.card) }
-            let episodes = seasons.flatMap(\.episodes)
-            details.playable = (episodes.first { !$0.isPlayed } ?? episodes.first).map(Self.item)
+            details.seasons = ShowSeason.ordered(seasons.map(Self.season))
+            // As Next Up would: the first episode not yet watched, outside the Specials, or the first once all are.
+            let numbered = seasons.filter { $0.number > 0 }
+            let episodes = numbered.flatMap(\.episodes)
+            let next = episodes.first { !$0.isPlayed } ?? episodes.first
+            let opening = next.flatMap { episode in numbered.first { $0.episodes.contains(episode) } } ?? seasons.first
+            details.playable = next.map(Self.item)
+            details.openingSeasonID = opening?.id
+            details.openingEpisodes = opening?.episodes.map(Self.item) ?? []
+            details.badges = next.map { Self.badges(of: $0) } ?? []
             details.similar = MockMedia.series.filter { $0.id != id }.map(Self.item)
         case .episode:
             let season = MockMedia.series(of: card).flatMap { series in
@@ -173,6 +180,23 @@ struct SampleMediaSource: MediaSource {
             break
         }
         return details
+    }
+
+    /// The media badges of a sample's made-up file.
+    static func badges(of card: MediaCard) -> [String] {
+        MediaBadges.badges(for: sampleFile(of: card))
+    }
+
+    /// A sample season, with art of its own as a server's seasons might have it: a poster for every season, and a
+    /// backdrop for odd-numbered ones.
+    private static func season(_ season: MediaSeason) -> ShowSeason {
+        ShowSeason(
+            item: item(season.card),
+            number: season.number,
+            episodeCount: season.episodes.count,
+            hasBackdrop: season.number % 2 == 1,
+            hasPoster: true
+        )
     }
 
     /// A made-up file for a sample, so previews show every Information column.
@@ -189,12 +213,12 @@ struct SampleMediaSource: MediaSource {
         )
     }
 
-    func season(_ id: String, of seriesID: String) async throws -> SeasonContent {
+    func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {
         guard
             let series = MockMedia.series.first(where: { $0.id == seriesID }),
-            let season = MockMedia.seasons(of: series).first(where: { $0.id == id })
+            let season = MockMedia.seasons(of: series).first(where: { $0.id == seasonID })
         else { throw SerafinError.notFound }
-        return SeasonContent(title: season.title, seriesTitle: series.title, episodes: season.episodes.map(Self.item))
+        return season.episodes.map(Self.item)
     }
 
     func search(_ term: String) async throws -> MediaSearchResults {

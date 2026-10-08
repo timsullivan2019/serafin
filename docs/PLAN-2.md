@@ -148,6 +148,20 @@ One PR, with screenshots before and after for each point.
 3. Chips: the selected state uses tinted prominent glass, not a solid fill; hide any chip whose filter the screen already implies (Unplayed on the Unwatched screen); rename "Unplayed" to "Unwatched" everywhere, including Settings copy.
 4. Toolbar played check: filled only when `userData.played` is true; outlined for in-progress and unwatched.
 
+### 3.5.11 Show page redesign, Apple TV app structure
+
+One PR, plus a short screen recording.
+
+1. Series detail: the hero pill reflects state (Play S1 E1 / Resume S2 E2 · 23 min left / Play S2 E3) using Next Up and resume data; badges come from that episode.
+2. Overview clamped to three lines with an inline "More".
+3. Replace the Seasons poster row with a season `Menu` in the section header ("Season 2" with the up/down chevron glyph), listing all seasons with episode counts, Specials last, defaulting to the season of the pill's episode.
+4. Under it, episodes as a horizontal row of landscape cards on iPhone (card width about 80% of the content width with the next card peeking), a two-column grid on iPad: thumbnail with play glyph and runtime, "EPISODE n" caption, title, two-line synopsis, progress bar, watched check. The row initially scrolls to the next unwatched episode. Tap plays; long-press and an ellipsis button open a context menu with Episode Details, Mark as Watched/Unwatched, Favorite, Go to Season.
+5. Section order after episodes: Trailers, Cast & Crew, More Like This, Information.
+6. Home: Continue Watching and Next Up cards play on tap; their context menu gains "Go to Show" and "Episode Details". Movie cards keep opening the movie page.
+7. Remove the Season screen from the UI; keep its route for deep links. The episode detail page is unchanged and reachable from the menus, Search and Chapters.
+8. Previews with `MockMedia` for a one-season show, a sixteen-season show and a show with Specials; VoiceOver labels on cards include episode number, title, runtime and watched state. Record play-from-Home and play-from-show-page for the gate review.
+9. Season-aware hero: on open, the hero shows the series backdrop and logo. After the user changes the season picker, the hero follows the selection: the season's backdrop if it has one; on compact width, its poster aspect-filled with the crop anchored to the top; on regular width with no season backdrop, the series art stays. Crossfade over 0.35 s with a 1.02→1.0 scale, the logo fixed, the pill label, badges and artwork tint crossfading to the selected season's first unwatched episode, and a selection haptic; opacity only under Reduce Motion. Prefetch all season hero images at page load at hero size so the switch never shows a placeholder. A season with no artwork falls back to the series art. Include it in the screen recording.
+
 ### Gate 3.5
 
 Owner review on device of Home, Library, a movie detail, a series detail, Search, Settings and sign-in in light and dark. Then 1.0 proceeds through Phase 3.

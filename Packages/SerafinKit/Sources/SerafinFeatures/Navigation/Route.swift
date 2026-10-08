@@ -22,7 +22,8 @@ enum Route: Hashable {
     case collection(id: String, title: String)
     /// Every movie and show filtered or sorted one way, such as Favourites, from the Library tab.
     case shortcut(LibraryShortcut)
-    /// A season's episodes. Jellyfin lists them under the show, so the route carries both.
+    /// A season's episodes, on its show's page with the season picked. Jellyfin lists them under the show, so the
+    /// route carries both. Kept for links to a season; nothing in the app opens a season on its own.
     case season(id: String, seriesID: String)
     /// A person's page: the movies and shows they're in or worked on, from search or a cast row.
     case person(CastMember)
@@ -129,7 +130,7 @@ private struct RouteDestination: View {
         case .shortcut(let shortcut):
             LibraryView(scope: .shortcut(shortcut))
         case .season(let id, let seriesID):
-            SeasonView(id: id, seriesID: seriesID)
+            ItemDetailView(seriesID: seriesID, seasonID: id)
         case .person(let person):
             LibraryView(scope: .person(person))
         case .addServer:
@@ -147,19 +148,19 @@ private struct RouteDestination: View {
 }
 
 extension View {
-    /// Zooms this screen in from the card with `id`, when the tab has a zoom namespace. iOS only.
-    func zoomTransition(from id: String, in namespace: Namespace.ID?) -> some View {
+    /// Zooms this screen in from the card with `id`, when there is one and the tab has a zoom namespace. iOS only.
+    func zoomTransition(from id: String?, in namespace: Namespace.ID?) -> some View {
         modifier(ZoomTransition(id: id, namespace: namespace))
     }
 }
 
 private struct ZoomTransition: ViewModifier {
-    let id: String
+    let id: String?
     let namespace: Namespace.ID?
 
     func body(content: Content) -> some View {
         #if os(iOS)
-            if let namespace {
+            if let id, let namespace {
                 content.navigationTransition(.zoom(sourceID: id, in: namespace))
             } else {
                 content

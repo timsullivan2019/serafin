@@ -5,7 +5,8 @@ import CoreGraphics
 /// Every title is public domain or an openly licensed film: Blender Studio's open movies and classic features
 /// from the Internet Archive. Series are built from the public-domain books of Lewis Carroll, L. Frank Baum and
 /// Arthur Conan Doyle, plus Blender's Caminandes shorts. Overviews are written for Serafin. Playback state is
-/// varied on purpose so that progress bars, played badges and favourites all appear.
+/// varied on purpose so that progress bars, played badges and favourites all appear. The series cover the shapes a
+/// show page has to handle: Caminandes has one season, Oz has sixteen, and Sherlock Holmes has Specials.
 public enum MockMedia {
     /// Twelve movies with a mix of unwatched, in-progress, played and favourite states.
     public static let movies: [MediaCard] = [
@@ -114,10 +115,10 @@ public enum MockMedia {
         return ids.compactMap { id in movies.first { $0.id == id } }
     }
 
-    /// Every episode of every series, in series, season and episode order.
+    /// Every episode of every series, in series, season and episode order, with Specials after a show's seasons.
     public static let episodes: [MediaCard] = allSeries.flatMap { $0.seasons.flatMap(\.episodes) }
 
-    /// The seasons of a series from ``series``, in order, or an empty array for anything else.
+    /// The seasons of a series from ``series``, in order, with Specials last, or an empty array for anything else.
     ///
     /// - Parameter series: A series card.
     public static func seasons(of series: MediaCard) -> [MediaSeason] {
@@ -172,6 +173,12 @@ extension MockMedia {
         seasons: [
             ("Season 1", ["Llama Drama", "Gran Dillama", "Llamigos"])
         ],
+        synopses: [
+            "Llama Drama": "Koro the llama wants the grass on the far side of a road, and the road is busier than it "
+                + "looks.",
+            "Gran Dillama": "A fence stands between Koro and the greenest grass in Patagonia, and it bites back.",
+            "Llamigos": "Winter has stripped the bushes bare, and Koro has to share the last berries with a penguin.",
+        ],
         played: 1
     )
 
@@ -189,8 +196,30 @@ extension MockMedia {
             ),
             ("The Memoirs", ["Silver Blaze", "The Yellow Face", "The Musgrave Ritual", "The Final Problem"]),
         ],
+        specials: ["A Study in Scarlet", "The Hound of the Baskervilles"],
+        synopses: [
+            "A Scandal in Bohemia": "A king hires Holmes to recover a photograph from Irene Adler, who proves more "
+                + "than a match for them both.",
+            "The Red-Headed League": "A pawnbroker is paid to copy out the encyclopaedia by hand, and Holmes wonders "
+                + "who wants him out of his shop.",
+            "A Case of Identity": "A young typist asks Holmes to find the man she was to marry, who vanished on the "
+                + "way to the church.",
+            "The Boscombe Valley Mystery": "A son is accused of killing his father beside a lonely pool, and every "
+                + "clue seems to agree.",
+            "The Five Orange Pips": "Five dried orange pips in an envelope have twice foretold a death, and now they "
+                + "have come again.",
+            "The Man with the Twisted Lip": "A respectable man vanishes from an opium den, and only a beggar is left "
+                + "in the room.",
+            "Silver Blaze": "The favourite for the Wessex Cup disappears the night its trainer is found dead on the "
+                + "moor.",
+            "The Final Problem": "Holmes meets Professor Moriarty above the falls at Reichenbach.",
+            "A Study in Scarlet": "Holmes and Watson meet, take rooms in Baker Street and solve their first case.",
+            "The Hound of the Baskervilles": "A spectral hound is said to haunt the Baskervilles, and the heir has "
+                + "just arrived on the moor.",
+        ],
         played: 3,
         inProgress: 0.55,
+        playedSpecials: 1,
         isFavourite: true
     )
 
@@ -211,10 +240,17 @@ extension MockMedia {
     )
 
     static let oz = makeSeries(
-        id: "series-oz", title: "The Wonderful Wizard of Oz", year: 1900, minutes: 25,
+        id: "series-oz", title: "Oz", year: 1900, minutes: 25,
         overview: "Swept away by a cyclone, a Kansas girl follows a yellow brick road to the one wizard who can "
-            + "send her home.",
-        seasons: [
+            + "send her home, and finds that Oz isn't finished with her.",
+        seasons: ozSeasons,
+        played: 0
+    )
+
+    /// The first book's chapters, then a season for each of the fifteen books that followed, from 1904 to 1922, with
+    /// four to six chapters each.
+    private static let ozSeasons: [(String, [String])] =
+        [
             (
                 "Season 1",
                 [
@@ -222,12 +258,14 @@ extension MockMedia {
                     "The Road Through the Forest", "The Rescue of the Tin Woodman", "The Cowardly Lion",
                 ]
             )
-        ],
-        played: 0
-    )
+        ]
+        + (2...16).map { (number: Int) -> (String, [String]) in
+            ("Season \(number)", (1...(4 + number % 3)).map { "Chapter \($0)" })
+        }
 
-    /// Builds a series whose first `played` episodes are played and whose next episode is `inProgress`
-    /// watched, when given.
+    /// Builds a series whose first `played` episodes are played and whose next episode is `inProgress` watched,
+    /// when given. Specials, when given, are season 0, after the numbered seasons, and the first `playedSpecials` of
+    /// them are played.
     private static func makeSeries(
         id: String,
         title: String,
@@ -235,30 +273,40 @@ extension MockMedia {
         minutes: Int,
         overview: String,
         seasons seasonTitles: [(String, [String])],
+        specials: [String] = [],
+        synopses: [String: String] = [:],
         played: Int,
         inProgress: Double? = nil,
+        playedSpecials: Int = 0,
         isFavourite: Bool = false
     ) -> MockSeries {
+        func episode(_ episodeTitle: String, season: Int, number: Int, isPlayed: Bool, progress: Double) -> MediaCard {
+            MediaCard(
+                id: "\(id)-s\(season)e\(number)",
+                kind: .episode,
+                title: episodeTitle,
+                year: year,
+                runtime: .seconds(minutes * 60),
+                progress: progress,
+                isPlayed: isPlayed,
+                overview: synopses[episodeTitle],
+                episode: MediaCard.EpisodeInfo(
+                    seriesID: id,
+                    seriesTitle: title,
+                    seasonNumber: season,
+                    episodeNumber: number
+                )
+            )
+        }
+
         var order = 0
-        let seasons = seasonTitles.enumerated().map { seasonIndex, season in
+        var seasons = seasonTitles.enumerated().map { seasonIndex, season in
             let seasonNumber = seasonIndex + 1
             let episodes = season.1.enumerated().map { episodeIndex, episodeTitle in
                 defer { order += 1 }
-                return MediaCard(
-                    id: "\(id)-s\(seasonNumber)e\(episodeIndex + 1)",
-                    kind: .episode,
-                    title: episodeTitle,
-                    year: year,
-                    runtime: .seconds(minutes * 60),
-                    progress: order == played ? inProgress ?? 0 : 0,
-                    isPlayed: order < played,
-                    episode: MediaCard.EpisodeInfo(
-                        seriesID: id,
-                        seriesTitle: title,
-                        seasonNumber: seasonNumber,
-                        episodeNumber: episodeIndex + 1
-                    )
-                )
+                return episode(
+                    episodeTitle, season: seasonNumber, number: episodeIndex + 1, isPlayed: order < played,
+                    progress: order == played ? inProgress ?? 0 : 0)
             }
             return MediaSeason(
                 id: "\(id)-s\(seasonNumber)",
@@ -267,6 +315,12 @@ extension MockMedia {
                 title: season.0,
                 episodes: episodes
             )
+        }
+        if !specials.isEmpty {
+            let episodes = specials.enumerated().map { index, episodeTitle in
+                episode(episodeTitle, season: 0, number: index + 1, isPlayed: index < playedSpecials, progress: 0)
+            }
+            seasons.append(MediaSeason(id: "\(id)-s0", seriesID: id, number: 0, title: "Specials", episodes: episodes))
         }
         let card = MediaCard(
             id: id,

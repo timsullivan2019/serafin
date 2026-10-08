@@ -122,14 +122,15 @@ struct HomeView: View {
                         HomeNoticeBanner(notice: notice, isRetrying: model.isLoading) { attempt += 1 }
                             .padding(.horizontal, Spacing.medium)
                     }
+                    // An episode here plays when tapped; a movie opens its page.
                     if !home.continueWatching.isEmpty {
                         MediaRow(Self.continueWatchingTitle, style: .landscape, items: home.continueWatching) {
-                            LandscapeLink(item: $0, showsPlayedBadge: false, role: .watching)
+                            WatchingLink(item: $0, showsPlayedBadge: false)
                         }
                     }
                     if !home.nextUp.isEmpty {
                         MediaRow(Self.nextUpTitle, style: .landscape, items: home.nextUp) {
-                            LandscapeLink(item: $0, role: .watching)
+                            WatchingLink(item: $0)
                         }
                     }
                     ForEach(home.latest.filter { !$0.items.isEmpty }) { row in

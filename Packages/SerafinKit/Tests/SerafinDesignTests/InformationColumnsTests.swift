@@ -53,4 +53,21 @@ import Testing
         let episode = try #require(MockMedia.episodes.first { $0.episodeCode != nil && !$0.isInProgress })
         #expect(HeroHeader.playTitle(for: episode).contains(try #require(episode.episodeCode)))
     }
+
+    @Test func aShowsPillNamesTheEpisodeItStartsOrResumes() throws {
+        let next = try #require(MockMedia.episodes.first { $0.isInProgress && $0.episode?.seasonNumber == 1 })
+        var show = try #require(MockMedia.series.first { $0.id == next.episode?.seriesID })
+        let code = try #require(next.episodeCode)
+        #expect(HeroHeader.playTitle(for: show, nextEpisode: next).contains(code))
+        #expect(!HeroHeader.playTitle(for: show, nextEpisode: next).contains("·"))
+
+        // The page gives the show the episode's progress, so the pill resumes it by name.
+        show.progress = next.progress
+        show.runtime = next.runtime
+        let resume = HeroHeader.playTitle(for: show, nextEpisode: next)
+        #expect(resume.contains(code))
+        #expect(resume.contains(try #require(show.remainingText)))
+        // A film resuming has no episode to name.
+        #expect(!HeroHeader.playTitle(for: show).contains(code))
+    }
 }

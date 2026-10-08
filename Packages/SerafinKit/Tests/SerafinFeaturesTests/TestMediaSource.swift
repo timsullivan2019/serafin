@@ -6,7 +6,7 @@ import SerafinDesign
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
 /// the server does, a server that refuses every change, Home saved on the device and a server that can't be reached,
-/// or libraries with pictures of their own.
+/// libraries with pictures of their own, or seasons whose episodes don't load.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
@@ -20,6 +20,8 @@ struct TestMediaSource: MediaSource {
     var homeFailure: SerafinError?
     /// The libraries that have a picture of their own on the server.
     var covers: Set<String> = []
+    /// The seasons whose episodes fail to load.
+    var failingSeasons: Set<String> = []
     private let samples = SampleMediaSource()
 
     func home() async throws -> HomeContent {
@@ -72,8 +74,9 @@ struct TestMediaSource: MediaSource {
 
     func details(of id: String) async throws -> ItemDetails { try await samples.details(of: id) }
 
-    func season(_ id: String, of seriesID: String) async throws -> SeasonContent {
-        try await samples.season(id, of: seriesID)
+    func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {
+        if failingSeasons.contains(seasonID) { throw URLError(.timedOut) }
+        return try await samples.episodes(inSeason: seasonID, of: seriesID)
     }
 
     func search(_ term: String) async throws -> MediaSearchResults { try await samples.search(term) }

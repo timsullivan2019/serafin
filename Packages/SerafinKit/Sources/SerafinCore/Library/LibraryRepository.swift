@@ -213,10 +213,10 @@ public actor LibraryRepository {
         }
     }
 
-    /// A show's seasons, in order.
+    /// A show's seasons, in the server's order, which puts Specials first, with how many episodes each has.
     public func seasons(series seriesID: String) async throws -> [BaseItemDto] {
         var parameters = Paths.GetSeasonsParameters(userID: userID)
-        parameters.fields = Self.cardFields
+        parameters.fields = Self.cardFields + [.childCount]
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         parameters.enableUserData = true
@@ -226,11 +226,11 @@ public actor LibraryRepository {
         }.items ?? []
     }
 
-    /// The episodes of one season of a show, in order.
+    /// The episodes of one season of a show, in order, with their streams for the media badges.
     public func episodes(series seriesID: String, season seasonID: String) async throws -> [BaseItemDto] {
         var parameters = Paths.GetEpisodesParameters(userID: userID)
         parameters.seasonID = seasonID
-        parameters.fields = Self.cardFields
+        parameters.fields = Self.cardFields + [.mediaStreams]
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         parameters.enableUserData = true

@@ -35,6 +35,30 @@ import Testing
         #expect(episode.eyebrowText == "Caminandes · S1 E2")
     }
 
+    @Test func specialsAreNamedRatherThanCalledSeasonZero() throws {
+        var special = episode
+        special.episode?.seasonNumber = 0
+        #expect(special.episodeCode(locale: english) == "Special 2")
+        #expect(special.episodeCaption(locale: english) == "Special 2")
+        #expect(special.accessibilityLabel(locale: english).contains("Special 2"))
+        #expect(!special.accessibilityLabel(locale: english).contains("Season"))
+    }
+
+    @Test func anEpisodeOnItsShowsPageSaysItsNumberTitleTimeAndWhetherItsWatched() {
+        #expect(episode.episodeCaption(locale: english) == "Episode 2")
+        #expect(
+            episode.episodeAccessibilityLabel(locale: english) == "Episode 2, Gran Dillama, 40% watched, 2 minutes left"
+        )
+        var watched = episode
+        watched.progress = 0
+        watched.isPlayed = true
+        watched.isFavourite = true
+        #expect(
+            watched.episodeAccessibilityLabel(locale: english)
+                == "Episode 2, Gran Dillama, 3 minutes, Watched, Favorite")
+        #expect(movie.episodeCaption == nil)
+    }
+
     @Test func moviesShowTheirYearInstead() {
         #expect(movie.episodeCode == nil)
         #expect(movie.eyebrowText == "2010")

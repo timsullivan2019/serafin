@@ -75,9 +75,16 @@ public struct Artwork: Sendable {
         return request
     }
 
-    /// The width in pixels to ask for: `points` at `scale`, rounded up to the next ``widthStep``.
+    /// The widest image Serafin asks for, in pixels: wider than any hero on any screen it runs on. A view measured
+    /// wider than that in a passing layout, or not at all, asks for this rather than overflowing.
+    static let maximumPixelWidth = 6000
+
+    /// The width in pixels to ask for: `points` at `scale`, rounded up to the next ``widthStep``, and never more than
+    /// ``maximumPixelWidth``.
     static func pixelWidth(points: CGFloat, scale: CGFloat) -> Int {
-        let exact = max(1, Int((points * max(scale, 1)).rounded(.up)))
+        let wanted = points * max(scale, 1)
+        guard wanted.isFinite, wanted < CGFloat(maximumPixelWidth) else { return maximumPixelWidth }
+        let exact = max(1, Int(wanted.rounded(.up)))
         return (exact + widthStep - 1) / widthStep * widthStep
     }
 }

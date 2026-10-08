@@ -155,17 +155,6 @@ public struct HeroItem: Identifiable, Hashable, Sendable {
 }
 
 extension MediaCard {
-    /// The season and episode code in `locale`.
-    func episodeCode(locale: Locale) -> String? {
-        guard let episode else { return nil }
-        return String(
-            localized: "S\(episode.seasonNumber) E\(episode.episodeNumber)",
-            bundle: .module,
-            locale: locale,
-            comment: "Season and episode code on cards, such as S2 E4."
-        )
-    }
-
     /// A running time as a metadata line shows it, with no comma between the parts, such as "1 hr 32 min".
     static func compactDurationText(_ duration: Duration, locale: Locale) -> String {
         let minutes = Int((duration / .seconds(60)).rounded(.up))

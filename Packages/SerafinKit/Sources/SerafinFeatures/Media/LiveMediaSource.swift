@@ -27,8 +27,10 @@ struct LiveMediaSource: MediaSource {
         if let next = MediaItem.from(try await library.nextUp(limit: 1, series: id)).first {
             return next
         }
-        // Nothing is next before a show is started or once it's watched through, so Play starts the first episode.
-        guard let first = MediaItem.from(try await library.seasons(series: id)).first else { return nil }
+        // Nothing is next before a show is started or once it's watched through, so Play starts the first episode of
+        // its first season, not of its Specials, which the server lists first.
+        let seasons = ShowSeason.ordered(try await library.seasons(series: id).compactMap(ShowSeason.init))
+        guard let first = seasons.first else { return nil }
         return MediaItem.from(try await library.episodes(series: id, season: first.id)).first
     }
 
@@ -125,14 +127,26 @@ struct LiveMediaSource: MediaSource {
             async let seasons = library.seasons(series: id)
             async let similar = library.similar(to: id)
             async let next = library.nextUp(limit: 1, series: id)
-            details.seasons = MediaItem.from(try await seasons)
+            details.seasons = ShowSeason.ordered(try await seasons.compactMap(ShowSeason.init))
             details.similar = MediaItem.from((try? await similar) ?? [])
-            details.playable = MediaItem.from((try? await next) ?? []).first
-            if details.playable == nil, let first = details.seasons.first {
-                // Nothing is next once a show is watched through, so Play starts it again from the first episode.
-                let episodes = (try? await library.episodes(series: id, season: first.id)) ?? []
-                details.playable = MediaItem.from(episodes).first
+            // Next Up for one show includes an episode part way through, which Play resumes.
+            let playable = MediaItem.from((try? await next) ?? []).first
+            // The page opens on that episode's season. Nothing is next before a show is started or once it's watched
+            // through, so Play starts it from the first episode of the first season.
+            let opening =
+                playable.flatMap { episode in details.seasons.first { $0.id == episode.source?.seasonID } }
+                ?? details.seasons.first
+            if let opening {
+                let episodes = MediaItem.from((try? await library.episodes(series: id, season: opening.id)) ?? [])
+                details.openingSeasonID = opening.id
+                details.openingEpisodes = episodes
+                // The season's copy of the episode lists its streams, which the badges come from.
+                details.playable =
+                    playable.map { next in episodes.first { $0.id == next.id } ?? next } ?? episodes.first
+            } else {
+                details.playable = playable
             }
+            details.badges = details.playable?.source.map(MediaBadges.badges(for:)) ?? []
         case .episode:
             if let seriesID = source.seriesID, let seasonID = source.seasonID {
                 let episodes = (try? await library.episodes(series: seriesID, season: seasonID)) ?? []
@@ -146,15 +160,8 @@ struct LiveMediaSource: MediaSource {
         return details
     }
 
-    func season(_ id: String, of seriesID: String) async throws -> SeasonContent {
-        async let season = library.item(id: id)
-        async let episodes = library.episodes(series: seriesID, season: id)
-        let item = try await season
-        return SeasonContent(
-            title: item.name ?? "",
-            seriesTitle: item.seriesName ?? "",
-            episodes: MediaItem.from(try await episodes)
-        )
+    func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {
+        MediaItem.from(try await library.episodes(series: seriesID, season: seasonID))
     }
 
     func search(_ term: String) async throws -> MediaSearchResults {
@@ -217,6 +224,20 @@ struct LiveMediaSource: MediaSource {
         default:
             nil
         }
+    }
+}
+
+extension ShowSeason {
+    /// A season from the server, or nil when it has no ID.
+    init?(_ season: BaseItemDto) {
+        guard let item = MediaItem(season) else { return nil }
+        self.init(
+            item: item,
+            number: season.indexNumber,
+            episodeCount: season.childCount,
+            hasBackdrop: season.backdropImageTags?.first.map { !$0.isEmpty } ?? false,
+            hasPoster: season.imageTags?[ImageType.primary.rawValue].map { !$0.isEmpty } ?? false
+        )
     }
 }
 
