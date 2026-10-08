@@ -90,7 +90,7 @@ public enum PlaybackState: Equatable, Sendable {
     private let negotiator: PlaybackNegotiator
     private let nextEpisode: NextEpisode
     private let mediaSegments: MediaSegments
-    private let streamLoader: PinnedStreamLoader
+    private let streamLoader: StreamLoader
     /// Reads the account's language preferences, for Settings' subtitle mode, or nil to leave subtitles to the server.
     private let languagePreferences: (@Sendable () async throws -> LanguagePreferences)?
     /// Settings' subtitle rules for what's playing, or nil when the account's settings couldn't be read.
@@ -101,6 +101,9 @@ public enum PlaybackState: Equatable, Sendable {
     @ObservationIgnored private var reassertions = 0
     /// Goes up with every stream asked for, so an answer to an older request doesn't replace a newer one.
     @ObservationIgnored private var streamRequest = 0
+    /// The item playing through the stream loader's playlists, which put its subtitles in time with the picture, or
+    /// nil when the item plays the server's playlists as they are. See ``SubtitlePlaylists``.
+    @ObservationIgnored private var retimedItem: AVPlayerItem?
     private var options = PlaybackOptions()
     private var reporter: ProgressReporter?
     private var timeObserver: Any?
@@ -174,7 +177,7 @@ public enum PlaybackState: Equatable, Sendable {
         self.negotiator = PlaybackNegotiator(client: client, userID: userID)
         self.nextEpisode = NextEpisode(client: client, userID: userID)
         self.mediaSegments = MediaSegments(client: client)
-        self.streamLoader = PinnedStreamLoader(pinning: pinning)
+        self.streamLoader = StreamLoader(pinning: pinning)
         self.languagePreferences = languagePreferences
         diagnosticsSession = URLSession(configuration: .ephemeral, delegate: pinning, delegateQueue: nil)
         player.allowsExternalPlayback = true
@@ -305,6 +308,7 @@ public enum PlaybackState: Equatable, Sendable {
         reporter = nil
         player.replaceCurrentItem(with: nil)
         clearItemObservations()
+        retimedItem = nil
         legible = nil
         item = nil
         plan = nil
@@ -456,7 +460,26 @@ public enum PlaybackState: Equatable, Sendable {
                 },
                 on(UIApplication.didEnterBackgroundNotification) { $0.enteredBackground() },
                 on(UIApplication.willEnterForegroundNotification) { $0.enteringForeground() },
+                on(AVAudioSession.routeChangeNotification) { $0.audioRouteChanged() },
             ]
+        }
+
+        /// Sound moved, as to or from AirPlay. An Apple TV plays the stream from its address, and can't reach the
+        /// stream loader's playlists from there, so while AirPlay is on the item plays the server's playlists as they
+        /// are, and once it's off, the loader's again, with the subtitles in time. The old item plays until the new
+        /// one is in, as when the server sends a new stream.
+        private func audioRouteChanged() {
+            guard let plan, let playerItem = player.currentItem, state != .loading, pendingSubtitleSelection == nil,
+                Self.retimesSubtitles(in: plan), (playerItem === retimedItem) == Self.isAirPlaying
+            else { return }
+            streamRequest += 1
+            let request = streamRequest
+            let playing = player.timeControlStatus != .paused
+            Self.logger.debug(
+                "Loading the stream again for AirPlay \(Self.isAirPlaying ? "on" : "off", privacy: .public)")
+            Task {
+                await install(plan, subtitles: subtitleSelection, startingAt: nil, playing: playing, request: request)
+            }
         }
 
         /// The app went to the background. iOS pauses a player whose picture is on screen, so unless Picture in
@@ -751,8 +774,11 @@ public enum PlaybackState: Equatable, Sendable {
         playing: Bool,
         request: Int
     ) async -> Duration? {
-        let asset = AVURLAsset(url: plan.url)
-        asset.resourceLoader.setDelegate(streamLoader, queue: PinnedStreamLoader.queue)
+        // AirPlay hands an Apple TV the stream's address, and it can't reach the stream loader's playlists from there.
+        let retimes = Self.retimesSubtitles(in: plan) && !Self.isAirPlaying
+        let loaderURL = retimes ? SubtitlePlaylists.loaderURL(for: plan.url) : nil
+        let asset = AVURLAsset(url: loaderURL ?? plan.url)
+        asset.resourceLoader.setDelegate(streamLoader, queue: StreamLoader.queue)
         let playerItem = AVPlayerItem(asset: asset)
         playerItem.textStyleRules = subtitleStyle.textStyleRules
         // Picked before the item goes in, so not even its first frame shows other subtitles.
@@ -780,6 +806,8 @@ public enum PlaybackState: Equatable, Sendable {
             }
             nowPlaying?.becomeActive()
         #endif
+        retimedItem = loaderURL == nil ? nil : playerItem
+        player.allowsExternalPlayback = loaderURL == nil
         player.replaceCurrentItem(with: playerItem)
         player.defaultRate = rate
         logSubtitles("loaded, tracks picked")
@@ -883,6 +911,21 @@ public enum PlaybackState: Equatable, Sendable {
         let text = subtitles.filter { $0.deliveryMethod == .hls }
         return text.contains { $0.index == plan.streamSubtitleStreamIndex } ? text : []
     }
+
+    /// Whether `plan`'s stream needs its subtitles put in time with the picture: text subtitles in the server's HLS
+    /// stream of fragmented MP4 segments, which Jellyfin times for MPEG-TS. See ``SubtitlePlaylists``.
+    nonisolated static func retimesSubtitles(in plan: PlaybackPlan) -> Bool {
+        plan.method != .directPlay && !carriedSubtitles(of: plan).isEmpty && SubtitlePlaylists.isFragmentedMP4(plan.url)
+    }
+
+    #if canImport(UIKit)
+        /// Whether sound is going to an AirPlay device, such as an Apple TV that AVPlayer would hand the video to.
+        private static var isAirPlaying: Bool {
+            AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .airPlay }
+        }
+    #else
+        private static let isAirPlaying = false
+    #endif
 
     /// Asks the server again with new options for the version playing, then picks up where playback is, showing
     /// `subtitles` in the new stream.

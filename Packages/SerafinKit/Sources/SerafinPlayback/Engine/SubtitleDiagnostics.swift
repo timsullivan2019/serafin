@@ -10,8 +10,9 @@ import os
 ///
 /// Each entry covers every layer that can draw subtitles: the server's plan (the stream asked for, and whether it's
 /// burned into the picture), the `#EXT-X-MEDIA:TYPE=SUBTITLES` renditions in the server's HLS playlist, AVPlayer's
-/// legible options and the one selected, whether AVPlayer applies media selection criteria by itself, and the system's
-/// caption setting. Stream addresses carry the account's token, so none is ever logged.
+/// legible options and the one selected, whether AVPlayer applies media selection criteria by itself, the system's
+/// caption setting, and whether the stream loader's playlists put the subtitles in time. Stream addresses carry the
+/// account's token, so none is ever logged.
 enum SubtitleDiagnostics {
     static let logger = Logger(serafinCategory: "subtitles")
 
@@ -45,6 +46,12 @@ enum SubtitleDiagnostics {
             }
             logger.debug("AVPlayer automatic selection: \(describeCriteria(of: player), privacy: .public)")
             logger.debug("System captions: \(describeSystemCaptions(), privacy: .public)")
+            let retimed = (player.currentItem?.asset as? AVURLAsset).map {
+                SubtitlePlaylists.serverURL(for: $0.url) != nil
+            }
+            logger.debug(
+                "Subtitle timing: \(retimed == true ? "put in time by Serafin's playlists" : "as the server sends it", privacy: .public)"
+            )
         #endif
     }
 
