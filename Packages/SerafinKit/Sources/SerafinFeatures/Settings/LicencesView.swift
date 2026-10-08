@@ -114,9 +114,9 @@ struct LicencesView: View {
                 Text(
                     String(
                         localized:
-                            "Serafin is open source under the MIT licence. The Jellyfin SDK's files stay under the Mozilla Public License 2.0.",
+                            "Serafin is open source under the MIT license. The Jellyfin SDK's files stay under the Mozilla Public License 2.0.",
                         bundle: .module,
-                        comment: "Footer under the list of open-source licences."
+                        comment: "Footer under the list of open-source licenses."
                     )
                 )
             }
@@ -124,8 +124,8 @@ struct LicencesView: View {
         .readableWidth()
         .navigationTitle(
             String(
-                localized: "Licences", bundle: .module,
-                comment: "Title of the licences screen, and its row in Settings."))
+                localized: "Licenses", bundle: .module,
+                comment: "Title of the licenses screen, and its row in Settings."))
     }
 }
 

@@ -112,7 +112,7 @@ private struct AccentSwatch: View {
                     LabeledContent {
                         Text(accent.name)
                     } label: {
-                        Text(verbatim: "Accent Colour")
+                        Text(verbatim: "Accent Color")
                     }
                     AccentPicker(selection: $accent)
                 }

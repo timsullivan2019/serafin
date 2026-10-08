@@ -138,8 +138,8 @@ enum LibraryShortcut: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .favourites:
             String(
-                localized: "Favourites", bundle: .module,
-                comment: "Favourites: the library filter chip, and the Library tab's Browse row and grid.")
+                localized: "Favorites", bundle: .module,
+                comment: "Favorites: the library filter chip, and the Library tab's Browse row and grid.")
         case .recentlyAdded:
             String(
                 localized: "Recently Added", bundle: .module,
@@ -243,11 +243,6 @@ protocol MediaSource: Sendable {
     /// What to watch next, as Home lists it: started movies and episodes, most recent first, then the next episode of
     /// each show in progress.
     func nextToWatch() async throws -> [MediaItem]
-    /// Every movie and episode the user has started and not finished, most recent first, for Continue Watching's
-    /// own screen.
-    func continueWatching() async throws -> [MediaItem]
-    /// The next episode of every show the user is part way through, for Next Up's own screen.
-    func nextUp() async throws -> [MediaItem]
     /// The episode a show's Play button starts: the one in progress or next, or the first when the show hasn't been
     /// started or has been watched through. Nil for a show with no episodes.
     func playable(ofSeries id: String) async throws -> MediaItem?

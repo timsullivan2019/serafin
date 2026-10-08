@@ -21,8 +21,8 @@ struct SettingsView: View {
                 NavigationLink(value: Route.licences) {
                     Text(
                         String(
-                            localized: "Licences", bundle: .module,
-                            comment: "Title of the licences screen, and its row in Settings."))
+                            localized: "Licenses", bundle: .module,
+                            comment: "Title of the licenses screen, and its row in Settings."))
                 }
                 LabeledContent(
                     String(

@@ -195,6 +195,7 @@ private struct AllItemsSheet: View {
             List(items, id: \.self) { item in
                 Text(item)
             }
+            .scrollIndicators(.never)
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

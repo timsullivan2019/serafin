@@ -6,8 +6,6 @@ import SerafinDesign
 struct LiveMediaSource: MediaSource {
     /// The most cast and crew a detail screen lists.
     static let castLimit = 24
-    /// The most items Continue Watching's and Next Up's own screens list.
-    static let listLimit = 100
 
     let library: LibraryRepository
 
@@ -23,14 +21,6 @@ struct LiveMediaSource: MediaSource {
         async let resume = library.resume()
         async let nextUp = library.nextUp()
         return MediaItem.from(try await resume + nextUp)
-    }
-
-    func continueWatching() async throws -> [MediaItem] {
-        MediaItem.from(try await library.resume(limit: Self.listLimit))
-    }
-
-    func nextUp() async throws -> [MediaItem] {
-        MediaItem.from(try await library.nextUp(limit: Self.listLimit))
     }
 
     func playable(ofSeries id: String) async throws -> MediaItem? {

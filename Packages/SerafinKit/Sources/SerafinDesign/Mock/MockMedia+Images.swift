@@ -46,7 +46,7 @@ extension MockMedia {
             Button {
             } label: {
                 Label {
-                    Text(verbatim: "Add to Favourites")
+                    Text(verbatim: "Add to Favorites")
                 } icon: {
                     Image(systemName: "heart")
                 }

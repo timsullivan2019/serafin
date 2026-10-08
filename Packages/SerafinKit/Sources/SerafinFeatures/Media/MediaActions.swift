@@ -32,11 +32,11 @@ import SwiftUI
                     comment: "Spoken once an item is marked unwatched."
                 )
             case .favourite:
-                String(localized: "Added to Favourites", bundle: .module, comment: "Spoken once a favourite is added.")
+                String(localized: "Added to Favorites", bundle: .module, comment: "Spoken once a favorite is added.")
             case .notFavourite:
                 String(
-                    localized: "Removed from Favourites", bundle: .module,
-                    comment: "Spoken once a favourite is taken out.")
+                    localized: "Removed from Favorites", bundle: .module,
+                    comment: "Spoken once a favorite is taken out.")
             case .refreshing:
                 String(
                     localized: "Refreshing metadata", bundle: .module,
@@ -142,15 +142,15 @@ struct CardMenuItems: View {
             if item.card.isFavourite {
                 Label(
                     String(
-                        localized: "Remove from Favourites", bundle: .module,
-                        comment: "Button and menu item that takes an item out of the favourites."),
+                        localized: "Remove from Favorites", bundle: .module,
+                        comment: "Button and menu item that takes an item out of the favorites."),
                     systemImage: "heart.slash"
                 )
             } else {
                 Label(
                     String(
-                        localized: "Add to Favourites", bundle: .module,
-                        comment: "Button and menu item that adds an item to the favourites."),
+                        localized: "Add to Favorites", bundle: .module,
+                        comment: "Button and menu item that adds an item to the favorites."),
                     systemImage: "heart"
                 )
             }

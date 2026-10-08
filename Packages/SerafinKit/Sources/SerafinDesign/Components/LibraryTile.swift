@@ -178,7 +178,7 @@ public struct AccentIcon: View {
                         AccentIcon(systemImage: "theatermasks.fill")
                     }
                     Label {
-                        Text(verbatim: "Favourites")
+                        Text(verbatim: "Favorites")
                     } icon: {
                         AccentIcon(systemImage: "heart.fill")
                     }

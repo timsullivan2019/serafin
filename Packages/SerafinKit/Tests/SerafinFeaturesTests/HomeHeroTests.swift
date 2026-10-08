@@ -218,27 +218,6 @@ private func pick(_ home: HomeContent, without: Set<String> = []) -> [String] {
 }
 
 @MainActor
-@Suite struct WatchListTests {
-    @Test func continueWatchingAndNextUpListTheirItems() async {
-        let watching = WatchListModel(list: .continueWatching)
-        await watching.load(from: SampleMediaSource())
-        guard case .loaded(let started) = watching.phase else {
-            Issue.record("Continue Watching didn't load")
-            return
-        }
-        #expect(started.map(\.card) == MockLibrary.continueWatching)
-
-        let next = WatchListModel(list: .nextUp)
-        await next.load(from: SampleMediaSource())
-        guard case .loaded(let episodes) = next.phase else {
-            Issue.record("Next Up didn't load")
-            return
-        }
-        #expect(episodes.map(\.card) == MockLibrary.nextUp)
-    }
-}
-
-@MainActor
 @Suite struct HomeHeroPageTests {
     @Test func theBackdropIsAskedForWideEnoughToFillATallPage() {
         #expect(HomeHeroPage.backdropWidth(for: .zero) == 0)

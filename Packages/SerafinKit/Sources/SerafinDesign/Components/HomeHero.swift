@@ -203,10 +203,11 @@ public struct HomeHero<Page: View>: View {
 /// The backdrop fills the page under the status bar, moving a little slower than the scroll and stretching when
 /// Home is pulled down, both still under Reduce Motion. Without a backdrop, the poster stands in, enlarged and
 /// blurred. Over the fade in the bottom-leading corner sit the logo or title, a line of details, two lines of the
-/// overview (hidden at accessibility text sizes), then a Play button tinted with the artwork's colour and a round
-/// button for the detail screen. Under Reduce Transparency the buttons are plain material instead of glass.
+/// overview (hidden at accessibility text sizes), then a Play button tinted with the artwork's colour. Under Reduce
+/// Transparency the button is plain material instead of glass.
 ///
-/// Tapping the artwork opens the detail screen and touching and holding the page opens its context menu. VoiceOver
+/// Tapping the artwork, text included, opens the detail screen, and touching and holding the page opens its context
+/// menu. VoiceOver
 /// reads the page as one element, such as "Featured: Sherlock Holmes, A Case of Identity, 9 minutes left", with
 /// actions to play and to show the details.
 public struct HeroPage<Menu: View>: View {
@@ -239,7 +240,7 @@ public struct HeroPage<Menu: View>: View {
     ///   - playZoomNamespace: The namespace in which the Play button is the source of the player's zoom, keyed by
     ///     ``HomeHeroLayout/playZoomID(for:)``. Pass nil for no zoom.
     ///   - play: Called when Play is tapped.
-    ///   - showDetails: Called when the artwork or the info button is tapped.
+    ///   - showDetails: Called when the artwork is tapped.
     ///   - menu: The context menu's items.
     public init(
         item: HeroItem,
@@ -316,8 +317,7 @@ public struct HeroPage<Menu: View>: View {
                 tint: tint,
                 menu: menu,
                 playZoomNamespace: playZoomNamespace,
-                play: play,
-                showDetails: showDetails
+                play: play
             )
             .fadesBeforeTopSafeArea(safeAreaTop)
             .padding(.top, Spacing.xSmall)
@@ -351,22 +351,21 @@ public struct HeroPage<Menu: View>: View {
     static var showDetailsTitle: String {
         String(
             localized: "Show Details", bundle: .module,
-            comment: "Button and accessibility action that opens a featured item's detail screen on Home.")
+            comment: "Accessibility action that opens a featured item's detail screen on Home.")
     }
 }
 
-/// The Play button and the round info button, each its own glass, or plain material under Reduce Transparency.
-/// Touching and holding either lifts just that button with the item's context menu.
+/// The Play button, glass, or plain material under Reduce Transparency. Touching and holding it lifts it with the
+/// item's context menu. The detail screen is a tap on the artwork, so there's no button for it.
 ///
 /// Not in a `GlassEffectContainer`: a container draws its buttons itself, which hides Play from UIKit's zoom
-/// transition, so the full-screen player couldn't grow out of it. The two sit apart, so they wouldn't merge anyway.
+/// transition, so the full-screen player couldn't grow out of it.
 private struct HeroActions<Menu: View>: View {
     let item: HeroItem
     let tint: Color
     let menu: Menu
     let playZoomNamespace: Namespace.ID?
     let play: () -> Void
-    let showDetails: () -> Void
     @State private var playCount = 0
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.heroIndicatorReserve) private var indicatorReserve
@@ -375,29 +374,25 @@ private struct HeroActions<Menu: View>: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                // Side by side when they fit, otherwise one above the other, with the page dots on a line of their
+                // On one line when it fits, otherwise with its title wrapping, and the page dots on a line of their
                 // own.
                 VStack(alignment: .leading, spacing: Spacing.xSmall) {
                     ViewThatFits(in: .horizontal) {
-                        buttons
+                        playButton
                             .fixedSize()
-                        VStack(alignment: .leading, spacing: Spacing.small) {
-                            playButton
-                            infoButton
-                        }
-                        // Play's title wraps rather than running off the screen.
-                        .fixedSize(horizontal: false, vertical: true)
+                        playButton
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     dotsLine
                 }
             } else {
                 // Beside the page dots when there's room, otherwise a line above them.
                 ViewThatFits(in: .horizontal) {
-                    buttons
+                    playButton
                         .fixedSize()
                         .padding(.trailing, indicatorReserve)
                     VStack(alignment: .leading, spacing: Spacing.xSmall) {
-                        buttons
+                        playButton
                             .fixedSize()
                         dotsLine
                     }
@@ -405,13 +400,6 @@ private struct HeroActions<Menu: View>: View {
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: playCount)
-    }
-
-    private var buttons: some View {
-        HStack(spacing: Spacing.small) {
-            playButton
-            infoButton
-        }
     }
 
     /// Room under the buttons for the page dots, which the hero draws.
@@ -434,52 +422,24 @@ private struct HeroActions<Menu: View>: View {
         .modifier(HeroPlayZoomSource(id: HomeHeroLayout.playZoomID(for: item.id), namespace: playZoomNamespace))
         Group {
             if reduceTransparency {
-                button.buttonStyle(HeroMaterialButtonStyle(fill: tint, shape: .capsule))
+                button.buttonStyle(HeroMaterialButtonStyle(fill: tint))
             } else {
                 button.buttonStyle(.glassProminent).tint(tint).controlSize(.large)
             }
         }
         .contextMenu { menu }
     }
-
-    @ViewBuilder private var infoButton: some View {
-        let button = Button(action: showDetails) {
-            Image(systemName: "info")
-                .typography(.headline)
-                .frame(width: 22, height: 22)
-        }
-        .accessibilityLabel(HeroPage<EmptyView>.showDetailsTitle)
-        Group {
-            if reduceTransparency {
-                button.buttonStyle(HeroMaterialButtonStyle(fill: nil, shape: .circle))
-            } else {
-                // The glass style colours its symbol with the tint, so a plain symbol needs a plain tint.
-                button.buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large).tint(.primary)
-            }
-        }
-        .contextMenu { menu }
-    }
 }
 
-/// A plain material button for Reduce Transparency: a solid tint for Play, the regular material for the rest.
+/// Play as a plain button for Reduce Transparency: a capsule of solid tint.
 private struct HeroMaterialButtonStyle: ButtonStyle {
-    enum Shape { case capsule, circle }
-
-    let fill: Color?
-    let shape: Shape
+    let fill: Color
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(fill == nil ? Color.textPrimary : .white)
-            .padding(shape == .capsule ? Spacing.small : Spacing.xSmall - 1)
-            .background {
-                switch shape {
-                case .capsule:
-                    if let fill { Capsule().fill(fill) } else { Capsule().fill(.regularMaterial) }
-                case .circle:
-                    if let fill { Circle().fill(fill) } else { Circle().fill(.regularMaterial) }
-                }
-            }
+            .foregroundStyle(.white)
+            .padding(Spacing.small)
+            .background(fill, in: .capsule)
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
@@ -507,8 +467,8 @@ private struct HeroPageBackdrop: View {
                 }
                 .animation(.easeOut(duration: 0.3), value: image != nil)
                 // The artwork spills past the page's sides, over the pages beside it, and would take their touches:
-                // after swiping back, the next page's artwork lay over this one's info button. The page's own taps
-                // belong to the clear layer over it.
+                // after swiping back, the next page's artwork lay over the right side of this one. The page's own
+                // taps belong to the clear layer over it.
                 .allowsHitTesting(false)
             }
             .visualEffect { content, proxy in

@@ -61,6 +61,7 @@ struct AddServerView: View {
             } cancel: {
                 model.unencrypted = nil
             }
+            .scrollIndicators(.never)
         }
         .sheet(item: $model.certificate) { check in
             CertificateSheet(fingerprint: check.fingerprint, host: check.address.url.host() ?? "") {
@@ -68,6 +69,7 @@ struct AddServerView: View {
             } cancel: {
                 model.certificate = nil
             }
+            .scrollIndicators(.never)
         }
     }
 
