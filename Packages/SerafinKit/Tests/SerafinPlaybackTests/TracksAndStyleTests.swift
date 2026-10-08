@@ -213,6 +213,71 @@ import Testing
     }
 }
 
+@Suite struct MergedSubtitleTests {
+    /// Text subtitles as a file with many languages lists them: two German and three Spanish tracks with the same
+    /// names, one English, and English forced subtitles, all sent in the server's HLS stream.
+    private let source = MediaSourceInfo(
+        id: "source-1",
+        mediaStreams: [
+            MediaStream(index: 1, language: "eng", type: .audio),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 19, language: "deu", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 20, language: "deu", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 21, language: "eng", type: .subtitle),
+            MediaStream(
+                codec: "subrip", deliveryMethod: .hls, index: 22, isForced: true, language: "eng", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 23, language: "spa", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 24, language: "spa", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 25, language: "spa", type: .subtitle),
+        ]
+    )
+
+    private func plan(subtitle: Int) throws -> PlaybackPlan {
+        PlaybackPlan(
+            itemID: "item-1", mediaSource: source, url: try #require(URL(string: "https://example.com/master.m3u8")),
+            method: .directStream, playSessionID: nil, startPosition: .zero, audioStreamIndex: 1,
+            subtitleStreamIndex: subtitle)
+    }
+
+    /// The options AVPlayer lists for that stream: one per language and kind, as it merges the tracks it can't tell
+    /// apart, plus the closed captions it looks for in the video.
+    private let options = [
+        LegibleOption(isClosedCaptions: true),
+        LegibleOption(language: "de"),
+        LegibleOption(language: "en"),
+        LegibleOption(language: "en", isForced: true),
+        LegibleOption(language: "es"),
+    ]
+
+    @Test func mergedTracksMatchTheOptionInTheirLanguageAndKind() throws {
+        let text = try plan(subtitle: 21)
+        #expect(PlayerEngine.legiblePosition(for: .stream(19), in: text, among: options) == (1, .stream(19)))
+        // The second German track was merged into the first, which shows for it.
+        #expect(PlayerEngine.legiblePosition(for: .stream(20), in: text, among: options) == (1, .stream(20)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(21), in: text, among: options) == (2, .stream(21)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(22), in: text, among: options) == (3, .stream(22)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(25), in: text, among: options) == (4, .stream(25)))
+        // A language AVPlayer doesn't list can't show.
+        let noSpanish = Array(options.dropLast())
+        #expect(PlayerEngine.legiblePosition(for: .stream(24), in: text, among: noSpanish) == (nil, .off))
+    }
+
+    @Test func theServersStreamCarriesTextSubtitlesOnlyWhenItWasAskedForOne() throws {
+        // Asked for with subtitles off, the server's playlist lists no subtitles, so picking one takes a new stream.
+        let off = try plan(subtitle: -1)
+        #expect(PlayerEngine.carriedSubtitles(of: off).isEmpty)
+        #expect(PlayerEngine.needsNewStream(toShow: .stream(21), in: off))
+        #expect(!PlayerEngine.needsNewStream(toShow: .generated, in: off))
+        // Asked for with one, it lists them all, and they stay listed after switching to none in place.
+        let text = try plan(subtitle: 21)
+        #expect(PlayerEngine.carriedSubtitles(of: text).map(\.index) == [19, 20, 21, 22, 23, 24, 25])
+        let switchedOff = text.with(subtitle: -1)
+        #expect(switchedOff.subtitleStreamIndex == -1)
+        #expect(PlayerEngine.carriedSubtitles(of: switchedOff).count == 7)
+        #expect(!PlayerEngine.needsNewStream(toShow: .stream(23), in: switchedOff))
+        #expect(PlayerEngine.carriedSubtitles(of: switchedOff.with(audio: 1).with(subtitle: 23)).count == 7)
+    }
+}
+
 @Suite struct SubtitleDiagnosticsTests {
     @Test func theLogListsSubtitleRenditionsWithoutTheirAddresses() {
         let playlist = """

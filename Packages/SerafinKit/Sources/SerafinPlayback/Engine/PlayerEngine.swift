@@ -648,7 +648,7 @@ public enum PlaybackState: Equatable, Sendable {
     /// Whether showing `selection` takes a new stream from the server rather than a switch in the loaded one: when
     /// subtitles are burned into the picture now, or the ones wanted aren't in the stream as text.
     nonisolated static func needsNewStream(toShow selection: SubtitleSelection, in plan: PlaybackPlan) -> Bool {
-        if isBurnedIn(plan.subtitleStreamIndex, in: plan.streams(.subtitle)) {
+        if isBurnedIn(plan.streamSubtitleStreamIndex, in: plan.streams(.subtitle)) {
             return true
         }
         guard case .stream(let index) = selection else { return false }
@@ -786,6 +786,14 @@ public enum PlaybackState: Equatable, Sendable {
         return start
     }
 
+    /// Selects the legible option the engine chose in `playerItem` again, if anything else changed it.
+    private func reassertLegible(in playerItem: AVPlayerItem) {
+        guard player.currentItem === playerItem, let legible,
+            playerItem.currentMediaSelection.selectedMediaOption(in: legible.group) != legible.option
+        else { return }
+        playerItem.select(legible.option, in: legible.group)
+    }
+
     /// Where the item playing has got to: the player's own time once the item has reached its start, otherwise the
     /// position it's on its way to.
     private func currentPosition() -> Duration {
@@ -863,15 +871,17 @@ public enum PlaybackState: Equatable, Sendable {
         plan.streams(.audio).filter { $0.isExternal != true }
     }
 
-    /// The subtitle streams the loaded asset carries as text, in order. The server's HLS stream carries every text
-    /// subtitle it can send as WebVTT, including ones in separate files; the original file carries only its own text
-    /// tracks. Subtitles burned into the picture aren't tracks at all.
+    /// The subtitle streams the loaded asset carries as text, in order. The original file carries only its own text
+    /// tracks. The server's HLS stream carries every text subtitle it can send as WebVTT, including ones in separate
+    /// files, but only when it was asked for one of them: a stream asked for with subtitles off or burned in lists
+    /// none. Subtitles burned into the picture aren't tracks at all.
     nonisolated static func carriedSubtitles(of plan: PlaybackPlan) -> [MediaStream] {
         let subtitles = plan.streams(.subtitle)
         if plan.method == .directPlay {
             return subtitles.filter { $0.isExternal != true && $0.deliveryMethod != .encode }
         }
-        return subtitles.filter { $0.deliveryMethod == .hls }
+        let text = subtitles.filter { $0.deliveryMethod == .hls }
+        return text.contains { $0.index == plan.streamSubtitleStreamIndex } ? text : []
     }
 
     /// Asks the server again with new options for the version playing, then picks up where playback is, showing
@@ -947,6 +957,8 @@ public enum PlaybackState: Equatable, Sendable {
                 isGenerated: option.hasMediaCharacteristic(.machineGenerated),
                 isClosedCaptions: option.mediaType == .closedCaption,
                 language: SubtitleRules.language(option.extendedLanguageTag ?? option.locale?.identifier),
+                isForced: option.hasMediaCharacteristic(.containsOnlyForcedSubtitles),
+                isHearingImpaired: option.hasMediaCharacteristic(.transcribesSpokenDialogForAccessibility),
                 isSelectable: selectable?.contains(option) ?? true
             )
         }
@@ -967,9 +979,13 @@ public enum PlaybackState: Equatable, Sendable {
     }
 
     /// Where among an item's legible `options` the option for `selection` is, or nil to select none, with the
-    /// subtitles that then show. Subtitles burned into the picture select none and still show. Text subtitles match
-    /// the stream's option by position among the options the server put in its stream, leaving out iOS's generated
-    /// subtitles and the closed captions the player looks for in the video, which the server never lists.
+    /// subtitles that then show. Subtitles burned into the picture select none and still show.
+    ///
+    /// Text subtitles are matched among the options the stream itself carries, leaving out iOS's generated subtitles
+    /// and the closed captions the player looks for in the video, which the server never lists. When there's an
+    /// option for every stream, they match in order. AVPlayer merges subtitles it can't tell apart, though, such as
+    /// several tracks of one language with the same name, and lists the first of them. Then a stream matches the
+    /// option in its language and of its kind, forced or SDH.
     nonisolated static func legiblePosition(
         for selection: SubtitleSelection,
         in plan: PlaybackPlan,
@@ -987,10 +1003,52 @@ public enum PlaybackState: Equatable, Sendable {
             }
             let carried = carriedSubtitles(of: plan)
             let authored = options.indices.filter { !options[$0].isGenerated && !options[$0].isClosedCaptions }
-            guard authored.count == carried.count, let position = carried.firstIndex(where: { $0.index == index })
-            else { return (nil, .off) }
-            return (authored[position], selection)
+            guard let stream = carried.first(where: { $0.index == index }) else { return (nil, .off) }
+            if authored.count == carried.count, let position = carried.firstIndex(where: { $0.index == index }) {
+                return (authored[position], selection)
+            }
+            let position = mergedPosition(of: stream, among: carried, options: options, authored: authored)
+            return (position, position == nil ? .off : selection)
         }
+    }
+
+    /// Where the option for `stream` is when AVPlayer has merged some of the `carried` streams: the `authored`
+    /// option in the stream's language and of its kind, preferring an exact match of forced and SDH, then forced
+    /// alone, then the language alone. Among several such options, the stream's place among its like matches them
+    /// up when the counts agree; otherwise the first stands for them all, as AVPlayer keeps the first it merges.
+    nonisolated static func mergedPosition(
+        of stream: MediaStream,
+        among carried: [MediaStream],
+        options: [LegibleOption],
+        authored: [Int]
+    ) -> Int? {
+        let language = SubtitleRules.language(stream.language)
+        let isForced = stream.isForced == true
+        let isHearingImpaired = stream.isHearingImpaired == true
+        let kinds: [(LegibleOption) -> Bool] = [
+            { $0.language == language && $0.isForced == isForced && $0.isHearingImpaired == isHearingImpaired },
+            { $0.language == language && $0.isForced == isForced },
+            { $0.language == language },
+        ]
+        let streamKinds: [(MediaStream) -> Bool] = [
+            {
+                SubtitleRules.language($0.language) == language && ($0.isForced == true) == isForced
+                    && ($0.isHearingImpaired == true) == isHearingImpaired
+            },
+            { SubtitleRules.language($0.language) == language && ($0.isForced == true) == isForced },
+            { SubtitleRules.language($0.language) == language },
+        ]
+        for (matches, sameKind) in zip(kinds, streamKinds) {
+            let candidates = authored.filter { matches(options[$0]) }
+            guard let first = candidates.first else { continue }
+            let siblings = carried.filter(sameKind)
+            if candidates.count == siblings.count, let place = siblings.firstIndex(where: { $0.index == stream.index })
+            {
+                return candidates[place]
+            }
+            return first
+        }
+        return nil
     }
 
     /// Where iOS's generated subtitles for the audio playing are among an item's legible `options`, or nil when there
@@ -1156,6 +1214,10 @@ public enum PlaybackState: Equatable, Sendable {
         guard let playerItem = player.currentItem else { return }
         switch playerItem.status {
         case .readyToPlay:
+            // As the item loads, AVPlayer applies the stream's own defaults over a selection made before, such as
+            // the closed captions it marks as the default, so the engine's selection is made again before the
+            // first frame shows.
+            reassertLegible(in: playerItem)
             logSubtitles("ready to play")
             let length = playerItem.duration
             if length.isNumeric {
@@ -1290,7 +1352,7 @@ public enum PlaybackState: Equatable, Sendable {
 extension PlaybackPlan {
     /// The same plan with a different audio stream selected.
     func with(audio streamIndex: Int) -> PlaybackPlan {
-        PlaybackPlan(
+        var plan = PlaybackPlan(
             itemID: itemID,
             mediaSource: mediaSource,
             url: url,
@@ -1300,11 +1362,14 @@ extension PlaybackPlan {
             audioStreamIndex: streamIndex,
             subtitleStreamIndex: subtitleStreamIndex
         )
+        plan.negotiatedSubtitles = negotiatedSubtitles
+        return plan
     }
 
-    /// The same plan with a different subtitle stream selected, or -1 for none.
+    /// The same plan with a different subtitle stream selected, or -1 for none. The stream stays the one the server
+    /// made, with the subtitles it carries.
     func with(subtitle streamIndex: Int) -> PlaybackPlan {
-        PlaybackPlan(
+        var plan = PlaybackPlan(
             itemID: itemID,
             mediaSource: mediaSource,
             url: url,
@@ -1314,6 +1379,8 @@ extension PlaybackPlan {
             audioStreamIndex: audioStreamIndex,
             subtitleStreamIndex: streamIndex
         )
+        plan.negotiatedSubtitles = streamSubtitleStreamIndex
+        return plan
     }
 }
 
@@ -1337,14 +1404,26 @@ struct LegibleOption: Equatable {
     var isClosedCaptions: Bool
     /// Its language, as ``SubtitleRules/language(_:)`` normalizes it.
     var language: String?
+    /// Whether it holds forced subtitles only.
+    var isForced: Bool
+    /// Whether it's for the deaf and hard of hearing.
+    var isHearingImpaired: Bool
     /// Whether it can show anything now.
     var isSelectable: Bool
 
-    init(isGenerated: Bool = false, isClosedCaptions: Bool = false, language: String? = nil, isSelectable: Bool = true)
-    {
+    init(
+        isGenerated: Bool = false,
+        isClosedCaptions: Bool = false,
+        language: String? = nil,
+        isForced: Bool = false,
+        isHearingImpaired: Bool = false,
+        isSelectable: Bool = true
+    ) {
         self.isGenerated = isGenerated
         self.isClosedCaptions = isClosedCaptions
         self.language = language
+        self.isForced = isForced
+        self.isHearingImpaired = isHearingImpaired
         self.isSelectable = isSelectable
     }
 }

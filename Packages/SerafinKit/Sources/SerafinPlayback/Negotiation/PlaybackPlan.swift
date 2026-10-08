@@ -39,6 +39,14 @@ public struct PlaybackPlan: Sendable {
     public let audioStreamIndex: Int?
     /// The subtitle stream asked for, if one was.
     public let subtitleStreamIndex: Int?
+    /// The subtitle stream the server made the stream for, when a switch in place has since changed
+    /// ``subtitleStreamIndex``. Nil when they're the same.
+    var negotiatedSubtitles: Int?
+
+    /// The subtitle stream the server made the stream for, which decides the subtitles the stream carries as text.
+    var streamSubtitleStreamIndex: Int? {
+        negotiatedSubtitles ?? subtitleStreamIndex
+    }
 
     /// The chosen version's ID.
     public var mediaSourceID: String {

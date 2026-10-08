@@ -116,6 +116,26 @@ import Testing
         #expect(TrackChoices.selection(.generated) == .generated)
     }
 
+    @Test func identicalTextTracksFromTheServersStreamShowOnce() {
+        let streams = [
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 19, language: "deu", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 20, language: "deu", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 21, language: "eng", type: .subtitle),
+            MediaStream(codec: "pgssub", deliveryMethod: .encode, index: 22, language: "deu", type: .subtitle),
+        ]
+        let merged = TrackChoices(
+            audioStreams: [], subtitleStreams: streams, selectedAudio: nil, subtitles: .stream(20),
+            mergesTextTracks: true, locale: english)
+        // AVPlayer can't tell the two German text tracks apart, so they're one row, checked for either.
+        #expect(merged.subtitles.map(\.id) == [19, 21, 22])
+        #expect(merged.selectedSubtitles == .track(19))
+        // Playing the original file, each track is its own.
+        let file = TrackChoices(
+            audioStreams: [], subtitleStreams: streams, selectedAudio: nil, subtitles: .stream(20), locale: english)
+        #expect(file.subtitles.map(\.id) == [19, 20, 21, 22])
+        #expect(file.selectedSubtitles == .track(20))
+    }
+
     @Test func generatedSubtitlesOfferOneRowNamingTheirLanguage() throws {
         let choices = TrackChoices(
             audioStreams: [], subtitleStreams: [], selectedAudio: nil, subtitles: .generated,

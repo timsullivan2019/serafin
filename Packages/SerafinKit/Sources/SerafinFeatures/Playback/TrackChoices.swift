@@ -40,11 +40,15 @@ struct TrackChoices: Equatable {
             subtitles: subtitles,
             pending: pending,
             generated: generated,
+            mergesTextTracks: plan.method != .directPlay,
             locale: locale
         )
     }
 
     /// The tracks among `audioStreams` and `subtitleStreams`.
+    ///
+    /// - Parameter mergesTextTracks: Whether text subtitles come in the server's HLS stream, where AVPlayer merges
+    ///   tracks it can't tell apart. Then identical rows for them show once, and the first stands for the others.
     init(
         audioStreams: [MediaStream],
         subtitleStreams: [MediaStream],
@@ -52,14 +56,33 @@ struct TrackChoices: Equatable {
         subtitles selection: SubtitleSelection,
         pending: SubtitleSelection? = nil,
         generated: GeneratedSubtitles? = nil,
+        mergesTextTracks: Bool = false,
         locale: Locale = .current
     ) {
         audio = audioStreams.compactMap { Self.choice(for: $0, locale: locale) }
-        subtitles = subtitleStreams.compactMap { Self.choice(for: $0, locale: locale) }
+        var subtitles: [TrackChoice] = []
+        var merged: [Int: Int] = [:]
+        for stream in subtitleStreams {
+            guard let choice = Self.choice(for: stream, locale: locale) else { continue }
+            if mergesTextTracks, stream.deliveryMethod == .hls,
+                let twin = subtitles.first(where: { $0.title == choice.title && $0.detail == choice.detail }),
+                let twinStream = subtitleStreams.first(where: { $0.index == twin.id }),
+                twinStream.deliveryMethod == .hls
+            {
+                merged[choice.id] = twin.id
+                continue
+            }
+            subtitles.append(choice)
+        }
+        self.subtitles = subtitles
         generatedSubtitles = generated.map { Self.choice(for: $0, locale: locale) }
         self.selectedAudio = selectedAudio
-        selectedSubtitles = Self.pick(selection)
-        pendingSubtitles = pending.map(Self.pick)
+        let row = { (pick: SubtitlePick) -> SubtitlePick in
+            guard case .track(let index) = pick, let twin = merged[index] else { return pick }
+            return .track(twin)
+        }
+        selectedSubtitles = row(Self.pick(selection))
+        pendingSubtitles = pending.map { row(Self.pick($0)) }
     }
 
     /// The picker's form of the subtitles the player shows.

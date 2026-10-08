@@ -39,7 +39,7 @@ enum SubtitleDiagnostics {
                 logger.debug("HLS subtitle renditions: \(playlist, privacy: .public)")
             }
             if let playerItem = player.currentItem {
-                let burnedIn = PlayerEngine.isBurnedIn(plan.subtitleStreamIndex, in: plan.streams(.subtitle))
+                let burnedIn = PlayerEngine.isBurnedIn(plan.streamSubtitleStreamIndex, in: plan.streams(.subtitle))
                 let legible = await describeLegible(of: playerItem, burnedIn: burnedIn)
                 logger.debug("AVPlayer legible: \(legible, privacy: .public)")
             }
@@ -52,7 +52,7 @@ enum SubtitleDiagnostics {
     static func describe(_ plan: PlaybackPlan) -> String {
         let subtitles = plan.streams(.subtitle)
         let selected = plan.subtitleStreamIndex.map(String.init) ?? "none"
-        let burnedIn = PlayerEngine.isBurnedIn(plan.subtitleStreamIndex, in: subtitles)
+        let burnedIn = PlayerEngine.isBurnedIn(plan.streamSubtitleStreamIndex, in: subtitles)
         let serverDefault = plan.mediaSource.defaultSubtitleStreamIndex.map(String.init) ?? "none"
         let streams = subtitles.map(describe).joined(separator: "; ")
         return "method=\(plan.method) subtitle=\(selected) burnIn=\(burnedIn) serverDefault=\(serverDefault) "
@@ -126,14 +126,22 @@ enum SubtitleDiagnostics {
                 if option.hasMediaCharacteristic(.describesMusicAndSoundForAccessibility) { parts.append("sounds") }
                 if option.hasMediaCharacteristic(.machineGenerated) { parts.append("machine-generated") }
                 if let selectable, !selectable.contains(option) { parts.append("unselectable") }
+                if option == group.defaultOption { parts.append("default") }
                 if option == selected { parts.append("SELECTED") }
+                parts.append("\"\(option.displayName)\"")
                 return parts.joined(separator: " ")
             }
             let automatic = playerItem.currentMediaSelection.mediaSelectionCriteriaCanBeAppliedAutomatically(to: group)
             // Burned-in subtitles and a legible option at once are the double subtitles this log was made to find.
+            // Until the item is ready, nothing shows and AVPlayer reports a provisional selection, such as the
+            // stream's default, which the engine selects again as the item becomes ready.
             let check =
-                burnedIn
-                ? (selected == nil ? " burn-in check: legible nil" : " burn-in check: CONFLICT, legible selected") : ""
+                switch (burnedIn, playerItem.status == .readyToPlay, selected == nil) {
+                case (false, _, _): ""
+                case (true, false, _): " burn-in check: not ready yet"
+                case (true, true, true): " burn-in check: legible nil"
+                case (true, true, false): " burn-in check: CONFLICT, legible selected"
+                }
             return "options=[\(options.joined(separator: "; "))] selected=\(selected == nil ? "nil" : "yes") "
                 + "groupAllowsEmpty=\(group.allowsEmptySelection) criteriaCanApply=\(automatic)\(check)"
         }
