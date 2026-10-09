@@ -696,20 +696,6 @@ private struct Scrubber: View {
                 guard !Task.isCancelled else { return }
                 releasedFraction = nil
             }
-            .overlay(alignment: .topLeading) {
-                if let scrubbedFraction {
-                    let thumbOffset = trackWidth * scrubbedFraction
-                    Text(ScrubberMath.timecode(ScrubberMath.position(at: scrubbedFraction, in: duration)))
-                        .font(.subheadline.monospacedDigit().weight(.semibold))
-                        .padding(.horizontal, Spacing.small)
-                        .padding(.vertical, Spacing.xSmall)
-                        .glassEffect(.regular, in: .capsule)
-                        .fixedSize()
-                        .alignmentGuide(.leading) { $0.width / 2 - thumbOffset }
-                        .alignmentGuide(.top) { $0.height + Spacing.large }
-                        .accessibilityHidden(true)
-                }
-            }
             .sensoryFeedback(.selection, trigger: detentsPassed)
     }
 }
