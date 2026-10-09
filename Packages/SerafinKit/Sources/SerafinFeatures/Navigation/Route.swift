@@ -6,10 +6,11 @@ import SwiftUI
 enum Route: Hashable {
     /// A movie, series or episode.
     case item(id: String)
-    /// A movie, series or episode featured at the top of Home: the same screen as ``item(id:)``, zooming in from the
-    /// hero's artwork rather than from a card showing the same item. It carries the item, and for a show the episode
-    /// Play starts, so the screen shows its hero at once while the rest loads.
-    case featured(MediaItem, playable: MediaItem?)
+    /// A movie or series featured at the top of Home: the same screen as ``item(id:)``, zooming in from the artwork
+    /// of the hero's page `heroID` rather than from a card showing the same item. It carries the item, and for a show
+    /// the episode Play starts, so the screen shows its hero at once while the rest loads. A featured episode opens its
+    /// show's screen, on the episode's season.
+    case featured(MediaItem, playable: MediaItem?, heroID: String)
     /// One library's full grid.
     case library(MediaLibrary)
     /// The genres of every library.
@@ -115,8 +116,8 @@ private struct RouteDestination: View {
         switch route {
         case .item(let id):
             ItemDetailView(id: id)
-        case .featured(let item, let playable):
-            ItemDetailView(featured: item, playable: playable)
+        case .featured(let item, let playable, let heroID):
+            ItemDetailView(featured: item, playable: playable, heroID: heroID)
         case .library(let library):
             LibraryView(scope: .library(library))
         case .genres:

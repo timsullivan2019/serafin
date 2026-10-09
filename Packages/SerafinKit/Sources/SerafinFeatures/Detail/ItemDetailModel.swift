@@ -57,6 +57,8 @@ import SwiftUI
     private let requestedSeasonID: String?
     /// The season the page opened on, which the hero shows with the show's own art.
     private var openedSeasonID: String?
+    /// The episode a show's page was opened for, as from Home's hero, which Play starts until it's watched.
+    private var pinnedEpisodeID: String?
     private var seasonChange: Task<Void, Never>?
     private var prefetcher: ImagePrefetcher?
 
@@ -71,10 +73,14 @@ import SwiftUI
         ownTint = ArtworkMemory.tint(for: id)
     }
 
-    /// Starts with `item` showing, and for a show the episode its Play button starts, while the full details load.
+    /// Starts with `item` showing, and for a show the episode its Play button starts, while the full details load. A
+    /// show opened for an episode opens on the episode's season, and Play keeps starting that episode until it's
+    /// watched, as what was tapped said it would.
     init(showing item: MediaItem, playable: MediaItem?) {
         id = item.id
-        requestedSeasonID = nil
+        let episode = item.card.kind == .series ? playable.flatMap { $0.card.kind == .episode ? $0 : nil } : nil
+        requestedSeasonID = episode?.seasonID
+        pinnedEpisodeID = episode?.id
         phase = .loaded(ItemDetails(item: item, playable: playable ?? item))
         ownTint = item.source == nil ? MockMedia.tint(for: item.card) : ArtworkMemory.tint(for: item.id)
     }
@@ -89,8 +95,8 @@ import SwiftUI
         seasonArtwork?.tint ?? ownTint
     }
 
-    /// What the hero's Play starts: for a show, the episode Next Up names until the user picks a season, then that
-    /// season's first episode not yet watched; otherwise the item itself.
+    /// What the hero's Play starts: for a show, the episode Next Up names, or the one the page was opened for, until the
+    /// user picks another season, then that season's first episode not yet watched; otherwise the item itself.
     var playable: MediaItem? {
         guard let details else { return nil }
         guard let heroSeasonID, let season = episodes[heroSeasonID], let first = Self.firstToWatch(in: season) else {
@@ -113,7 +119,7 @@ import SwiftUI
     func load(from media: any MediaSource) async {
         async let canRefresh = media.canRefreshMetadata()
         do {
-            let details = try await media.details(of: id)
+            var details = try await media.details(of: id)
             if details.item.source == nil {
                 ownTint = MockMedia.tint(for: details.item.card)
             }
@@ -134,6 +140,15 @@ import SwiftUI
             let selected = selectedSeasonID.flatMap { seasonIDs.contains($0) ? $0 : nil } ?? listed
             for seasonID in [selected, heroSeasonID].compactMap({ $0 }) where loaded[seasonID] == nil {
                 loaded[seasonID] = episodes[seasonID]
+            }
+            if let pinnedEpisodeID, let pinned = loaded.values.joined().first(where: { $0.id == pinnedEpisodeID }) {
+                if pinned.card.isWatched {
+                    // Watched since, so Play moves on with the show, as on any show's page.
+                    self.pinnedEpisodeID = nil
+                } else {
+                    details.playable = pinned
+                    details.badges = Self.badges(of: pinned)
+                }
             }
             episodes = loaded
             failedSeasons = Set([selected].compactMap { $0 }.filter { loaded[$0] == nil })

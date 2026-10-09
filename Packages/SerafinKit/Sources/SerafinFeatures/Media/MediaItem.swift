@@ -99,14 +99,15 @@ extension MediaItem {
         }
     }
 
-    /// The series a season belongs to, made from what the season says about it, or nil when that leaves it without
-    /// a name or poster. The season's parent artwork is the series', so the series keeps its backdrop and logo for
-    /// Home's hero, and the season's date added says how new it is.
-    static func series(of season: BaseItemDto) -> BaseItemDto? {
-        guard let id = season.seriesID, let name = season.seriesName, let poster = season.seriesPrimaryImageTag else {
-            return nil
-        }
-        var series = BaseItemDto(id: id, imageTags: [ImageType.primary.rawValue: poster], name: name, type: .series)
+    /// The series a season or an episode belongs to, made from what the season or episode says about it, or nil when
+    /// that leaves it without a name, or without a poster when `requiresPoster`. The parent artwork is usually the
+    /// series', so the series keeps its backdrop and logo for Home's hero, and the date added says how new it is.
+    static func series(of season: BaseItemDto, requiresPoster: Bool = true) -> BaseItemDto? {
+        guard let id = season.seriesID, !id.isEmpty, let name = season.seriesName else { return nil }
+        let poster = season.seriesPrimaryImageTag
+        guard poster != nil || !requiresPoster else { return nil }
+        var series = BaseItemDto(
+            id: id, imageTags: poster.map { [ImageType.primary.rawValue: $0] }, name: name, type: .series)
         series.parentBackdropItemID = season.parentBackdropItemID
         series.parentBackdropImageTags = season.parentBackdropImageTags
         series.parentLogoItemID = season.parentLogoItemID
@@ -114,6 +115,26 @@ extension MediaItem {
         series.dateCreated = season.dateCreated
         series.dateLastMediaAdded = season.dateLastMediaAdded ?? season.dateCreated
         return series
+    }
+}
+
+extension MediaItem {
+    /// For an episode, its show, made from what the episode says about it so the show's screen can show its hero at
+    /// once; nil for anything else, or an episode that doesn't name its show.
+    var show: MediaItem? {
+        guard card.kind == .episode else { return nil }
+        guard let source else {
+            // A sample episode's show is one of the samples.
+            return MockMedia.series(of: card).map { MediaItem(card: $0, source: nil) }
+        }
+        return Self.series(of: source, requiresPoster: false).flatMap(MediaItem.init)
+    }
+
+    /// For an episode, the season it's in, or nil when it doesn't say.
+    var seasonID: String? {
+        guard card.kind == .episode else { return nil }
+        guard let source else { return SampleMediaSource.seasonID(ofEpisode: id) }
+        return source.seasonID.flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 

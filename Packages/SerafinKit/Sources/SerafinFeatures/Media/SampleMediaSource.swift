@@ -246,6 +246,13 @@ struct SampleMediaSource: MediaSource {
 
     func refresh() async {}
 
+    /// The sample season a sample episode is in.
+    static func seasonID(ofEpisode id: String) -> String? {
+        MockMedia.series.lazy.flatMap { MockMedia.seasons(of: $0) }.first { season in
+            season.episodes.contains { $0.id == id }
+        }?.id
+    }
+
     /// The sample show a sample season belongs to.
     static func seriesID(ofSeason id: String) -> String? {
         MockMedia.series.first { series in MockMedia.seasons(of: series).contains { $0.id == id } }?.id
