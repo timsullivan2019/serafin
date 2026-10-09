@@ -35,7 +35,7 @@ docker compose up -d
 
 Then finish the Jellyfin setup wizard at the public address and set the dashboard as described under Jellyfin below.
 
-To update Jellyfin, change the image tag in `docker-compose.yml` here and on the server, then run `docker compose up -d`. Never run `docker compose down -v`: it deletes the certificates along with the volumes.
+Jellyfin is pinned to an exact build tag (`12.2.20261005-225228`, Jellyfin 12.2) so a restart never upgrades the server under App Review. To update, pick the new dated tag from Docker Hub, change it in `docker-compose.yml` here and on the server, then run `docker compose pull jellyfin && docker compose up -d`. Check the version with `docker compose exec jellyfin /jellyfin/jellyfin --version`. Never run `docker compose down -v`: it deletes the certificates along with the volumes.
 
 ## Media
 
