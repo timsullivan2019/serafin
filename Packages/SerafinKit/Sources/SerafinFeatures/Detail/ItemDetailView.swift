@@ -359,24 +359,38 @@ extension ShowSeason {
 
 /// A season's episodes in a row that scrolls sideways, each card about four fifths of the row wide so the next one
 /// peeks in. It starts at the episode to watch next.
+///
+/// Every card shows its whole synopsis, and the row is as tall as the season's longest needs: each card's words get the
+/// height of the tallest, measured hidden, so the lazy row never changes height as it scrolls.
 private struct EpisodeRow: View {
     let episodes: [MediaItem]
     let start: String?
     @State private var position = ScrollPosition(idType: String.self)
+    /// How wide the cards are, as laid out, which the hidden measure of their words matches.
+    @State private var laidOutWidth: CGFloat = 0
+    @State private var textHeight: CGFloat?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        // Every card keeps room for a synopsis when any has one, so the cards are one height and the lazy row never
-        // changes height as it scrolls.
-        let reservesSynopsis = episodes.contains { $0.card.overview != nil }
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: Spacing.small) {
                 ForEach(episodes) { episode in
-                    EpisodeLink(item: episode, reservesSynopsisSpace: reservesSynopsis)
+                    EpisodeLink(item: episode, textHeight: textHeight)
                         .containerRelativeFrame(.horizontal) { length, _ in cardWidth(in: length) }
+                        .onGeometryChange(for: CGFloat.self) {
+                            $0.size.width
+                        } action: {
+                            laidOutWidth = $0
+                        }
                 }
             }
             .scrollTargetLayout()
+        }
+        .background(alignment: .topLeading) {
+            if laidOutWidth > 0 {
+                EpisodeCard<EmptyView>.textHeight(of: episodes.map(\.card)) { textHeight = $0 }
+                    .frame(width: laidOutWidth)
+            }
         }
         .contentMargins(.horizontal, Spacing.medium, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
@@ -394,19 +408,19 @@ private struct EpisodeRow: View {
     }
 }
 
-/// A season's episodes in two columns, for iPad.
+/// A season's episodes in two columns, for iPad, each with its whole synopsis: a row of the grid is as tall as its
+/// longer card.
 private struct EpisodeGrid: View {
     let episodes: [MediaItem]
 
     var body: some View {
-        let reservesSynopsis = episodes.contains { $0.card.overview != nil }
         LazyVGrid(
             columns: Array(
                 repeating: GridItem(.flexible(), spacing: Spacing.large, alignment: .top), count: 2),
             spacing: Spacing.large
         ) {
             ForEach(episodes) { episode in
-                EpisodeLink(item: episode, reservesSynopsisSpace: reservesSynopsis)
+                EpisodeLink(item: episode)
             }
         }
         .padding(.horizontal, Spacing.medium)
