@@ -18,12 +18,26 @@ import Testing
     }
 }
 
-@Suite struct SkipPillWordingTests {
+@Suite struct SkipSegmentWordingTests {
     @Test func eachStretchSaysWhatItSkips() {
-        #expect(SkipPill.Kind.intro.title == "Skip Intro")
-        #expect(SkipPill.Kind.recap.title == "Skip Recap")
-        #expect(SkipPill.Kind.credits.title == "Skip Credits")
-        #expect(SkipPill.Kind.preview.title == "Skip Preview")
-        #expect(SkipPill.Kind.advert.title == "Skip Ad")
+        #expect(SkipSegmentButton.Kind.intro.title == "Skip Intro")
+        #expect(SkipSegmentButton.Kind.recap.title == "Skip Recap")
+        #expect(SkipSegmentButton.Kind.preview.title == "Skip Preview")
+        #expect(SkipSegmentButton.Kind.advert.title == "Skip Ad")
+        #expect(SkipSegmentButton.Kind.credits.title == "Skip Credits")
+        #expect(SkipSegmentButton.Kind.unknown.title == "Skip")
+    }
+
+    @Test func theNoticeSaysWhatWasSkipped() {
+        #expect(SkipSegmentButton.Kind.intro.skippedTitle == "Skipped intro")
+        #expect(SkipSegmentButton.Kind.recap.skippedTitle == "Skipped recap")
+        #expect(SkipSegmentButton.Kind.preview.skippedTitle == "Skipped preview")
+        #expect(SkipSegmentButton.Kind.advert.skippedTitle == "Skipped ad")
+    }
+
+    @Test func thePillIsAsTallAsTheSpecSays() {
+        // `.buttonStyle(.glass)` pads a label by 7 points above and below, measured on the iOS 27 simulator.
+        #expect(SkipSegmentButton.height == 44)
+        #expect(SkipSegmentButton.height - 2 * SkipSegmentButton.glassVerticalPadding == 30)
     }
 }

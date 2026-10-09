@@ -36,6 +36,8 @@ enum Route: Hashable {
     case licences
     /// Audio and subtitle languages, and how subtitles look, from Settings.
     case audioAndSubtitles
+    /// Which stretches the server marks, such as intros, skip by themselves, from Settings.
+    case skipSegments
     /// The accent colour, from Settings.
     case accentColour
 }
@@ -142,6 +144,8 @@ private struct RouteDestination: View {
             LicencesView()
         case .audioAndSubtitles:
             AudioAndSubtitlesView()
+        case .skipSegments:
+            SkipSegmentsView()
         case .accentColour:
             AccentColourView()
         }

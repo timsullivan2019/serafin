@@ -1,5 +1,6 @@
 import Foundation
 import JellyfinAPI
+import SerafinCore
 import SerafinDesign
 import SerafinPlayback
 import Testing
@@ -305,10 +306,11 @@ import Testing
 
 @Suite struct SkipPillMappingTests {
     @Test func everyMarkedStretchGetsItsOwnPill() {
-        #expect(SkipPill.Kind(PlaybackSegment.Kind.intro) == .intro)
-        #expect(SkipPill.Kind(PlaybackSegment.Kind.recap) == .recap)
-        #expect(SkipPill.Kind(PlaybackSegment.Kind.credits) == .credits)
-        #expect(SkipPill.Kind(PlaybackSegment.Kind.preview) == .preview)
-        #expect(SkipPill.Kind(PlaybackSegment.Kind.advert) == .advert)
+        #expect(SkipSegmentButton.Kind(PlaybackSegment.Kind.intro) == .intro)
+        #expect(SkipSegmentButton.Kind(PlaybackSegment.Kind.recap) == .recap)
+        #expect(SkipSegmentButton.Kind(PlaybackSegment.Kind.credits) == .credits)
+        #expect(SkipSegmentButton.Kind(PlaybackSegment.Kind.preview) == .preview)
+        #expect(SkipSegmentButton.Kind(PlaybackSegment.Kind.advert) == .advert)
+        #expect(SkipSegmentButton.Kind(PlaybackSegment.Kind.unknown) == .unknown)
     }
 }

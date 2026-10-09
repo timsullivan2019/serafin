@@ -384,7 +384,7 @@ private struct TabChrome: ViewModifier {
         #if os(iOS)
             content
                 .tabBarMinimizeBehavior(.onScrollDown)
-                // The player screen ends a video itself, with Up Next for an episode. Away, as in Picture in Picture,
+                // The player screen ends a video itself, offering an episode's next one. Away, as in Picture in Picture,
                 // the end comes here.
                 .onChange(of: playback.engine?.state) { _, state in
                     if state == .ended, !playback.isPlayerPresented {

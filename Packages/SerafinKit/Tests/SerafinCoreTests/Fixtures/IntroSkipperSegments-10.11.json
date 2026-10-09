@@ -1,0 +1,9 @@
+{
+  "Introduction": {"EpisodeId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Start": 31.5, "End": 91.25, "Valid": true},
+  "Recap": {"EpisodeId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Start": 0, "End": 20, "Valid": true},
+  "Preview": {"EpisodeId": "00000000000000000000000000000000", "Start": 0, "End": 0, "Valid": false},
+  "Commercial": {"EpisodeId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Start": 700, "End": 640, "Valid": true},
+  "Credits": {"EpisodeId": "0b82ed8e9f1daed4e2a44e4d233e29b4", "Start": 1240, "End": 1320, "Valid": true},
+  "Mystery": {"Start": 5, "End": 10, "Valid": true},
+  "Broken": "not an entry"
+}

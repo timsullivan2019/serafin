@@ -105,6 +105,9 @@
     "More for %@" : {
       "comment" : "Spoken label of the ellipsis button that opens an episode's menu, such as More for Silver Blaze."
     },
+    "Next Episode" : {
+      "comment" : "Heading over the next episode."
+    },
     "Off" : {
       "comment" : "Choice that turns subtitles off."
     },
@@ -222,6 +225,9 @@
     "Shows the whole description" : {
       "comment" : "Hint on the More button at the end of a shortened description."
     },
+    "Skip" : {
+      "comment" : "Button that skips a stretch of the video the server marked without naming it."
+    },
     "Skip Ad" : {
       "comment" : "Button that skips an advert."
     },
@@ -242,6 +248,24 @@
     },
     "Skip forward 10 seconds" : {
       "comment" : "Button that jumps forward 10 seconds."
+    },
+    "Skipped" : {
+      "comment" : "Notice once a stretch of the video the server marked without naming it was skipped."
+    },
+    "Skipped ad" : {
+      "comment" : "Notice once an advert was skipped."
+    },
+    "Skipped credits" : {
+      "comment" : "Notice once the closing credits were skipped."
+    },
+    "Skipped intro" : {
+      "comment" : "Notice once the intro was skipped."
+    },
+    "Skipped preview" : {
+      "comment" : "Notice once a preview was skipped."
+    },
+    "Skipped recap" : {
+      "comment" : "Notice once a recap was skipped."
     },
     "Sky" : {
       "comment" : "Accent colour: a light, sky blue."
@@ -272,9 +296,6 @@
     },
     "Try Again" : {
       "comment" : "Button that retries a failed load."
-    },
-    "Up Next" : {
-      "comment" : "Heading over the next episode."
     },
     "Violet" : {
       "comment" : "Accent colour."

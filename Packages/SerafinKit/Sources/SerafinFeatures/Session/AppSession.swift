@@ -214,7 +214,7 @@ import os
                     client: try await accounts.client(for: current),
                     userID: current.user.id,
                     pinning: accounts.pinning,
-                    languagePreferences: { try await library.languagePreferences() }
+                    playbackPreferences: { try await library.playbackPreferences() }
                 )
                 await previous?.stop()
             }

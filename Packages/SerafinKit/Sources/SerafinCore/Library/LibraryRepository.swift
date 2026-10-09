@@ -373,6 +373,12 @@ public actor LibraryRepository {
         LanguagePreferences(configuration: try await userConfiguration())
     }
 
+    /// What the user's account says about playback: the audio and subtitle languages, and whether the next episode
+    /// plays by itself. Always asks the server, since another Jellyfin app may have changed them.
+    public func playbackPreferences() async throws -> PlaybackPreferences {
+        PlaybackPreferences(configuration: try await userConfiguration())
+    }
+
     /// Saves the user's audio and subtitle language preferences on the server.
     ///
     /// The server replaces a user's settings as a whole, so the rest of them go back exactly as the server sent them,
