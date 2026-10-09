@@ -34,6 +34,21 @@ import Testing
         Case(input: "[fe80::1]:8096", url: "http://[fe80::1]:8096", fallback: nil),
         Case(input: "::1", url: "http://[::1]:8096", fallback: nil),
         Case(input: "[2001:db8::7]", url: "https://[2001:db8::7]", fallback: "https://[2001:db8::7]:8920"),
+        Case(input: "100.101.102.103", url: "http://100.101.102.103:8096", fallback: nil),
+        Case(
+            input: "nas.tailnet-1234.ts.net", url: "https://nas.tailnet-1234.ts.net",
+            fallback: "http://nas.tailnet-1234.ts.net:8096"),
+        Case(
+            input: "NAS.Tailnet-1234.TS.NET/jellyfin/", url: "https://nas.tailnet-1234.ts.net/jellyfin",
+            fallback: "http://nas.tailnet-1234.ts.net:8096/jellyfin"),
+        Case(input: "nas.tailnet-1234.ts.net:8096", url: "http://nas.tailnet-1234.ts.net:8096", fallback: nil),
+        Case(input: "nas.tailnet-1234.ts.net:443", url: "https://nas.tailnet-1234.ts.net:443", fallback: nil),
+        Case(
+            input: "http://nas.tailnet-1234.ts.net", url: "http://nas.tailnet-1234.ts.net",
+            fallback: "http://nas.tailnet-1234.ts.net:8096"),
+        Case(
+            input: "https://nas.tailnet-1234.ts.net", url: "https://nas.tailnet-1234.ts.net",
+            fallback: "https://nas.tailnet-1234.ts.net:8920"),
     ]
 
     @Test(arguments: valid)
@@ -61,7 +76,7 @@ import Testing
             "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.10", "127.0.0.1", "169.254.10.20", "localhost",
             "media.localhost", "jellyfin.local", "JELLYFIN.LOCAL.", "nas", "::1", "[::1]", "fe80::1", "fe80::1%en0",
             "fd12:3456::1", "::ffff:192.168.1.1", "100.64.0.1", "100.101.102.103", "100.127.255.254",
-            "fd7a:115c:a1e0::1",
+            "fd7a:115c:a1e0::1", "nas.tailnet-1234.ts.net", "NAS.Tailnet-1234.TS.NET.",
         ]
     )
     func privateHosts(_ host: String) {
@@ -71,11 +86,20 @@ import Testing
     @Test(
         arguments: [
             "8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.0.1", "100.63.255.255", "100.128.0.1",
-            "jellyfin.example.com", "nas.lan", "nas.tailnet-1234.ts.net", "2001:db8::1", "::ffff:8.8.8.8", "",
+            "jellyfin.example.com", "nas.lan", "ts.net", "nas.ts.net.example.com", "nas.evil-ts.net", "2001:db8::1",
+            "::ffff:8.8.8.8", "",
         ]
     )
     func publicHosts(_ host: String) {
         #expect(!PrivateNetwork.isPrivate(host: host))
+    }
+
+    @Test func tellsTailscaleNamesFromOtherPrivateHosts() {
+        #expect(PrivateNetwork.isTailscaleName("nas.tailnet-1234.ts.net"))
+        #expect(PrivateNetwork.isTailscaleName("NAS.Tailnet-1234.TS.NET."))
+        for host in ["nas", "100.101.102.103", "jellyfin.local", "ts.net", "nas.ts.net.example.com", ""] {
+            #expect(!PrivateNetwork.isTailscaleName(host))
+        }
     }
 }
 
@@ -89,6 +113,15 @@ import Testing
         #expect(try TransportPolicy.security(of: home) == .unencryptedOnPrivateNetwork)
         let internet = try #require(URL(string: "http://example.com"))
         #expect(throws: SerafinError.insecureTransport) { try TransportPolicy.security(of: internet) }
+    }
+
+    @Test(
+        arguments: [
+            "http://100.101.102.103:8096", "http://[fd7a:115c:a1e0::1]:8096", "http://nas.tailnet-1234.ts.net",
+        ]
+    )
+    func plainHTTPIsAllowedOverTailscale(_ address: String) throws {
+        #expect(try TransportPolicy.security(of: #require(URL(string: address))) == .unencryptedOnPrivateNetwork)
     }
 
     @Test func otherSchemesAreRefused() throws {

@@ -2,27 +2,21 @@ import Network
 
 /// Decides whether a host is on the user's own network, where Serafin allows plain HTTP after a warning.
 ///
-/// Tailscale counts as the user's own network: its addresses (100.64.0.0/10, and IPv6 inside fc00::/7) are only
-/// reachable inside the user's tailnet, where WireGuard encrypts everything. Its full MagicDNS names (`.ts.net`)
-/// don't count, because App Transport Security only lets plain HTTP through to addresses and bare names; the bare
-/// MagicDNS name, such as `nas`, works.
+/// Tailscale counts as the user's own network: its addresses (100.64.0.0/10, and IPv6 inside fc00::/7) and its
+/// MagicDNS names (`.ts.net`) reach the server through the user's tailnet, where WireGuard encrypts everything. iOS
+/// lets plain HTTP through to them only because Serafin's Info.plist lists 100.64.0.0/10 and `ts.net` as App
+/// Transport Security exceptions.
 public enum PrivateNetwork {
     /// Whether `host` is private: an RFC 1918, loopback, link-local or shared (100.64.0.0/10) IPv4 address, a
-    /// loopback, link-local or unique-local IPv6 address, `localhost`, a `.local` name, or a bare name without a dot.
+    /// loopback, link-local or unique-local IPv6 address, `localhost`, a `.local` name, a Tailscale `.ts.net` name,
+    /// or a bare name without a dot.
     ///
     /// Only the name is judged; nothing is resolved. A public-looking name that happens to point at a home server
     /// counts as public.
     public static func isPrivate(host: String) -> Bool {
-        var name = host.lowercased()
-        if name.hasPrefix("["), name.hasSuffix("]") {
-            name = String(name.dropFirst().dropLast())
-        }
-        if name.hasSuffix(".") {
-            name.removeLast()
-        }
-        guard !name.isEmpty else { return false }
+        guard let name = normalized(host) else { return false }
 
-        if name == "localhost" || name.hasSuffix(".localhost") || name.hasSuffix(".local") {
+        if name == "localhost" || name.hasSuffix(".localhost") || name.hasSuffix(".local") || isTailscale(name) {
             return true
         }
         if let address = IPv4Address(name) {
@@ -33,6 +27,28 @@ public enum PrivateNetwork {
             return isPrivate(ipv6: address.rawValue)
         }
         return !name.contains(".") && !name.contains(":")
+    }
+
+    /// Whether `host` is a Tailscale MagicDNS name, such as `nas.tailnet-1234.ts.net`. Tailscale can give these names
+    /// real certificates, so Serafin tries HTTPS on them before plain HTTP.
+    public static func isTailscaleName(_ host: String) -> Bool {
+        normalized(host).map(isTailscale) ?? false
+    }
+
+    private static func isTailscale(_ name: String) -> Bool {
+        name.hasSuffix(".ts.net")
+    }
+
+    /// `host` in lowercase without IPv6 brackets or a trailing dot, or nil when nothing is left.
+    private static func normalized(_ host: String) -> String? {
+        var name = host.lowercased()
+        if name.hasPrefix("["), name.hasSuffix("]") {
+            name = String(name.dropFirst().dropLast())
+        }
+        if name.hasSuffix(".") {
+            name.removeLast()
+        }
+        return name.isEmpty ? nil : name
     }
 
     private static func isPrivate(_ v4: some Collection<UInt8>) -> Bool {
