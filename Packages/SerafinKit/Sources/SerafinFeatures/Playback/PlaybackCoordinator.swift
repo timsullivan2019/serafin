@@ -4,6 +4,7 @@ import Observation
 import SerafinCore
 import SerafinDesign
 import SerafinPlayback
+import SwiftUI
 
 #if canImport(UIKit)
     import UIKit
@@ -225,15 +226,23 @@ import SerafinPlayback
                 zoomSource = nil
             }
             // The title stays until the player has gone, so the screen doesn't empty while it turns upright.
-            closePlayer { [weak self] in self?.nowPlaying = nil }
+            closePlayer { [weak self] in self?.clearNowPlaying() }
         } else {
-            nowPlaying = nil
+            clearNowPlaying()
         }
         guard let engine else { return }
         Task { [media, actions] in
             await engine.stop()
             await media.refresh()
             actions.reload()
+        }
+    }
+
+    /// Forgets what was playing, which takes the mini player out of the tab bar. Animated, so the mini player fades
+    /// away rather than vanishing. iOS still snaps the tab bar back to its own size: it doesn't animate that.
+    private func clearNowPlaying() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            nowPlaying = nil
         }
     }
 

@@ -149,6 +149,9 @@ struct MainTabs: View {
         // On iPhone the search tab sits apart at the end of the tab bar and, chosen, becomes the system's search field
         // at the bottom of the screen. On iPad the search screen keeps its field under its title.
         .tabViewSearchActivation(sizeClass == .regular ? .automatic : .searchTabSelection)
+        // Home's hero and every detail screen's are a share of the screen, measured here, outside the tabs, where the
+        // tab bar and the mini player don't reach: they match, and keep their size as the mini player comes and goes.
+        .heroScreen()
         .background {
             TabShortcuts(selection: $selection, searchRequest: $searchRequest, showsSettings: $showsSettings)
         }

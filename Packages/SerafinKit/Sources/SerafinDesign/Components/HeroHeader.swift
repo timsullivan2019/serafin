@@ -22,8 +22,6 @@ public struct HeroHeader: View {
     @State private var playCount = 0
     /// How much of Home's hero fade still shows, from 1 as the screen zooms in from the hero to 0 once it has.
     @State private var arrivalFade: Double
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.isPresented) private var isPresented
     @Environment(\.heroSafeAreaTop) private var safeAreaTop
 
@@ -76,11 +74,7 @@ public struct HeroHeader: View {
                 }
             }
             // As tall as Home's hero, so zooming in from it keeps the artwork the same size and place.
-            .containerRelativeFrame(.vertical) { height, _ in
-                height
-                    * HomeHeroLayout.heightFraction(
-                        isRegularWidth: sizeClass == .regular, dynamicTypeSize: dynamicTypeSize)
-            }
+            .heroFrame()
             .onAppear {
                 guard arrivesFromHomeHero else { return }
                 withAnimation(.easeOut(duration: 0.45)) { arrivalFade = 0 }
