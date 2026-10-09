@@ -40,12 +40,13 @@ public struct ServerConnector: Sendable {
         self.sessionConfiguration = sessionConfiguration
     }
 
-    /// Connects to `address`, trying its fallback port once if nothing answers at the first address or what answers
-    /// is not Jellyfin, such as a router or NAS page on port 80.
+    /// Connects to `address`, trying its fallback once if nothing answers at the first address or what answers is
+    /// not Jellyfin, such as a router or NAS page on port 80.
     ///
     /// - Throws: ``SerafinError/insecureTransport`` before any request for plain HTTP to a public host;
     ///   ``SerafinError/offline`` without trying the fallback when the device has no connection;
     ///   ``SerafinError/untrustedCertificate(_:)`` when the server's certificate needs the user's pin;
+    ///   ``SerafinError/notAllowedFromThisNetwork`` when Jellyfin's network settings turn the device away;
     ///   ``SerafinError/notJellyfin``, ``SerafinError/unsupportedServerVersion(_:)`` or
     ///   ``SerafinError/serverUnreachable`` otherwise. When both addresses fail, the first address's error wins
     ///   unless the fallback got further.
@@ -99,13 +100,19 @@ public struct ServerConnector: Sendable {
         var request = URLRequest(url: url.appending(path: path), timeoutInterval: Self.timeout)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (bytes, response) = try await session.bytes(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw SerafinError.notJellyfin }
+        let status = (response as? HTTPURLResponse)?.statusCode
 
         var body = Data()
         for try await byte in bytes {
             body.append(byte)
             guard body.count <= Self.maximumInfoSize else { throw SerafinError.notJellyfin }
         }
+        // Jellyfin answers an address outside its LAN networks with an empty 503 when remote connections are off,
+        // or when its IP filter blocks the address. A proxy whose server is down sends a page with its 503.
+        if status == 503, body.isEmpty {
+            throw SerafinError.notAllowedFromThisNetwork
+        }
+        guard status == 200 else { throw SerafinError.notJellyfin }
         return try JSONDecoder().decode(PublicSystemInfo.self, from: body)
     }
 }

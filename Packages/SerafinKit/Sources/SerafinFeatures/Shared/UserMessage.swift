@@ -97,11 +97,25 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                     comment: "Title when iOS refuses plain HTTP to an address."),
                 message: String(
                     localized:
-                        "iOS doesn't allow unencrypted connections to this kind of address. For a Tailscale address, enter the server's Tailscale machine name instead, or use HTTPS.",
+                        "iOS doesn't allow unencrypted connections to this address. Use the server's https:// address instead.",
                     bundle: .module,
-                    comment: "Explanation when iOS refuses plain HTTP to an address, such as a Tailscale 100.x address."
+                    comment: "Explanation when iOS refuses plain HTTP to an address."
                 ),
                 systemImage: "lock.shield"
+            )
+        case .notAllowedFromThisNetwork:
+            self.init(
+                title: String(
+                    localized: "The Server Only Allows Its Own Network", bundle: .module,
+                    comment: "Title when Jellyfin's network settings turn the device away."),
+                message: String(
+                    localized:
+                        "In Jellyfin's dashboard, open Networking and turn on remote connections, or add this network to LAN networks. For Tailscale, that's 100.64.0.0/10.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when Jellyfin's network settings turn the device away. Networking and LAN networks are Jellyfin's own names."
+                ),
+                systemImage: "network.badge.shield.half.filled"
             )
         case .notJellyfin:
             self.init(

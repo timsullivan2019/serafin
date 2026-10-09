@@ -21,9 +21,13 @@ public enum SerafinError: Error, Equatable, Sendable {
     case offline
     /// Nothing answered at the address.
     case serverUnreachable
-    /// iOS refused plain HTTP to the address before Serafin could ask. It allows HTTP only to local addresses and
-    /// bare names, so a Tailscale 100.x address needs the server's Tailscale name, or HTTPS.
+    /// iOS refused plain HTTP to the address before Serafin could ask. It allows HTTP only to local addresses, bare
+    /// names and the Tailscale addresses and names Serafin's Info.plist lists, so anything else needs HTTPS.
     case plainHTTPBlocked
+    /// Jellyfin turned the device away because of its network settings: remote connections are off and the
+    /// device's address is outside the server's LAN networks, as a Tailscale 100.x address is by default, or the
+    /// server's IP filter blocks it.
+    case notAllowedFromThisNetwork
     /// Something answered, but it is not a Jellyfin server.
     case notJellyfin
     /// The server runs a Jellyfin version older than Serafin supports, which it carries.

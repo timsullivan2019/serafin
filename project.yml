@@ -43,6 +43,14 @@ targets:
         LSRequiresIPhoneOS: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+          # iOS 17 and later allow plain HTTP only to local addresses and bare names. Tailscale's addresses and its
+          # MagicDNS names need their own exceptions; nothing else gets one.
+          NSExceptionDomains:
+            "100.64.0.0/10":
+              NSExceptionAllowsInsecureHTTPLoads: true
+            ts.net:
+              NSExceptionAllowsInsecureHTTPLoads: true
+              NSIncludesSubdomains: true
         NSFaceIDUsageDescription: Serafin uses Face ID to unlock when you turn on its lock in Settings.
         NSLocalNetworkUsageDescription: Serafin looks for Jellyfin servers on your network.
         UIApplicationSceneManifest:

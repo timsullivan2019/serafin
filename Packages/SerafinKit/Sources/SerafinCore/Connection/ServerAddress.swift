@@ -10,14 +10,16 @@ public struct ServerAddress: Hashable, Sendable {
     /// The address to try first.
     public let url: URL
     /// The address to try once if ``url`` cannot be reached: Jellyfin's default port for the same scheme, when the
-    /// user typed no port and the first attempt did not already use it.
+    /// user typed no port and the first attempt did not already use it, or plain HTTP on Jellyfin's port for a
+    /// Tailscale name typed without a scheme or port, when it has no HTTPS.
     public let fallback: URL?
 
     /// Parses an address such as `jellyfin.example.com`, `192.168.1.20:8096` or `https://example.com/jellyfin`.
     ///
     /// Without a scheme, a public host gets `https` on its standard port, since most self-hosters sit behind a
-    /// reverse proxy, and a private host gets `http` on 8096. Anything but `http` and `https` is refused, as are
-    /// addresses with credentials, a query or a fragment.
+    /// reverse proxy, and a private host gets `http` on 8096. A Tailscale name without a port, such as
+    /// `nas.tailnet-1234.ts.net`, gets `https` first, since Tailscale can give it a certificate, and `http` on 8096
+    /// after. Anything but `http` and `https` is refused, as are addresses with credentials, a query or a fragment.
     ///
     /// - Throws: ``SerafinError/invalidAddress`` when the text is not a usable address.
     public static func parse(_ input: String) throws -> ServerAddress {
@@ -44,12 +46,14 @@ public struct ServerAddress: Hashable, Sendable {
             components.query == nil, components.fragment == nil
         else { throw SerafinError.invalidAddress }
 
-        let isPrivate = PrivateNetwork.isPrivate(host: host)
         let typedPort = components.port
-        let resolvedScheme = scheme ?? defaultScheme(port: typedPort, isPrivate: isPrivate)
+        // A Tailscale name typed without a scheme or port is treated like a public host until HTTPS fails.
+        let isTailscaleNameAlone = scheme == nil && typedPort == nil && PrivateNetwork.isTailscaleName(host)
+        let prefersHTTP = PrivateNetwork.isPrivate(host: host) && !isTailscaleNameAlone
+        let resolvedScheme = scheme ?? defaultScheme(port: typedPort, prefersHTTP: prefersHTTP)
         components.scheme = resolvedScheme
         components.host = host.lowercased()
-        if scheme == nil, typedPort == nil, isPrivate {
+        if scheme == nil, typedPort == nil, prefersHTTP {
             components.port = jellyfinHTTPPort
         }
         while components.path.hasSuffix("/") {
@@ -58,7 +62,11 @@ public struct ServerAddress: Hashable, Sendable {
         guard let url = components.url else { throw SerafinError.invalidAddress }
 
         var fallback: URL?
-        if typedPort == nil {
+        if isTailscaleNameAlone {
+            components.scheme = "http"
+            components.port = jellyfinHTTPPort
+            fallback = components.url
+        } else if typedPort == nil {
             let defaultPort = resolvedScheme == "https" ? jellyfinHTTPSPort : jellyfinHTTPPort
             if components.port != defaultPort {
                 components.port = defaultPort
@@ -68,11 +76,11 @@ public struct ServerAddress: Hashable, Sendable {
         return ServerAddress(url: url, fallback: fallback)
     }
 
-    private static func defaultScheme(port: Int?, isPrivate: Bool) -> String {
+    private static func defaultScheme(port: Int?, prefersHTTP: Bool) -> String {
         switch port {
         case 443, jellyfinHTTPSPort: "https"
         case 80, jellyfinHTTPPort: "http"
-        default: isPrivate ? "http" : "https"
+        default: prefersHTTP ? "http" : "https"
         }
     }
 }

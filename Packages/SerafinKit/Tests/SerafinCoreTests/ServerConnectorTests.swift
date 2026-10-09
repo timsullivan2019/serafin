@@ -111,9 +111,40 @@ private func publicInfoJSON(id: String = "c0ffee", version: String = "10.10.7", 
     }
 
     @Test func explainsWhenIOSBlocksPlainHTTP() async throws {
-        StubURLProtocol.stub("100.101.102.104:8096", .failure(.appTransportSecurityRequiresSecureConnection))
+        StubURLProtocol.stub("media.localhost:8096", .failure(.appTransportSecurityRequiresSecureConnection))
         await #expect(throws: SerafinError.plainHTTPBlocked) {
-            try await connector.connect(to: ServerAddress.parse("100.101.102.104"))
+            try await connector.connect(to: ServerAddress.parse("media.localhost"))
+        }
+    }
+
+    @Test func triesHTTPSFirstOnATailscaleName() async throws {
+        StubURLProtocol.stub("nas.tailnet-1234.ts.net:443", .json(200, publicInfoJSON(id: "tailnet-https")))
+        let connected = try await connector.connect(to: ServerAddress.parse("nas.tailnet-1234.ts.net"))
+        #expect(connected.server.url.absoluteString == "https://nas.tailnet-1234.ts.net")
+        #expect(connected.security == .encrypted)
+        #expect(StubURLProtocol.requests(to: "nas.tailnet-1234.ts.net:8096", path: "/System/Info/Public").isEmpty)
+    }
+
+    @Test func fallsBackToPlainHTTPOnATailscaleNameWithoutHTTPS() async throws {
+        StubURLProtocol.stub("tv.tailnet-1234.ts.net:443", .failure(.cannotConnectToHost))
+        StubURLProtocol.stub("tv.tailnet-1234.ts.net:8096", .json(200, publicInfoJSON(id: "tailnet-http")))
+        let connected = try await connector.connect(to: ServerAddress.parse("tv.tailnet-1234.ts.net"))
+        #expect(connected.server.url.absoluteString == "http://tv.tailnet-1234.ts.net:8096")
+        #expect(connected.security == .unencryptedOnPrivateNetwork)
+    }
+
+    @Test func explainsWhenJellyfinOnlyAllowsItsOwnNetwork() async throws {
+        // Jellyfin's answer to an address outside its LAN networks while remote connections are off.
+        StubURLProtocol.stub("100.101.102.105:8096", .json(503, ""))
+        await #expect(throws: SerafinError.notAllowedFromThisNetwork) {
+            try await connector.connect(to: ServerAddress.parse("100.101.102.105"))
+        }
+    }
+
+    @Test func aProxysUnavailablePageIsNotTakenForJellyfinsNetworkSettings() async throws {
+        StubURLProtocol.stub("192.168.77.23:8096", .json(503, "<html><body>Service Unavailable</body></html>"))
+        await #expect(throws: SerafinError.notJellyfin) {
+            try await connector.connect(to: ServerAddress.parse("192.168.77.23"))
         }
     }
 
