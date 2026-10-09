@@ -354,13 +354,6 @@ public actor LibraryRepository {
 
     // MARK: - Detail extras
 
-    /// An item's trailers stored with it on the server, as items that play in the normal player.
-    public func localTrailers(of id: String) async throws -> [BaseItemDto] {
-        guard ItemID.isPlain(id) else { throw SerafinError.notFound }
-        let request = Paths.getLocalTrailers(itemID: id, userID: userID)
-        return try await cached(request.url, request.query) { try await client.send(request).value }
-    }
-
     /// Asks the server to look up an item's metadata again, as the Jellyfin dashboard's Refresh Metadata does,
     /// without replacing what an administrator has edited. Administrators only.
     public func refreshMetadata(of id: String) async throws {
