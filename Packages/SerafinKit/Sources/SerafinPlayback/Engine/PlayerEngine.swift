@@ -125,6 +125,10 @@ public enum PlaybackState: Equatable, Sendable {
     private var endObserver: (any NSObjectProtocol)?
     /// Hears AVPlayer change the item's media selection, as when it picks subtitles by itself.
     private var selectionObserver: (any NSObjectProtocol)?
+    /// Hears the player log a new stretch of the stream, with the bitrate it chose, for the diagnostic log.
+    private var accessLogObserver: (any NSObjectProtocol)?
+    /// The picture size last logged for the current item, so each size is logged once.
+    @ObservationIgnored private var loggedPictureSize: CGSize?
     /// Fetches the server's playlist for the subtitle diagnostics, with the account's certificate pins.
     private let diagnosticsSession: URLSession
     private var reportingTask: Task<Void, Never>?
@@ -829,6 +833,11 @@ public enum PlaybackState: Equatable, Sendable {
         asset.resourceLoader.setDelegate(streamLoader, queue: StreamLoader.queue)
         let playerItem = AVPlayerItem(asset: asset)
         playerItem.textStyleRules = subtitleStyle.textStyleRules
+        // Jellyfin 10.10 lists two slightly lower bitrates after the one asked for when it converts for a client
+        // outside its network. AVPlayer would otherwise start where its estimate of the connection from earlier streams
+        // says, which can be the lowest, and climb from there, so the picture sharpens several seconds in. It starts on
+        // the first, the quality asked for, and still steps down if the connection can't keep up.
+        playerItem.startsOnFirstEligibleVariant = true
         // Picked before the item goes in, so not even its first frame shows other subtitles.
         async let legibleGroup = try? asset.loadMediaSelectionGroup(for: .legible)
         async let audibleGroup = try? asset.loadMediaSelectionGroup(for: .audible)
@@ -859,6 +868,9 @@ public enum PlaybackState: Equatable, Sendable {
         player.replaceCurrentItem(with: playerItem)
         player.defaultRate = rate
         logSubtitles("loaded, tracks picked")
+        if plan.method != .directPlay {
+            Self.logVersions(of: asset)
+        }
         return start
     }
 
@@ -1267,6 +1279,7 @@ public enum PlaybackState: Equatable, Sendable {
     }
 
     private func observe(_ playerItem: AVPlayerItem) {
+        loggedPictureSize = nil
         itemObservations = [
             playerItem.observe(\.status, options: [.new]) { @Sendable [weak self] _, _ in
                 Task { @MainActor in self?.itemStatusChanged() }
@@ -1274,7 +1287,19 @@ public enum PlaybackState: Equatable, Sendable {
             playerItem.observe(\.loadedTimeRanges, options: [.new]) { @Sendable [weak self] _, _ in
                 Task { @MainActor in self?.bufferChanged() }
             },
+            playerItem.observe(\.presentationSize, options: [.new]) { @Sendable [weak self] _, _ in
+                Task { @MainActor in self?.pictureSizeChanged() }
+            },
         ]
+        accessLogObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.newAccessLogEntryNotification,
+            object: playerItem,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.accessLogChanged(in: playerItem)
+            }
+        }
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification,
             object: playerItem,
@@ -1324,11 +1349,12 @@ public enum PlaybackState: Equatable, Sendable {
 
     private func clearItemObservations() {
         itemObservations.removeAll()
-        for observer in [endObserver, selectionObserver].compactMap({ $0 }) {
+        for observer in [endObserver, selectionObserver, accessLogObserver].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(observer)
         }
         endObserver = nil
         selectionObserver = nil
+        accessLogObserver = nil
     }
 
     private func timeChanged(_ time: CMTime) {
@@ -1388,6 +1414,80 @@ public enum PlaybackState: Equatable, Sendable {
         @unknown default:
             break
         }
+    }
+
+    /// Logs the picture's size as it changes, so a log shows whether the stream itself changed quality.
+    private func pictureSizeChanged() {
+        guard let size = player.currentItem?.presentationSize, size.width > 0, size.height > 0,
+            size != loggedPictureSize
+        else { return }
+        loggedPictureSize = size
+        Self.logger.debug(
+            "Picture \(Int(size.width), privacy: .public)×\(Int(size.height), privacy: .public) at \(self.elapsed.components.seconds, privacy: .public) s"
+        )
+    }
+
+    /// Logs the bitrate of each new stretch of the stream, which of the server's versions it comes from, and what the
+    /// player measured the connection at. A stretch ends when the player switches versions, seeks or stalls.
+    private func accessLogChanged(in playerItem: AVPlayerItem) {
+        guard player.currentItem === playerItem, let event = playerItem.accessLog()?.events.last else { return }
+        let (uri, indicated, observed) = (event.uri, event.indicatedBitrate, event.observedBitrate)
+        let stalls = event.numberOfStalls
+        let asset = playerItem.asset as? AVURLAsset
+        Task {
+            // Already loaded for a stream that comes in versions, so this answers at once.
+            let versions = (try? await asset?.load(.variants)) ?? []
+            let version = versions.firstIndex { $0.url.absoluteString == uri }.map {
+                "version \($0 + 1) of \(versions.count), "
+            }
+            Self.logger.debug(
+                "Stream at \(Self.megabits(indicated), privacy: .public) Mbit/s, \(version ?? "", privacy: .public)measured \(Self.megabits(observed), privacy: .public) Mbit/s, \(stalls, privacy: .public) stalls"
+            )
+        }
+    }
+
+    /// Logs the versions the server's playlist offers, which the player picks between by bitrate, codec and range, so a
+    /// log shows what else it could have played. Their addresses carry the account's token, so they're left out.
+    private static func logVersions(of asset: AVURLAsset) {
+        Task {
+            guard let versions = try? await asset.load(.variants), !versions.isEmpty else { return }
+            let count = versions.count == 1 ? "1 version" : "\(versions.count) versions"
+            let list = versions.enumerated().map { "\($0.offset + 1)) \(describe($0.element))" }
+            logger.debug(
+                "The server offers \(count, privacy: .public): \(list.joined(separator: "; "), privacy: .public)")
+        }
+    }
+
+    /// A version of the stream as the log shows it. See ``describe(bitrate:codecs:range:size:)``.
+    nonisolated static func describe(_ version: AVAssetVariant) -> String {
+        let video = version.videoAttributes
+        return describe(
+            bitrate: version.peakBitRate, codecs: video?.codecTypes ?? [], range: video?.videoRange,
+            size: video?.presentationSize)
+    }
+
+    /// A version of the stream as the log shows it: its bitrate, video codecs, range and picture size, such as
+    /// "18.2 Mbit/s hvc1 PQ 3840×2160".
+    nonisolated static func describe(
+        bitrate: Double?, codecs: [CMVideoCodecType], range: AVVideoRange?, size: CGSize?
+    ) -> String {
+        var parts = ["\(megabits(bitrate ?? -1)) Mbit/s"] + codecs.map(VideoSupport.fourCharacters)
+        switch range {
+        case .pq?: parts.append("PQ")
+        case .hlg?: parts.append("HLG")
+        case .sdr?: parts.append("SDR")
+        default: break
+        }
+        if let size, size.width > 0, size.height > 0 {
+            parts.append("\(Int(size.width))×\(Int(size.height))")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// Bits a second in megabits, to one place, or "unknown" for AVPlayer's negative unknown value.
+    nonisolated static func megabits(_ bitsPerSecond: Double) -> String {
+        guard bitsPerSecond.isFinite, bitsPerSecond >= 0 else { return "unknown" }
+        return String(format: "%.1f", bitsPerSecond / 1_000_000)
     }
 
     private func bufferChanged() {
