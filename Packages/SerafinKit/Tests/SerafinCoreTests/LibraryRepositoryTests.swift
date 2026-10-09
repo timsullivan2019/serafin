@@ -274,7 +274,7 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(person.query("userId") == "user-1")
     }
 
-    @Test func suggestionsAreAFewUnwatchedTitlesAtRandom() async throws {
+    @Test func suggestionsAreTwelveUnwatchedTitlesAtRandom() async throws {
         let host = "suggestions.example.com"
         StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
         _ = try await library(on: host).suggestions()
@@ -283,8 +283,20 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(request.queryValues("includeItemTypes") == ["Movie", "Series"])
         #expect(request.queryValues("filters") == ["IsUnplayed"])
         #expect(request.queryValues("sortBy") == ["Random"])
-        #expect(request.query("limit") == "6")
+        #expect(request.query("limit") == "12")
         #expect(request.query("recursive") == "true")
+    }
+
+    @Test func watchedTitlesFillSuggestionsWhenFewAreUnwatched() async throws {
+        let host = "suggestions-top-up.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
+        let suggestions = try await library(on: host).suggestions()
+
+        // Two unwatched titles aren't twelve, so a second ask takes any title, and the two aren't repeated.
+        let requests = StubURLProtocol.requests(to: "\(host):443", path: "/Items")
+        #expect(requests.count == 2)
+        #expect(requests.last?.queryValues("filters") == [])
+        #expect(suggestions.count == 2)
     }
 
     @Test func aPersonsGridAsksForTheirTitles() async throws {
