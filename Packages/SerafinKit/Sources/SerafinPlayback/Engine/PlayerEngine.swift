@@ -56,6 +56,9 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var segments: [PlaybackSegment] = []
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
+    /// The subtitles picked in the player for what's playing, or nil while Settings' default stands. An episode that
+    /// plays on from the one before keeps them.
+    public private(set) var subtitleChoice: SubtitleChoice?
     /// How text subtitles look. A change shows straight away on what's playing.
     public var subtitleStyle = SubtitleStyle.standard {
         didSet {
@@ -168,13 +171,22 @@ public enum PlaybackState: Equatable, Sendable {
     /// Negotiates `item` with the server and starts playing it at `options.startPosition`.
     ///
     /// Anything already playing is stopped and reported first.
-    public func load(_ item: BaseItemDto, options: PlaybackOptions) async {
+    ///
+    /// - Parameters:
+    ///   - item: The movie or episode.
+    ///   - options: What to ask the server for.
+    ///   - keepsSubtitleChoice: Whether the subtitles picked in the player for what played before carry on, as for an
+    ///     episode playing on from the last. Otherwise Settings' default applies again.
+    public func load(_ item: BaseItemDto, options: PlaybackOptions, keepsSubtitleChoice: Bool = false) async {
         generation += 1
         let load = generation
         await stopReporting()
         guard load == generation else { return }
         self.item = item
         self.options = options
+        if !keepsSubtitleChoice {
+            subtitleChoice = nil
+        }
         nextItem = nil
         segments = []
         failure = nil
@@ -187,8 +199,19 @@ public enum PlaybackState: Equatable, Sendable {
             // Asked for alongside the plan, so an intro at the very start can be skipped from its first seconds, but
             // waited for only once playback has started, so a slow answer never holds the picture up.
             async let marked = try? mediaSegments.of(itemID)
-            let plan = try await negotiator.plan(for: itemID, options: options)
+            var plan = try await negotiator.plan(for: itemID, options: options)
             guard load == generation else { return }
+            // Subtitles picked in the player for the episode before win over Settings' default for this one.
+            if let choice = subtitleChoice, let wanted = Self.streamIndex(for: choice, in: plan),
+                wanted != (plan.subtitleStreamIndex ?? -1)
+            {
+                var chosen = Self.optionsAskingAgain(options, for: plan)
+                chosen.subtitleStreamIndex = wanted
+                chosen.allowsDirectPlay = Self.allowsDirectPlay(showing: wanted, in: plan)
+                plan = try await negotiator.plan(for: itemID, options: chosen)
+                guard load == generation else { return }
+                self.options = chosen
+            }
             Self.logger.debug("Playing by \(String(describing: plan.method), privacy: .public)")
             install(plan, startingAt: options.startPosition, playing: true)
             reporter = ProgressReporter(client: client, plan: plan)
@@ -522,33 +545,88 @@ public enum PlaybackState: Equatable, Sendable {
         await renegotiate(options)
     }
 
-    /// Shows the subtitle stream with server index `streamIndex`, or turns subtitles off for nil.
+    /// Shows the subtitle stream with server index `streamIndex`, or turns subtitles off for nil. The choice stands
+    /// over Settings' default for the rest of what's playing, and for episodes that play on from it.
     ///
     /// Subtitles inside the loaded asset switch in place. Others mean asking the server again: subtitles the
     /// player can't read from the original file come back in an HLS stream, and styled or image subtitles are
-    /// burned into the picture.
+    /// burned into the picture. Subtitles burned in can only be changed by asking again, for a picture without them.
     public func selectSubtitle(_ streamIndex: Int?) async {
         guard let plan else { return }
         let wanted = streamIndex ?? -1
-        guard wanted != plan.subtitleStreamIndex else { return }
-        let subtitles = plan.streams(.subtitle)
-        if streamIndex == nil, plan.method != .transcode || !isBurnedIn(plan.subtitleStreamIndex, in: subtitles) {
-            await deselectLegible()
-            self.plan = plan.with(subtitle: -1)
-            return
-        }
-        if let streamIndex,
-            await selectInPlace(streamIndex, characteristic: .legible, among: Self.carriedSubtitles(of: plan))
-        {
-            self.plan = plan.with(subtitle: streamIndex)
-            return
+        guard wanted != (plan.subtitleStreamIndex ?? -1) else { return }
+        subtitleChoice = Self.choice(showing: streamIndex, in: plan)
+        if !Self.needsNewStream(toShow: streamIndex, in: plan) {
+            guard let streamIndex else {
+                await deselectLegible()
+                self.plan = plan.with(subtitle: -1)
+                return
+            }
+            if await selectInPlace(streamIndex, characteristic: .legible, among: Self.carriedSubtitles(of: plan)) {
+                self.plan = plan.with(subtitle: streamIndex)
+                return
+            }
         }
         var options = self.options
         options.subtitleStreamIndex = wanted
-        let stream = subtitles.first { $0.index == streamIndex }
-        // Only text tracks inside an MP4 play from the original file; anything else needs the server's HLS stream.
-        options.allowsDirectPlay = stream == nil || (stream?.isExternal != true && stream?.codec == "mov_text")
+        options.allowsDirectPlay = Self.allowsDirectPlay(showing: wanted, in: plan)
         await renegotiate(options)
+    }
+
+    /// Whether showing `streamIndex`, or nil for none, takes a new stream from the server rather than a switch in the
+    /// loaded one: when subtitles are burned into the picture now, or the ones wanted aren't in the stream.
+    nonisolated static func needsNewStream(toShow streamIndex: Int?, in plan: PlaybackPlan) -> Bool {
+        if isBurnedIn(plan.subtitleStreamIndex, in: plan.streams(.subtitle)) {
+            return true
+        }
+        guard let streamIndex else { return false }
+        return !carriedSubtitles(of: plan).contains { $0.index == streamIndex }
+    }
+
+    /// Whether a stream showing `streamIndex`, or -1 for none, may be the original file: only with no subtitles or a
+    /// text track inside an MP4. Anything else needs the server's HLS stream.
+    nonisolated static func allowsDirectPlay(showing streamIndex: Int, in plan: PlaybackPlan) -> Bool {
+        guard streamIndex >= 0, let stream = plan.streams(.subtitle).first(where: { $0.index == streamIndex }) else {
+            return true
+        }
+        return stream.isExternal != true && stream.codec == "mov_text"
+    }
+
+    /// The subtitles picked as a choice that can carry on to another episode: off, or the language and kind of the
+    /// stream, or nil for a stream with no language to match.
+    nonisolated static func choice(showing streamIndex: Int?, in plan: PlaybackPlan) -> SubtitleChoice? {
+        guard let streamIndex else { return .off }
+        guard let stream = plan.streams(.subtitle).first(where: { $0.index == streamIndex }),
+            let language = stream.language, !language.isEmpty
+        else { return nil }
+        return .language(
+            language, isForced: stream.isForced == true, isHearingImpaired: stream.isHearingImpaired == true)
+    }
+
+    /// The stream in `plan` that matches `choice`: -1 for off, otherwise a subtitle in the same language, the same
+    /// kind if there is one, or nil when there's none in that language and Settings' default stands.
+    nonisolated static func streamIndex(for choice: SubtitleChoice, in plan: PlaybackPlan) -> Int? {
+        switch choice {
+        case .off:
+            return -1
+        case .language(let language, let isForced, let isHearingImpaired):
+            let sameLanguage = plan.streams(.subtitle).filter { $0.language == language }
+            let match =
+                sameLanguage.first {
+                    ($0.isForced == true) == isForced && ($0.isHearingImpaired == true) == isHearingImpaired
+                }
+                ?? sameLanguage.first { ($0.isForced == true) == isForced } ?? sameLanguage.first
+            return match?.index
+        }
+    }
+
+    /// `options` for asking the server again for the version `plan` plays. They name the version: Jellyfin honours a
+    /// chosen audio or subtitle stream only when the request names the version it belongs to, and goes back to its
+    /// defaults otherwise, such as subtitles that Settings says always show.
+    nonisolated static func optionsAskingAgain(_ options: PlaybackOptions, for plan: PlaybackPlan) -> PlaybackOptions {
+        var options = options
+        options.mediaSourceID = plan.mediaSourceID
+        return options
     }
 
     // MARK: - Helpers
@@ -589,6 +667,9 @@ public enum PlaybackState: Equatable, Sendable {
         }
         if let subtitle = plan.subtitleStreamIndex, subtitle >= 0 {
             await select(subtitle, characteristic: .legible, among: Self.carriedSubtitles(of: plan), in: playerItem)
+        } else if subtitleChoice == .off {
+            // Turned off in the player: off, whatever AVPlayer would pick by itself.
+            await deselectLegible(in: playerItem)
         }
     }
 
@@ -609,10 +690,10 @@ public enum PlaybackState: Equatable, Sendable {
         return subtitles.filter { $0.deliveryMethod == .hls }
     }
 
-    /// Asks the server again with new options, then picks up where playback was.
+    /// Asks the server again with new options for the version playing, then picks up where playback was.
     private func renegotiate(_ newOptions: PlaybackOptions) async {
         guard let item, let itemID = item.id else { return }
-        var options = newOptions
+        var options = plan.map { Self.optionsAskingAgain(newOptions, for: $0) } ?? newOptions
         options.startPosition = elapsed
         let wasPlaying = player.timeControlStatus == .playing
         state = .loading
@@ -660,14 +741,17 @@ public enum PlaybackState: Equatable, Sendable {
     }
 
     private func deselectLegible() async {
-        guard
-            let playerItem = player.currentItem,
-            let group = try? await playerItem.asset.loadMediaSelectionGroup(for: .legible)
-        else { return }
+        guard let playerItem = player.currentItem else { return }
+        await deselectLegible(in: playerItem)
+    }
+
+    private func deselectLegible(in playerItem: AVPlayerItem) async {
+        guard let group = try? await playerItem.asset.loadMediaSelectionGroup(for: .legible) else { return }
         playerItem.select(nil, in: group)
     }
 
-    private func isBurnedIn(_ streamIndex: Int?, in streams: [MediaStream]) -> Bool {
+    /// Whether the subtitles `streamIndex` names are burned into the picture.
+    nonisolated static func isBurnedIn(_ streamIndex: Int?, in streams: [MediaStream]) -> Bool {
         guard let streamIndex, streamIndex >= 0 else { return false }
         return streams.first { $0.index == streamIndex }?.deliveryMethod == .encode
     }
@@ -927,6 +1011,14 @@ extension PlaybackPlan {
             subtitleStreamIndex: streamIndex
         )
     }
+}
+
+/// Subtitles picked in the player, as they carry on to the next episode: off, or a language.
+public enum SubtitleChoice: Equatable, Sendable {
+    /// No subtitles.
+    case off
+    /// Subtitles in `language`, as the server names it, such as "eng", preferring forced or SDH ones as picked.
+    case language(String, isForced: Bool, isHearingImpaired: Bool)
 }
 
 extension CMTime {
