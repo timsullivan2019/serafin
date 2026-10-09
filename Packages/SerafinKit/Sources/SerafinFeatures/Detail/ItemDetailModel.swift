@@ -7,9 +7,10 @@ import SwiftUI
 /// What a movie, show or episode detail screen shows.
 ///
 /// A show's page lists one season's episodes at a time. It opens on the season of the episode Play starts, with the
-/// show's own artwork in the hero. Once the user picks a season, the hero follows it: the season's own picture, and
-/// Play starting the season's first episode not yet watched. The episodes show as soon as they load; the hero waits
-/// until the season's episodes and picture are both ready, then changes in one movement.
+/// show's own artwork in the hero. Once the user picks another season, the hero follows it: the season's own picture,
+/// and Play starting the season's first episode not yet watched. Picking the season the page opened on puts the hero
+/// back as it opened, so a season looks the same every time it's picked. The episodes show as soon as they load; the
+/// hero waits until the season's episodes and picture are both ready, then changes in one movement.
 @Observable @MainActor final class ItemDetailModel {
     enum Phase {
         case loading
@@ -54,6 +55,8 @@ import SwiftUI
     private(set) var seasonArtwork: SeasonArtwork?
     /// The season asked for by a link, which the page opens on instead of the season of the next episode.
     private let requestedSeasonID: String?
+    /// The season the page opened on, which the hero shows with the show's own art.
+    private var openedSeasonID: String?
     private var seasonChange: Task<Void, Never>?
     private var prefetcher: ImagePrefetcher?
 
@@ -135,6 +138,9 @@ import SwiftUI
             episodes = loaded
             failedSeasons = Set([selected].compactMap { $0 }.filter { loaded[$0] == nil })
             selectedSeasonID = selected
+            if openedSeasonID == nil {
+                openedSeasonID = selected
+            }
             if let heroSeasonID, !seasonIDs.contains(heroSeasonID) {
                 self.heroSeasonID = nil
                 seasonArtwork = nil
@@ -183,6 +189,9 @@ import SwiftUI
     /// Loads the listed season's episodes and picture, then has the hero follow the season, as picking it does. Also
     /// what Try Again does once a season's episodes failed to load; until they load, the hero stays as it was.
     ///
+    /// For the season the page opened on, the hero goes back to how the page opened: the show's own art, and Play
+    /// starting the show's next episode.
+    ///
     /// - Returns: The work that has the hero follow, for tests to wait on.
     @discardableResult
     func followSelectedSeason(
@@ -192,6 +201,18 @@ import SwiftUI
             return nil
         }
         seasonChange?.cancel()
+        if seasonID == openedSeasonID {
+            let change = Task {
+                await loadEpisodes(of: seasonID, from: media)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    heroSeasonID = nil
+                    seasonArtwork = nil
+                }
+            }
+            seasonChange = change
+            return change
+        }
         let change = Task {
             async let listed: Void = loadEpisodes(of: seasonID, from: media)
             let picture = await Self.picture(of: season, artwork: artwork, hero: hero)

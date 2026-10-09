@@ -126,6 +126,27 @@ private let phoneHero = ItemDetailModel.HeroGeometry(size: CGSize(width: 402, he
         #expect(model.selectSeason("series-oz-s8", from: media, artwork: nil, hero: phoneHero) == nil)
     }
 
+    @Test func pickingTheSeasonThePageOpenedOnPutsTheHeroBackAsItOpened() async {
+        let media = SampleMediaSource()
+        let model = ItemDetailModel(id: "series-sherlock-holmes")
+        await model.load(from: media)
+        let opening = model.playable?.id
+        #expect(model.selectedSeasonID == "series-sherlock-holmes-s1")
+
+        // The Memoirs has art of its own in the samples' rule, so the hero takes it.
+        await model.selectSeason("series-sherlock-holmes-s2", from: media, artwork: nil, hero: phoneHero)?.value
+        #expect(model.heroSeasonID == "series-sherlock-holmes-s2")
+        #expect(model.seasonArtwork != nil)
+
+        // Back on The Adventures, which the page opened on, the hero is the show's again, with the same Play, even
+        // though the season has art of its own.
+        await model.selectSeason("series-sherlock-holmes-s1", from: media, artwork: nil, hero: phoneHero)?.value
+        #expect(model.heroSeasonID == nil)
+        #expect(model.seasonArtwork == nil)
+        #expect(model.playable?.id == opening)
+        #expect(model.episodes["series-sherlock-holmes-s1"]?.count == 6)
+    }
+
     @Test func aReloadKeepsThePickedSeasonAndItsEpisodes() async {
         let media = SampleMediaSource()
         let model = ItemDetailModel(id: "series-oz")
