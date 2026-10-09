@@ -7,9 +7,9 @@ import os
 /// The video this device plays beyond H.264 and HEVC, which every iPhone and iPad that runs Serafin decodes in
 /// hardware: AV1, which only newer chips decode, and Dolby Vision.
 ///
-/// It's read from the device: VideoToolbox says whether the chip decodes a codec in hardware, and AVFoundation
-/// whether AVPlayer plays a codec string. Decoding in software doesn't count, since it would drain the battery, so a
-/// device without an AV1 decoder has the server convert AV1.
+/// It's read from the device: VideoToolbox says whether the chip decodes AV1 in hardware, and AVFoundation whether
+/// AVPlayer plays a codec string. Decoding in software doesn't count, since it would drain the battery, so a device
+/// without an AV1 decoder has the server convert AV1.
 public struct VideoSupport: Equatable, Sendable {
     /// The highest AV1 level the device plays, as AV1's level index (13 is level 5.1, 4K at 60 frames a second), or
     /// nil when its chip has no AV1 decoder.
@@ -64,9 +64,9 @@ public struct VideoSupport: Equatable, Sendable {
         }
     ) -> VideoSupport {
         // Dolby Vision is HEVC with extra metadata, and Apple's devices play profiles 5 and 8 alike, so either codec
-        // string counts for both.
-        let dolbyVision =
-            decodesInHardware(kCMVideoCodecType_HEVC) && (plays("dvh1.05.06") || plays("dvh1.08.06"))
+        // string counts for both. The chip isn't asked about HEVC, which every device that runs Serafin decodes in
+        // hardware: on an iPhone with iOS 27, that question took VideoToolbox 4.6 seconds the first time after launch.
+        let dolbyVision = plays("dvh1.05.06") || plays("dvh1.08.06")
         var av1Level: Int?
         if decodesInHardware(kCMVideoCodecType_AV1) {
             // Main profile, in both 8-bit and 10-bit.

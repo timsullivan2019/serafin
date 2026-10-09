@@ -104,17 +104,28 @@ import Testing
         #expect(support.av1Level == 8)
     }
 
-    @Test func dolbyVisionNeedsTheHEVCDecoderAndEitherProfile() {
-        #expect(detect(hardware: [kCMVideoCodecType_HEVC]) { $0 == "dvh1.05.06" }.dolbyVision)
-        #expect(detect(hardware: [kCMVideoCodecType_HEVC]) { $0 == "dvh1.08.06" }.dolbyVision)
-        #expect(!detect(hardware: [kCMVideoCodecType_HEVC]) { $0.hasPrefix("hvc1") }.dolbyVision)
-        #expect(!detect(hardware: []) { _ in true }.dolbyVision)
+    @Test func dolbyVisionNeedsEitherProfile() {
+        #expect(detect(hardware: []) { $0 == "dvh1.05.06" }.dolbyVision)
+        #expect(detect(hardware: []) { $0 == "dvh1.08.06" }.dolbyVision)
+        #expect(!detect(hardware: []) { $0.hasPrefix("hvc1") }.dolbyVision)
+    }
+
+    @Test func theChipIsAskedOnlyAboutAV1() {
+        // Every device that runs Serafin decodes HEVC in hardware, and iOS can be slow to say so.
+        var asked: [CMVideoCodecType] = []
+        _ = VideoSupport.detect(
+            decodesInHardware: { codec in
+                asked.append(codec)
+                return true
+            },
+            plays: { _ in true })
+        #expect(asked == [kCMVideoCodecType_AV1])
     }
 
     @Test func dolbyVisionInAV1NeedsAV1AndDolbyVision() {
         let everything = detect(hardware: [kCMVideoCodecType_HEVC, kCMVideoCodecType_AV1]) { _ in true }
         #expect(everything == VideoSupport(av1Level: 19, dolbyVision: true, dolbyVisionInAV1: true))
-        let noDolbyVision = detect(hardware: [kCMVideoCodecType_AV1]) { _ in true }
+        let noDolbyVision = detect(hardware: [kCMVideoCodecType_AV1]) { !$0.hasPrefix("dvh1") }
         #expect(!noDolbyVision.dolbyVisionInAV1)
     }
 
