@@ -43,8 +43,12 @@ Eleven Blender open films and the three Caminandes shorts as one show, about 2.3
 
 `fetch-media.sh` needs `yt-dlp` as well as `curl`, `unzip` and `ffmpeg`. It downloads each film, then `normalise` remuxes it to MP4 with the first video and audio track, AAC stereo audio and faststart, re-encoding the video to H.264 only when it is something else. YouTube downloads ask for H.264 at up to 1080p, so nothing is re-encoded. Each download is deleted once normalised, and anything already in the library is skipped, so the script can be run again after a change:
 
+YouTube refuses downloads from data-centre addresses ("Sign in to confirm you're not a bot"), so run the script on a computer at home first, copy its `media` folder up, then run it on the server, where it skips everything already there:
+
 ```sh
-cd /opt/serafin-demo && nohup ./fetch-media.sh > fetch.log 2>&1 &
+./fetch-media.sh                                   # on a home computer, in an empty folder
+rsync -a --ignore-existing media/ serafin-demo:/opt/serafin-demo/media/
+ssh serafin-demo 'cd /opt/serafin-demo && nohup ./fetch-media.sh > fetch.log 2>&1 &'
 ```
 
 Movie folders carry the TMDB ID (`Movies/Spring (2019) [tmdbid-593048]/Spring (2019).mp4`) because titles like Spring, Hero and Charge are shared with other films. TMDB lists the Caminandes films as three movies rather than a series, so `fetch-media.sh` writes the show's `tvshow.nfo` and episode NFOs itself and cuts its poster and backdrop from stills of the film.
