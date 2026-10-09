@@ -63,6 +63,26 @@ import Testing
         #expect(card(secondsLeft: nil).accessibilityLabel == "Next episode, Gran Dillama")
     }
 
+    @Test func theCardIsAsWideAsItsContentUpToItsMaximum() throws {
+        /// The card's width given all the room it could want.
+        func width(of card: MediaCard) throws -> CGFloat {
+            let renderer = ImageRenderer(
+                content: NextEpisodeCard(
+                    NextEpisodePrompt(card: card, artwork: nil, tint: .gray), playNow: {}, cancel: {}))
+            renderer.proposedSize = ProposedViewSize(width: 1000, height: nil)
+            let image = try #require(renderer.cgImage)
+            return CGFloat(image.width) / renderer.scale
+        }
+        let short = try width(of: next)
+        #expect(short < NextEpisodeCard.maximumWidth - 40)
+        var long = next
+        long.title = "The Adventure of the Long Title That Goes On Past the Width of Any Card"
+        // A truncated title ends at a whole letter, so the card comes within a few points of its maximum.
+        let longWidth = try width(of: long)
+        #expect(longWidth <= NextEpisodeCard.maximumWidth)
+        #expect(longWidth > NextEpisodeCard.maximumWidth - 16)
+    }
+
     @Test func theTitleLineLeadsWithTheEpisodeCode() {
         #expect(NextEpisodeCard.titleLine(for: next) == "S1 E2 · Gran Dillama")
         #expect(NextEpisodeCard.titleLine(for: MockMedia.movies[1]) == MockMedia.movies[1].title)

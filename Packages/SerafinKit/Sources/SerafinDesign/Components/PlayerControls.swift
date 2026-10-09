@@ -132,8 +132,8 @@ public enum PlaybackSpeed {
 /// provides.
 ///
 /// Hidden controls fade out but stay in place, so a menu open on one of them stays usable. The skip pill, its notice
-/// and the next episode's card sit 12 points above the scrubber's row at the trailing edge, in a glass container of
-/// their own, so they stay while the controls are hidden: glass inside the controls' container keeps showing when only
+/// and the next episode's card sit 16 points above the scrubber at the trailing edge, in a glass container of their
+/// own, so they stay while the controls are hidden: glass inside the controls' container keeps showing when only
 /// its content fades. They materialize as they're offered and dissolve as they go. Where the card would cover skip
 /// back, play and skip forward, as on iPhone, those make room by moving to the middle of the space beside it.
 ///
@@ -238,17 +238,18 @@ public struct PlayerControls<RoutePicker: View>: View {
     /// The next episode's card, or else the skip pill or its notice, materializing in their glass.
     @ViewBuilder private var overlay: some View {
         if let nextEpisode {
-            NextEpisodeCard(nextEpisode, playNow: actions.playNextEpisode, cancel: actions.cancelNextEpisode)
-                .frame(maxWidth: layout.cardWidth)
-                .onGeometryChange(for: CGRect.self) {
-                    $0.frame(in: .named(TransportLayout.space))
-                } action: {
-                    layout.card = $0
-                }
-                .glassEffectTransition(.materialize)
-                // Springs in from its corner; under Reduce Motion it only materializes.
-                .transition(reduceMotion ? .identity : .scale(scale: 0.9, anchor: .bottomTrailing))
-                .id(nextEpisode.card.id)
+            FittingWidth(maximum: layout.cardWidth) {
+                NextEpisodeCard(nextEpisode, playNow: actions.playNextEpisode, cancel: actions.cancelNextEpisode)
+            }
+            .onGeometryChange(for: CGRect.self) {
+                $0.frame(in: .named(TransportLayout.space))
+            } action: {
+                layout.card = $0
+            }
+            .glassEffectTransition(.materialize)
+            // Springs in from its corner; under Reduce Motion it only materializes.
+            .transition(reduceMotion ? .identity : .scale(scale: 0.9, anchor: .bottomTrailing))
+            .id(nextEpisode.card.id)
         } else {
             prompt
         }

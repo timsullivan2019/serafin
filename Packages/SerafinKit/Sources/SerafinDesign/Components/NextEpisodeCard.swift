@@ -114,8 +114,9 @@ public struct NextEpisodePrompt {
 /// ``PlayerControls`` shows it in the bottom trailing corner, in the glass container it keeps on screen while the other
 /// controls hide. Always dark, like the rest of the player.
 public struct NextEpisodeCard: View {
-    /// The widest the card grows. Narrower spaces get a narrower card, and the title truncates.
-    nonisolated public static let maximumWidth: CGFloat = 320
+    /// The widest the card grows, padding included. The card is as wide as its content needs, and a title too long for
+    /// this width, or for a narrower space, truncates.
+    nonisolated public static let maximumWidth: CGFloat = 360
     /// How wide the thumbnail is, for loading it at its size.
     nonisolated public static let thumbnailWidth: CGFloat = 96
     /// The thumbnail's size.
@@ -142,33 +143,10 @@ public struct NextEpisodeCard: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.small) {
-            HStack(spacing: Spacing.small) {
-                CardArtwork(card: prompt.card, image: prompt.artwork, aspectRatio: 16 / 9, showsPlayedBadge: false)
-                    .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
-                details
-            }
-            HStack(spacing: Spacing.xSmall) {
-                Button(action: play) {
-                    PlayNowLabel(countdown: prompt.countdown)
-                        .frame(minHeight: Self.buttonHeight - 2 * SkipSegmentButton.glassVerticalPadding)
-                }
-                .buttonStyle(.glassProminent)
-                .tint(prompt.tint)
-                Spacer(minLength: 0)
-                Button(action: cancel) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(
-                            width: Self.buttonHeight - 2 * SkipSegmentButton.glassVerticalPadding,
-                            height: Self.buttonHeight - 2 * SkipSegmentButton.glassVerticalPadding)
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-            }
+        FittingWidth(maximum: Self.maximumWidth) {
+            content
+                .padding(Spacing.medium)
         }
-        .padding(Spacing.small)
-        .frame(maxWidth: Self.maximumWidth, alignment: .leading)
         .glassEffect(.regular, in: .rounded(.medium))
         .contentShape(.rounded(.medium))
         .onTapGesture(perform: play)
@@ -181,6 +159,37 @@ public struct NextEpisodeCard: View {
         .accessibilityAction { play() }
         .accessibilityAction(named: Text(Self.playNowTitle), play)
         .accessibilityAction(named: Text(Self.cancelTitle), cancel)
+    }
+
+    /// The thumbnail and details, with Play Now and the close button under them, side by side. Play Now takes the room
+    /// the details leave, so the buttons span the card with nothing between them.
+    private var content: some View {
+        VStack(alignment: .leading, spacing: Spacing.small) {
+            HStack(spacing: Spacing.small) {
+                CardArtwork(card: prompt.card, image: prompt.artwork, aspectRatio: 16 / 9, showsPlayedBadge: false)
+                    .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
+                details
+            }
+            HStack(spacing: Spacing.xSmall) {
+                Button(action: play) {
+                    PlayNowLabel(countdown: prompt.countdown)
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: Self.buttonHeight - 2 * SkipSegmentButton.glassVerticalPadding)
+                }
+                .buttonStyle(.glassProminent)
+                .tint(prompt.tint)
+                Button(action: cancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .frame(
+                            width: Self.buttonHeight - 2 * SkipSegmentButton.glassVerticalPadding,
+                            height: Self.buttonHeight - 2 * SkipSegmentButton.glassVerticalPadding)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+            }
+        }
     }
 
     /// "Next Episode", the code and title, and the running time.
@@ -248,6 +257,25 @@ public struct NextEpisodeCard: View {
         String(
             localized: "Cancel", bundle: .module,
             comment: "Button that puts away the next episode's card, so it doesn't play by itself.")
+    }
+}
+
+/// Lays out one view at its natural width, up to `maximum` and the room offered, so parts of it that can stretch fill
+/// only the width the rest needs. A frame with a maximum width would grow to that width whenever there's room, leaving
+/// dead space in a card whose content is narrower.
+struct FittingWidth: Layout {
+    /// The widest the view may be.
+    let maximum: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let view = subviews.first else { return .zero }
+        let natural = view.sizeThatFits(.unspecified).width
+        let width = min(natural, maximum, proposal.width ?? .infinity)
+        return view.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 

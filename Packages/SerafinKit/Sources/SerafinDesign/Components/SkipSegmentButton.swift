@@ -124,10 +124,10 @@ public struct SkippedNotice: View {
 
 /// Measurements the player's overlays share with its controls.
 public enum PlayerLayout {
-    /// How far above the bottom of the safe area the skip pill and the next episode's card sit: the controls' margin
-    /// and their bottom bar, the row with the scrubber, which its 44-point glass buttons make 58 points tall, and 12
-    /// points between.
-    public static let bottomBarClearance: CGFloat = Spacing.medium + 58 + Spacing.small
+    /// How far above the bottom of the safe area the skip pill and the next episode's card sit: 16 points above the
+    /// scrubber. Under them are the controls' margin and the scrubber's 44 points, in the middle of a bottom bar that
+    /// the glass buttons beside it make 58 points tall.
+    public static let bottomBarClearance: CGFloat = Spacing.medium + (58 + 44) / 2 + Spacing.medium
 }
 
 #if DEBUG
