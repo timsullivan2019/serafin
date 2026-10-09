@@ -147,7 +147,7 @@ extension MediaItem {
         case .collection:
             .collection(id: id, title: card.title)
         case .movie, .series, .episode:
-            .item(id: id)
+            .card(self)
         }
     }
 }
