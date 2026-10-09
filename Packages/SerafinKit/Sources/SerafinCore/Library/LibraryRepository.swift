@@ -266,13 +266,28 @@ public actor LibraryRepository {
             movies: movies, series: series, episodes: episodes, people: people, collections: collections)
     }
 
-    /// A few movies and shows the user hasn't watched, picked at random by the server, for the search tab to suggest
-    /// before anything is typed. The pick stays the same until the cache is cleared, as by pull to refresh.
-    public func suggestions(limit: Int = 6) async throws -> [BaseItemDto] {
+    /// Movies and shows the user hasn't watched, picked at random by the server, for the search tab to suggest
+    /// before anything is typed. When fewer than `limit` are unwatched, watched ones fill the rest, so a library
+    /// the user has mostly seen still fills the screen. The pick stays the same until the cache is cleared, as by
+    /// pull to refresh.
+    public func suggestions(limit: Int = 12) async throws -> [BaseItemDto] {
+        let unwatched = try await randomTitles(limit: limit, unwatchedOnly: true)
+        guard unwatched.count < limit else { return unwatched }
+        let picked = Set(unwatched.compactMap(\.id))
+        let others = try await randomTitles(limit: limit, unwatchedOnly: false).filter {
+            $0.id.map { !picked.contains($0) } ?? false
+        }
+        return unwatched + others.prefix(limit - unwatched.count)
+    }
+
+    /// Up to `limit` movies and shows in random order, only unwatched ones if `unwatchedOnly`.
+    private func randomTitles(limit: Int, unwatchedOnly: Bool) async throws -> [BaseItemDto] {
         var parameters = Paths.GetItemsParameters(userID: userID)
         parameters.includeItemTypes = [.movie, .series]
         parameters.isRecursive = true
-        parameters.filters = [.isUnplayed]
+        if unwatchedOnly {
+            parameters.filters = [.isUnplayed]
+        }
         parameters.sortBy = [.random]
         parameters.limit = limit
         parameters.fields = Self.cardFields

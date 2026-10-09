@@ -237,7 +237,7 @@ struct SampleMediaSource: MediaSource {
     }
 
     func suggestions() async throws -> [MediaItem] {
-        (MockMedia.movies + MockMedia.series).filter { !$0.isPlayed }.prefix(6).map(Self.item)
+        (MockMedia.movies + MockMedia.series).filter { !$0.isPlayed }.prefix(12).map(Self.item)
     }
 
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws {}
