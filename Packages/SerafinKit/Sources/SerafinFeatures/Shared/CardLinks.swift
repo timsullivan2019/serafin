@@ -87,8 +87,8 @@ struct WatchingLink: View {
 /// own page, marks it watched or adds it to the favorites.
 struct EpisodeLink: View {
     let item: MediaItem
-    /// Whether the card keeps room for a full title and synopsis, so it's as tall as the others in its season.
-    var reservesSynopsisSpace = false
+    /// The least height for the card's words, so it's as tall as the others in a row; nil for its own height.
+    var textHeight: CGFloat?
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.playerZoomNamespace) private var playerZoom
@@ -97,7 +97,7 @@ struct EpisodeLink: View {
         ItemArtwork(item, role: .landscape) { image in
             EpisodeCard(
                 card: item.card, artwork: image, zoomNamespace: zoom, playZoomNamespace: playerZoom,
-                reservesSynopsisSpace: reservesSynopsisSpace
+                textHeight: textHeight
             ) {
                 playback.play(item, zoomSource: CardPlayZoom.id(for: item.id))
             } menu: {

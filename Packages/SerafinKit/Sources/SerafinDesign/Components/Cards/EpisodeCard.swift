@@ -1,16 +1,17 @@
 import SwiftUI
 
 /// An episode on its show's page, as the TV app lays them out: a 16:9 still with a play glyph and the time, "EPISODE 3",
-/// the title and a two-line synopsis, with a progress bar while it's part way through and a check once it's watched.
+/// the title and the whole synopsis, with a progress bar while it's part way through and a check once it's watched.
 ///
 /// Tapping the card plays the episode. Touching and holding it, or tapping the ellipsis beside its number, opens its
-/// menu. The card fills the width it is given.
+/// menu. The card fills the width it is given, and is as tall as its synopsis needs, or as ``textHeight(of:measured:)``
+/// measures for a row whose cards should line up.
 public struct EpisodeCard<Menu: View>: View {
     private let card: MediaCard
     private let artwork: Image?
     private let zoomNamespace: Namespace.ID?
     private let playZoomNamespace: Namespace.ID?
-    private let reservesSynopsisSpace: Bool
+    private let textHeight: CGFloat?
     private let play: () -> Void
     private let menu: Menu
     @State private var playCount = 0
@@ -24,8 +25,8 @@ public struct EpisodeCard<Menu: View>: View {
     ///     ``MediaCard/id``, for when the menu opens it. Pass nil for no zoom.
     ///   - playZoomNamespace: The namespace in which the still is the source of the player's zoom, keyed by
     ///     ``CardPlayZoom/id(for:)``, so the player grows out of it. Pass nil for no zoom.
-    ///   - reservesSynopsisSpace: Whether the card keeps room for a full title and synopsis even when its own are
-    ///     shorter or missing, so every card in a row or grid is the same height.
+    ///   - textHeight: The least height for the number, title and synopsis, so cards in a row are as tall as the one
+    ///     with the longest synopsis, as ``textHeight(of:measured:)`` measures it; nil for the card's own height.
     ///   - play: Called when the card is tapped.
     ///   - menu: The items of the card's menu.
     public init(
@@ -33,7 +34,7 @@ public struct EpisodeCard<Menu: View>: View {
         artwork: Image?,
         zoomNamespace: Namespace.ID? = nil,
         playZoomNamespace: Namespace.ID? = nil,
-        reservesSynopsisSpace: Bool = false,
+        textHeight: CGFloat? = nil,
         play: @escaping () -> Void,
         @ViewBuilder menu: () -> Menu
     ) {
@@ -41,7 +42,7 @@ public struct EpisodeCard<Menu: View>: View {
         self.artwork = artwork
         self.zoomNamespace = zoomNamespace
         self.playZoomNamespace = playZoomNamespace
-        self.reservesSynopsisSpace = reservesSynopsisSpace
+        self.textHeight = textHeight
         self.play = play
         self.menu = menu()
     }
@@ -56,7 +57,8 @@ public struct EpisodeCard<Menu: View>: View {
                     .cardZoomSource(id: card.id, in: zoomNamespace)
                     .cardZoomSource(id: CardPlayZoom.id(for: card.id), in: playZoomNamespace)
                     .cardHoverEffect()
-                EpisodeText(card: card, reservesSpace: reservesSynopsisSpace)
+                EpisodeText(card: card)
+                    .frame(minHeight: textHeight, alignment: .top)
             }
             .contentShape(.rect)
         }
@@ -98,6 +100,31 @@ public struct EpisodeCard<Menu: View>: View {
         .cardContextMenu(menu) {
             EpisodeStill(card: card, image: artwork)
                 .frame(width: 320)
+        }
+    }
+}
+
+extension EpisodeCard {
+    /// A view that measures the tallest number, title and synopsis among `cards` at the width it's given, and hands
+    /// the height to `measured`, for each card's `textHeight` in a row that scrolls sideways. A lazy row only lays out
+    /// the cards on screen, so it can't know the tallest; this lays out only their words, hidden.
+    ///
+    /// - Parameters:
+    ///   - cards: The episodes in the row.
+    ///   - measured: Called with the height whenever it changes, as with the text size.
+    public static func textHeight(of cards: [MediaCard], measured: @escaping (CGFloat) -> Void) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(cards) { card in
+                EpisodeText(card: card)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hidden()
+        .accessibilityHidden(true)
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+        } action: {
+            measured($0)
         }
     }
 }
@@ -186,8 +213,6 @@ private struct EpisodeStill: View {
 /// "EPISODE 3", the title and two lines of synopsis.
 private struct EpisodeText: View {
     let card: MediaCard
-    /// Whether the title and synopsis keep their full height when shorter or missing.
-    let reservesSpace: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -206,12 +231,12 @@ private struct EpisodeText: View {
             Text(card.title)
                 .typography(.cardTitle)
                 .foregroundStyle(.textPrimary)
-                .lineLimit(isLarge ? 3 : 1, reservesSpace: reservesSpace)
-            if card.overview != nil || reservesSpace {
-                Text(card.overview ?? "")
+                .lineLimit(isLarge ? 3 : 1)
+            if let overview = card.overview {
+                // The whole synopsis, however long, rather than cutting it off.
+                Text(overview)
                     .font(.subheadline)
                     .foregroundStyle(.textSecondary)
-                    .lineLimit(isLarge ? 4 : 2, reservesSpace: reservesSpace)
                     .padding(.top, 2)
             }
         }
@@ -219,7 +244,7 @@ private struct EpisodeText: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Whether the text is an accessibility size, where titles and synopses get more lines rather than cutting words.
+    /// Whether the text is an accessibility size, where titles get more lines rather than cutting words.
     private var isLarge: Bool {
         dynamicTypeSize.isAccessibilitySize
     }
