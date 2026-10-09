@@ -40,7 +40,7 @@
       "comment" : "Accent colour."
     },
     "Cancel" : {
-      "comment" : "Button that stops autoplay."
+      "comment" : "Button that puts away the next episode's card, so it doesn't play by itself."
     },
     "Close Player" : {
       "comment" : "Button that stops and hides the mini player."
@@ -108,6 +108,12 @@
     "Next Episode" : {
       "comment" : "Heading over the next episode."
     },
+    "Next episode, %@" : {
+      "comment" : "Spoken description of the next episode's card, which waits to be played: Next episode, title."
+    },
+    "Next episode, %@, plays in %@" : {
+      "comment" : "Spoken description of the next episode's card while it counts down: Next episode, title, plays in 8 seconds."
+    },
     "Off" : {
       "comment" : "Choice that turns subtitles off."
     },
@@ -157,9 +163,6 @@
     },
     "Playback position" : {
       "comment" : "Spoken name of the player scrubber."
-    },
-    "Plays in %@" : {
-      "comment" : "Countdown before the next episode plays, such as Plays in 7 seconds."
     },
     "Plays the episode" : {
       "comment" : "Hint on an episode card on a show's page."

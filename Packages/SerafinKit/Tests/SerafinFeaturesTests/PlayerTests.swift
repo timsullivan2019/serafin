@@ -40,23 +40,6 @@ import Testing
         #expect(screen.controlsVisible)
     }
 
-    @Test func upNextCountsDownThenPlays() async {
-        var finished = false
-        await screen.runCountdown(tick: .milliseconds(1)) { finished = true }
-        #expect(finished)
-        #expect(screen.countdown == nil)
-    }
-
-    @Test func cancellingUpNextNeverPlays() async {
-        var finished = false
-        let countdown = Task { await screen.runCountdown(tick: .seconds(5)) { finished = true } }
-        await Task.yield()
-        countdown.cancel()
-        await countdown.value
-        #expect(!finished)
-        #expect(screen.countdown == nil)
-    }
-
     @Test func aDoubleTapShowsItsSideForAMoment() async {
         screen.skipped(.forward)
         #expect(screen.skip == .forward)

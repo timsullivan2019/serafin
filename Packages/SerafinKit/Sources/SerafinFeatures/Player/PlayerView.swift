@@ -1,11 +1,12 @@
+import JellyfinAPI
 import SerafinCore
 import SerafinDesign
 import SerafinPlayback
 import SwiftUI
 
 /// The full-screen player: the video under glass controls, double-tap skipping, pinching to fill the screen or fit
-/// it, the audio and subtitle picker, skipping the stretches the server marked, and the next episode over the credits
-/// and when an episode ends. On iPhone the interface turns to landscape while it shows.
+/// it, the audio and subtitle picker, skipping the stretches the server marked, and the next episode's card over the
+/// credits and as an episode ends. On iPhone the interface turns to landscape while it shows.
 struct PlayerView: View {
     @Environment(PlaybackCoordinator.self) private var playback
 
@@ -42,8 +43,12 @@ struct PlayerView: View {
         @Environment(PlaybackCoordinator.self) private var playback
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+        @Environment(\.artwork) private var artwork
+        @Environment(\.displayScale) private var displayScale
         @State private var screen = PlayerScreenModel()
         @State private var showsTracks = false
+        /// The next episode's thumbnail and the tint taken from it, once loaded.
+        @State private var nextArtwork: NextEpisodeArtwork?
 
         /// What restarts the wait before the controls hide: a touch, a change in playback, or the picker closing.
         private struct HideTrigger: Equatable {
@@ -60,27 +65,36 @@ struct PlayerView: View {
             let hasNextEpisode: Bool
         }
 
-        /// Whether the episode has ended and the next one is offered, filling the screen.
-        private var isUpNext: Bool {
-            engine.state == .ended && engine.nextItem != nil
+        /// What decides whether the next episode's card shows.
+        private struct NextEpisodeInputs: Equatable {
+            let position: Duration
+            let duration: Duration
+            let segments: [PlaybackSegment]
+            let itemID: String?
+            let hasNextEpisode: Bool
+            let hasEnded: Bool
         }
 
-        /// The credits playing, while the next episode is offered over them.
-        private var creditsOffer: PlaybackSegment? {
-            guard case .nextEpisode(let segment) = screen.segmentAction, engine.nextItem != nil else { return nil }
-            return segment
+        /// Whether the next episode's countdown runs: while playback runs or has ended, and not while it's paused or a
+        /// finger is on the scrubber.
+        private var countdownRuns: Bool {
+            (engine.state == .playing || engine.state == .ended) && !screen.isScrubbing
         }
 
-        /// Whether the next episode counts down to playing by itself: offered over the credits or at the end, with the
-        /// account's Play Next Episode Automatically on. A countdown that started over the credits runs on as the
-        /// episode ends.
-        private var countsDown: Bool {
-            engine.playsNextEpisodeAutomatically && (isUpNext || creditsOffer != nil)
-        }
-
-        /// The seconds left on the next episode's card, or nil when it doesn't count down.
-        private var secondsLeft: Int? {
-            countsDown ? screen.countdown ?? PlayerScreenModel.countdownSeconds : nil
+        /// The next episode's card, while it's offered after the episode this screen shows. Tied to that episode, so
+        /// the card goes in the same update that shows the next episode's title.
+        private var nextEpisode: NextEpisodePrompt? {
+            guard let offered = screen.nextEpisodeOffer, offered == item.id, offered == engine.item?.id,
+                let next = engine.nextItem.flatMap(MediaItem.init)
+            else { return nil }
+            let artwork = nextArtwork?.itemID == next.id ? nextArtwork : nil
+            return NextEpisodePrompt(
+                card: next.card,
+                artwork: artwork?.image,
+                tint: artwork?.tint ?? ArtworkTint.neutral,
+                countdown: screen.countdown,
+                secondsLeft: screen.secondsLeft
+            )
         }
 
         /// The skip pill, or the notice that a stretch was skipped by itself.
@@ -114,12 +128,12 @@ struct PlayerView: View {
                 guard screen.skip != nil else { return }
                 await screen.clearSkipLater()
             }
-            .task(id: countsDown) {
-                guard countsDown else {
-                    screen.cancelCountdown()
-                    return
-                }
-                await screen.runCountdown { playback.playNext() }
+            .task(id: screen.countdown) {
+                await screen.tickCountdown { playNext() }
+            }
+            .task(id: engine.nextItem?.id) {
+                guard let next = engine.nextItem else { return }
+                nextArtwork = await NextEpisodeArtwork.load(next, artwork: artwork, scale: displayScale)
             }
             .task(id: screen.noticeCount) {
                 guard screen.skippedNotice != nil else { return }
@@ -138,19 +152,52 @@ struct PlayerView: View {
                 AccessibilityNotification.Announcement(SkipSegmentButton.Kind(skipped.kind).skippedTitle).post()
                 Task { await engine.seek(to: skipped.skipTarget) }
             }
+            .onChange(
+                of: NextEpisodeInputs(
+                    position: engine.elapsed, duration: engine.duration, segments: engine.segments,
+                    itemID: engine.item?.id, hasNextEpisode: engine.nextItem != nil, hasEnded: engine.state == .ended),
+                initial: true
+            ) { _, inputs in
+                screen.updateNextEpisode(
+                    at: inputs.position, duration: inputs.duration, segments: inputs.segments, itemID: inputs.itemID,
+                    hasNextEpisode: inputs.hasNextEpisode, hasEnded: inputs.hasEnded,
+                    countsDown: engine.playsNextEpisodeAutomatically, countdownRuns: countdownRuns)
+            }
+            .onChange(of: countdownRuns) { _, runs in
+                screen.setCountdownRunning(runs)
+            }
             .onChange(of: engine.state) { _, state in
-                // A movie or a last episode closes the player at the end; an episode with a next one offers it.
-                if state == .ended, engine.nextItem == nil {
+                // A movie, a last episode or an episode whose next one was put away closes the player at the end;
+                // otherwise the next episode's card stays.
+                if state == .ended, engine.nextItem == nil || screen.hasCancelledNextEpisode(after: engine.item?.id) {
                     playback.stop()
                 }
+            }
+        }
+
+        /// Plays the next episode as a cut: the card goes, the old picture with it, and the next episode's title and
+        /// loading show in the same frame, with nothing animating across it, so no frame has one episode's title with
+        /// the other's card.
+        private func playNext() {
+            var cut = Transaction()
+            cut.disablesAnimations = true
+            withTransaction(cut) {
+                screen.handOff()
+                playback.playNext()
+            }
+        }
+
+        /// Puts the next episode's card away; at the end of the episode, that closes the player.
+        private func cancelNextEpisode() {
+            screen.cancelNextEpisode()
+            if engine.state == .ended {
+                playback.stop()
             }
         }
 
         @ViewBuilder private var overlay: some View {
             if engine.state == .failed {
                 PlayerFailure(error: engine.failure)
-            } else if isUpNext, let next = engine.nextItem.flatMap(MediaItem.init) {
-                UpNext(next: next, secondsLeft: secondsLeft) { playback.stop() }
             } else {
                 ZStack {
                     if engine.isBuffering, !screen.controlsVisible {
@@ -161,15 +208,6 @@ struct PlayerView: View {
                     }
                     controls
                 }
-                // Over the credits, as in the TV app: the next episode, while the credits play on.
-                .overlay(alignment: .bottomTrailing) {
-                    if let credits = creditsOffer, let next = engine.nextItem.flatMap(MediaItem.init) {
-                        NextEpisodeOverCredits(next: next, secondsLeft: secondsLeft) {
-                            screen.dismiss(credits)
-                        }
-                    }
-                }
-                .animation(Motion.animation(reduceMotion: reduceMotion), value: creditsOffer)
             }
         }
 
@@ -189,6 +227,7 @@ struct PlayerView: View {
                 fillsScreen: engine.fillsScreen,
                 showsControls: screen.controlsVisible,
                 segmentPrompt: segmentPrompt,
+                nextEpisode: nextEpisode,
                 actions: PlayerControlActions(
                     minimize: { playback.dismissPlayer() },
                     playPause: {
@@ -219,7 +258,9 @@ struct PlayerView: View {
                         guard case .offer(let segment) = screen.segmentAction else { return }
                         screen.dismiss(segment)
                         Task { await engine.seek(to: segment.skipTarget) }
-                    }
+                    },
+                    playNextEpisode: { playNext() },
+                    cancelNextEpisode: { cancelNextEpisode() }
                 )
             ) {
                 AirPlayButton()
@@ -329,65 +370,21 @@ struct PlayerView: View {
         }
     }
 
-    /// The next episode, with its countdown when it plays by itself, over the last frame of the one that ended.
-    private struct UpNext: View {
-        let next: MediaItem
-        let secondsLeft: Int?
-        let cancel: () -> Void
+    /// The next episode's thumbnail on its card, and the tint taken from it for Play Now.
+    private struct NextEpisodeArtwork {
+        let itemID: String
+        let image: Image
+        let tint: Color
 
-        var body: some View {
-            ZStack(alignment: .bottomTrailing) {
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                NextEpisodeCard(next: next, secondsLeft: secondsLeft, cancel: cancel)
-                    .padding(Spacing.large)
-            }
-        }
-    }
-
-    /// The next episode, with its countdown when it plays by itself, in the corner while the credits play on, above
-    /// the controls' bottom bar. Cancel puts it away and the credits carry on.
-    private struct NextEpisodeOverCredits: View {
-        let next: MediaItem
-        let secondsLeft: Int?
-        let cancel: () -> Void
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        var body: some View {
-            NextEpisodeCard(next: next, secondsLeft: secondsLeft, cancel: cancel)
-                .padding(.trailing, Spacing.medium)
-                .padding(.bottom, PlayerLayout.bottomBarClearance)
-                .background(alignment: .bottomTrailing) {
-                    // Darkens the corner it sits in, so its words read over bright credits.
-                    RadialGradient(
-                        colors: [.black.opacity(0.6), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 520
-                    )
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                }
-                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
-        }
-    }
-
-    /// The next episode's card with its artwork: Play Now, Cancel, and the countdown when it plays by itself.
-    private struct NextEpisodeCard: View {
-        let next: MediaItem
-        let secondsLeft: Int?
-        let cancel: () -> Void
-        @Environment(PlaybackCoordinator.self) private var playback
-
-        var body: some View {
-            ItemArtwork(next, role: .landscape) { image in
-                UpNextCard(
-                    card: next.card,
-                    artwork: image,
-                    secondsLeft: secondsLeft,
-                    playNow: { playback.playNext() },
-                    cancel: cancel
-                )
-            }
-            .fixedSize()
+        /// Loads `item`'s thumbnail at the card's size, or nil when there's none to show.
+        static func load(_ item: BaseItemDto, artwork: Artwork?, scale: CGFloat) async -> NextEpisodeArtwork? {
+            guard let id = item.id, let artwork,
+                let request = artwork.request(
+                    .landscape, of: item, width: NextEpisodeCard.thumbnailWidth, scale: scale),
+                let loaded = try? await artwork.pipeline.image(for: request),
+                let bitmap = loaded.bitmap
+            else { return nil }
+            return NextEpisodeArtwork(itemID: id, image: Image(uiImage: loaded), tint: ArtworkTint.color(for: bitmap))
         }
     }
 

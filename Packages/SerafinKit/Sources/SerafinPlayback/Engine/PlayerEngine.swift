@@ -221,7 +221,10 @@ public enum PlaybackState: Equatable, Sendable {
 
     /// Negotiates `item` with the server and starts playing it at `options.startPosition`.
     ///
-    /// Anything already playing is stopped and reported first.
+    /// Anything already playing stops and is reported first. Everything the engine shows changes before the first
+    /// wait, so a caller that starts the load straight away, as with `Task.immediate`, changes the screen in the same
+    /// update: the new item loading, and nothing of the old one, whose picture goes as well, except in Picture in
+    /// Picture or AirPlay, which keep their last frame until the new item replaces it.
     ///
     /// The subtitles it starts with come from Settings' subtitle mode, the account's languages and the audio, as
     /// ``SubtitleRules`` decide, rather than from the server, which would bring back the last subtitles picked for the
@@ -239,8 +242,13 @@ public enum PlaybackState: Equatable, Sendable {
         // A stream still on its way for what played before is no longer wanted.
         streamRequest += 1
         let request = streamRequest
-        await stopReporting()
-        guard load == generation else { return }
+        // What played before is told where it stopped, once the screen has moved on from it.
+        let finished = reporter
+        let stoppedAt = elapsed
+        reporter = nil
+        reportingTask?.cancel()
+        reportingTask = nil
+        letGoOfCurrentItem()
         self.item = item
         self.options = options
         plan = nil
@@ -255,7 +263,11 @@ public enum PlaybackState: Equatable, Sendable {
         segments = []
         failure = nil
         elapsed = options.startPosition
+        duration = item.runTimeTicks.map(Ticks.duration) ?? .zero
+        buffered = .zero
         state = .loading
+        await finished?.stop(at: stoppedAt)
+        guard load == generation else { return }
         await PlaybackAudioSession.activate()
         guard load == generation else { return }
         do {
@@ -313,6 +325,22 @@ public enum PlaybackState: Equatable, Sendable {
                 nextItem = next
             }
         }
+    }
+
+    /// Stops what's playing as a new item starts loading, and takes it off the screen, unless Picture in Picture or
+    /// AirPlay shows it: they keep its last frame until the new item replaces it, since taking it away could close the
+    /// window or the Apple TV's player.
+    private func letGoOfCurrentItem() {
+        guard player.currentItem != nil else { return }
+        player.pause()
+        guard !player.isExternalPlaybackActive else { return }
+        #if canImport(UIKit)
+            guard !isPictureInPictureActive else { return }
+        #endif
+        player.replaceCurrentItem(with: nil)
+        clearItemObservations()
+        retimedItem = nil
+        legible = nil
     }
 
     /// Stops playback, reports where it stopped and unloads the item.
