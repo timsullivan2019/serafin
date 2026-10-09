@@ -210,6 +210,27 @@ import Testing
         #expect(PlayerEngine.isTranslation(translated[2], audioLanguage: "eng"))
     }
 
+    @Test func generatedSubtitlesHeldBackByTextSubtitlesStayOnOffer() throws {
+        // English audio and English text in the stream: iOS holds back its English transcription and offers a
+        // Spanish translation instead, so the English one is what a stream without text subtitles would offer.
+        let withText = try plan(subtitle: 3)
+        let translationOnly = [
+            LegibleOption(language: "en"), LegibleOption(language: "fr"),
+            LegibleOption(isGenerated: true, language: "es"),
+        ]
+        #expect(
+            PlayerEngine.withheldGenerated(among: translationOnly, in: withText)
+                == GeneratedSubtitles(languageTag: "en"))
+        // Picking them can't happen in place, so it asks for a stream without text subtitles.
+        #expect(PlayerEngine.legiblePosition(for: .generated, in: withText, among: translationOnly) == (nil, .off))
+        // Nothing is held back when iOS offers the transcription, offers nothing at all, or the stream carries no
+        // text subtitles in the audio's language.
+        let offered = translationOnly + [LegibleOption(isGenerated: true, language: "en")]
+        #expect(PlayerEngine.withheldGenerated(among: offered, in: withText) == nil)
+        #expect(PlayerEngine.withheldGenerated(among: Array(translationOnly.prefix(2)), in: withText) == nil)
+        #expect(PlayerEngine.withheldGenerated(among: translationOnly, in: try plan(subtitle: -1)) == nil)
+    }
+
     @Test func generatedSubtitlesInTheViewersLanguageComeFirstThenTheAudios() {
         // A French film: iOS writes down the French and translates it into English.
         let french = [
