@@ -242,7 +242,8 @@ struct PlayerView: View {
                         screen.touched()
                         Task { await engine.skip(by: 10) }
                     },
-                    seek: { position in Task { await engine.seek(to: position) } },
+                    // Started at once, so the position moves in the same frame the scrubber lets go.
+                    seek: { position in Task.immediate { await engine.seek(to: position) } },
                     scrubbingChanged: { screen.scrubbingChanged($0) },
                     setRate: { rate in
                         screen.touched()
