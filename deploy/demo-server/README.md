@@ -39,17 +39,23 @@ Jellyfin is pinned to an exact build tag (`12.2.20261005-225228`, Jellyfin 12.2)
 
 ## Media
 
-`fetch-media.sh` downloads each film, then `normalise` remuxes it to MP4 with the first video and audio track, AAC stereo audio and faststart, re-encoding the video to H.264 only when it is something else. It skips anything it already has, so it can be run again after a change.
+Eleven Blender open films and the three Caminandes shorts as one show, about 2.3 GB in all, every one under a CC BY licence. [SOURCES.md](SOURCES.md) lists each title's licence and where it comes from. Agent 327 is left out because it is CC BY-ND.
 
-| Library | Title | Source |
-| --- | --- | --- |
-| Movies | Big Buck Bunny (2008) | Kodi's mirror at `mirrors.mit.edu`. Blender zipped its original BBB folder in 2023, so the old blender.org URL returns 404. |
-| Movies | Sintel (2010) | `download.blender.org/demo/movies/` |
-| Shows | Caminandes, S01E02 Gran Dillama | Debian's mirror of blender.org at `cdimage.debian.org/mirror/blender.org/demo/movies/` |
+`fetch-media.sh` needs `yt-dlp` as well as `curl`, `unzip` and `ffmpeg`. It downloads each film, then `normalise` remuxes it to MP4 with the first video and audio track, AAC stereo audio and faststart, re-encoding the video to H.264 only when it is something else. YouTube downloads ask for H.264 at up to 1080p, so nothing is re-encoded. Each download is deleted once normalised, and anything already in the library is skipped, so the script can be run again after a change:
 
-Tears of Steel is not included: blender.org returns 404 for it and the Purdue mirror is gone. Debian's mirror above is the working fallback when a blender.org download disappears.
+YouTube refuses downloads from data-centre addresses ("Sign in to confirm you're not a bot"), so run the script on a computer at home first, copy its `media` folder up, then run it on the server, where it skips everything already there:
 
-Folders follow Jellyfin's naming (`Movies/Title (Year)/Title (Year).mp4`, `Shows/Name/Season 01/Name - S01E02 - Title.mp4`) so TMDB matches every title on a scan.
+```sh
+./fetch-media.sh                                   # on a home computer, in an empty folder
+rsync -a --ignore-existing media/ serafin-demo:/opt/serafin-demo/media/
+ssh serafin-demo 'cd /opt/serafin-demo && nohup ./fetch-media.sh > fetch.log 2>&1 &'
+```
+
+Movie folders carry the TMDB ID (`Movies/Spring (2019) [tmdbid-593048]/Spring (2019).mp4`) because titles like Spring, Hero and Charge are shared with other films. TMDB lists the Caminandes films as three movies rather than a series, so `fetch-media.sh` writes the show's `tvshow.nfo` and episode NFOs into `Shows/Caminandes (2013)/` itself and cuts its poster and backdrop from stills of the film. The NFOs must not carry `<lockdata>`: Jellyfin locks every new item under a locked parent, and a locked item never reads its NFO, so a locked show leaves new episodes named after their files.
+
+Big Buck Bunny comes from Kodi's mirror at `mirrors.mit.edu`, because Blender zipped its original folder in 2023 and the old URL returns 404. Tears of Steel is not included: blender.org returns 404 for it and the Purdue mirror is gone. Debian's mirror at `cdimage.debian.org/mirror/blender.org/demo/movies/` is the working fallback when a blender.org download disappears.
+
+After a fetch, run a library scan from the dashboard (Libraries, Scan All Libraries) and check that every title has a poster.
 
 ## Jellyfin
 
