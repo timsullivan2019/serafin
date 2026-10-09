@@ -64,6 +64,19 @@ import Testing
         #expect(episode.episodeNumber == 2)
     }
 
+    @MainActor @Test func aCardOpensItsPageWithWhatTheCardShowed() throws {
+        let movie = try #require(
+            MediaItem(
+                BaseItemDto(
+                    id: "aaaa1111", name: "Metropolis", type: .movie,
+                    userData: UserItemDataDto(isFavorite: true, key: "aaaa1111"))))
+        #expect(movie.route == .card(movie))
+        // The page's navigation bar shows the card's marks before the details load.
+        let model = ItemDetailModel(id: movie.id, preview: movie)
+        #expect(model.details == nil)
+        #expect(model.preview?.card.isFavourite == true)
+    }
+
     @Test func anEpisodeOffersItsShowAndNothingElseDoes() throws {
         let episode = BaseItemDto(id: "cccc3333", name: "The Red-Headed League", seriesID: "show1111", type: .episode)
         #expect(try #require(MediaItem(episode)).showRoute == .item(id: "show1111"))

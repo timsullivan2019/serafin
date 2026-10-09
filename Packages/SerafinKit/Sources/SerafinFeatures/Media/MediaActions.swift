@@ -103,7 +103,7 @@ struct CardMenuItems: View {
     var body: some View {
         if tapPlays {
             Button {
-                navigate(.item(id: item.id))
+                navigate(.card(item))
             } label: {
                 Label(
                     String(
