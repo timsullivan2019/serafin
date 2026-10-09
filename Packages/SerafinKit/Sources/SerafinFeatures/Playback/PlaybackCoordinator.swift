@@ -155,7 +155,8 @@ import SerafinPlayback
         let subtitle = card.episode == nil ? nil : card.eyebrowText
         engine.describe(title: card.title, subtitle: subtitle, artwork: nil)
         loading?.cancel()
-        loading = Task { [artwork] in
+        // Started at once, so the engine's change to the new item lands in the same update as its title here.
+        loading = Task.immediate { [artwork] in
             await engine.load(source, options: options, keepsSubtitleChoice: continuing)
             guard !Task.isCancelled, let jpeg = await Self.lockScreenArtwork(for: source, from: artwork) else { return }
             engine.describe(title: card.title, subtitle: subtitle, artwork: jpeg)

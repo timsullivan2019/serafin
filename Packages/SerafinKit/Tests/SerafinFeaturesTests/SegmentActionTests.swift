@@ -32,12 +32,14 @@ import Testing
         #expect(action(at: 610) == .offer(unknown))
     }
 
-    @Test func creditsOfferTheNextEpisodeOrAPillWithoutOne() {
-        #expect(action(at: 1200) == .nextEpisode(credits))
+    @Test func creditsLeaveTheirPlaceToTheNextEpisodesCardOrOfferAPillWithoutOne() {
+        #expect(action(at: 1200) == .none)
         // A film's or a last episode's credits.
         #expect(action(at: 1200, hasNextEpisode: false) == .offer(credits))
         // Settings can't skip credits by themselves.
-        #expect(action(at: 1200, automatic: [.intro, .recap, .preview, .advert]) == .nextEpisode(credits))
+        #expect(action(at: 1200, automatic: [.intro, .recap, .preview, .advert]) == .none)
+        #expect(
+            action(at: 1200, automatic: [.intro, .recap, .preview, .advert], hasNextEpisode: false) == .offer(credits))
     }
 
     @Test func aKindSettingsSkipIsSkippedOnceThenOffered() {
@@ -108,15 +110,6 @@ import Testing
         let skipped = screen.updateSegment(
             at: .seconds(31), in: [intro], itemID: "ep2", automatic: [.intro], hasNextEpisode: true)
         #expect(skipped == intro)
-    }
-
-    @Test func theCreditsOfferTheNextEpisodeUntilPutAway() {
-        let screen = PlayerScreenModel()
-        _ = screen.updateSegment(at: .seconds(1201), in: [credits], itemID: "ep1", automatic: [], hasNextEpisode: true)
-        #expect(screen.segmentAction == .nextEpisode(credits))
-        screen.dismiss(credits)
-        _ = screen.updateSegment(at: .seconds(1210), in: [credits], itemID: "ep1", automatic: [], hasNextEpisode: true)
-        #expect(screen.segmentAction == .none)
     }
 
     @Test func theNoticeGoesAfterAMoment() async {

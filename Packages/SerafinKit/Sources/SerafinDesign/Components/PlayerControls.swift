@@ -25,6 +25,10 @@ public struct PlayerControlActions {
     public var toggleFill: () -> Void
     /// Skips the stretch the skip pill offers, such as the intro.
     public var skipSegment: () -> Void
+    /// Plays the next episode the card offers, now.
+    public var playNextEpisode: () -> Void
+    /// Puts the next episode's card away.
+    public var cancelNextEpisode: () -> Void
 
     /// Creates the set of actions.
     public init(
@@ -38,7 +42,9 @@ public struct PlayerControlActions {
         showTracks: @escaping () -> Void = {},
         togglePictureInPicture: @escaping () -> Void = {},
         toggleFill: @escaping () -> Void = {},
-        skipSegment: @escaping () -> Void = {}
+        skipSegment: @escaping () -> Void = {},
+        playNextEpisode: @escaping () -> Void = {},
+        cancelNextEpisode: @escaping () -> Void = {}
     ) {
         self.minimize = minimize
         self.playPause = playPause
@@ -51,6 +57,8 @@ public struct PlayerControlActions {
         self.togglePictureInPicture = togglePictureInPicture
         self.toggleFill = toggleFill
         self.skipSegment = skipSegment
+        self.playNextEpisode = playNextEpisode
+        self.cancelNextEpisode = cancelNextEpisode
     }
 }
 
@@ -118,14 +126,16 @@ public enum PlaybackSpeed {
 /// skip back, play or pause and skip forward in the middle; the scrubber, the speed and the audio and subtitle
 /// button along the bottom.
 ///
-/// All controls share one glass container and always render in dark appearance. The darkening behind them lets
-/// taps through, so a tap on the video still reaches the screen underneath. The AirPlay control is a slot, because
-/// the real route picker is a UIKit view that SerafinPlayback provides.
+/// All controls share one glass container and always render in dark appearance. Nothing darkens the video behind
+/// them: the glass gives them their contrast, and a tap on the video between them still reaches the screen
+/// underneath. The AirPlay control is a slot, because the real route picker is a UIKit view that SerafinPlayback
+/// provides.
 ///
-/// Hidden controls fade out but stay in place, so a menu open on one of them stays usable. The skip pill and its
-/// notice sit above the scrubber at the trailing edge, in a glass container of their own, so they stay while the
-/// controls are hidden: glass inside the controls' container keeps showing when only its content fades. They
-/// materialize as a stretch starts and dissolve as it ends.
+/// Hidden controls fade out but stay in place, so a menu open on one of them stays usable. The skip pill, its notice
+/// and the next episode's card sit 12 points above the scrubber's row at the trailing edge, in a glass container of
+/// their own, so they stay while the controls are hidden: glass inside the controls' container keeps showing when only
+/// its content fades. They materialize as they're offered and dissolve as they go. Where the card would cover skip
+/// back, play and skip forward, as on iPhone, those make room by moving to the middle of the space beside it.
 ///
 /// With a hardware keyboard, Space plays and pauses, the left and right arrows skip 10 seconds, and F leaves the
 /// full-screen player, as in other video players.
@@ -140,9 +150,12 @@ public struct PlayerControls<RoutePicker: View>: View {
     private let fillsScreen: Bool?
     private let showsControls: Bool
     private let segmentPrompt: SegmentPrompt?
+    private let nextEpisode: NextEpisodePrompt?
     private let actions: PlayerControlActions
     private let routePicker: RoutePicker
     @State private var playPauseTaps = 0
+    /// Where the transport and the next episode's card are, so the transport can make room for the card.
+    @State private var layout = TransportLayout()
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -155,9 +168,11 @@ public struct PlayerControls<RoutePicker: View>: View {
     ///   - showsPictureInPicture: Whether to offer Picture in Picture, which some devices can't do.
     ///   - fillsScreen: Whether the picture fills the screen, which the fill button shows and switches, or nil for no
     ///     fill button.
-    ///   - showsControls: Whether the controls show. Hidden, they fade out, and only the skip pill or its notice
-    ///     stays.
+    ///   - showsControls: Whether the controls show. Hidden, they fade out, and only the skip pill, its notice or the
+    ///     next episode's card stays.
     ///   - segmentPrompt: The skip pill or notice to show above the scrubber, or nil for none.
+    ///   - nextEpisode: The next episode to offer on its card above the scrubber, in place of any skip pill, or nil for
+    ///     none.
     ///   - actions: What each control does.
     ///   - routePicker: The AirPlay route picker, shown in a glass circle at the top trailing corner.
     public init(
@@ -168,6 +183,7 @@ public struct PlayerControls<RoutePicker: View>: View {
         fillsScreen: Bool? = nil,
         showsControls: Bool = true,
         segmentPrompt: SegmentPrompt? = nil,
+        nextEpisode: NextEpisodePrompt? = nil,
         actions: PlayerControlActions,
         @ViewBuilder routePicker: () -> RoutePicker
     ) {
@@ -178,6 +194,7 @@ public struct PlayerControls<RoutePicker: View>: View {
         self.fillsScreen = fillsScreen
         self.showsControls = showsControls
         self.segmentPrompt = segmentPrompt
+        self.nextEpisode = nextEpisode
         self.actions = actions
         self.routePicker = routePicker()
     }
@@ -187,13 +204,15 @@ public struct PlayerControls<RoutePicker: View>: View {
             controls
                 .shown(showsControls)
             GlassEffectContainer {
-                prompt
+                overlay
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, Spacing.medium)
             .padding(.bottom, PlayerLayout.bottomBarClearance)
             .animation(Motion.animation(reduceMotion: reduceMotion), value: segmentPrompt)
+            .animation(Motion.animation(reduceMotion: reduceMotion), value: nextEpisode?.card.id)
         }
+        .coordinateSpace(.named(TransportLayout.space))
         .environment(\.colorScheme, .dark)
         // Symbols and text are white over the video, whatever the app's accent.
         .tint(.white)
@@ -202,31 +221,36 @@ public struct PlayerControls<RoutePicker: View>: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// The bars, with the darkening behind them.
+    /// The bars and the transport between them.
     private var controls: some View {
         GlassEffectContainer(spacing: Spacing.medium) {
             VStack(spacing: 0) {
                 topBar
                 Spacer(minLength: Spacing.large)
-                transport
+                transportRow
                 Spacer(minLength: Spacing.large)
                 bottomBar
             }
             .padding(Spacing.medium)
         }
-        .background {
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.55), location: 0),
-                    .init(color: .black.opacity(0.1), location: 0.3),
-                    .init(color: .black.opacity(0.1), location: 0.7),
-                    .init(color: .black.opacity(0.6), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+    }
+
+    /// The next episode's card, or else the skip pill or its notice, materializing in their glass.
+    @ViewBuilder private var overlay: some View {
+        if let nextEpisode {
+            NextEpisodeCard(nextEpisode, playNow: actions.playNextEpisode, cancel: actions.cancelNextEpisode)
+                .frame(maxWidth: layout.cardWidth)
+                .onGeometryChange(for: CGRect.self) {
+                    $0.frame(in: .named(TransportLayout.space))
+                } action: {
+                    layout.card = $0
+                }
+                .glassEffectTransition(.materialize)
+                // Springs in from its corner; under Reduce Motion it only materializes.
+                .transition(reduceMotion ? .identity : .scale(scale: 0.9, anchor: .bottomTrailing))
+                .id(nextEpisode.card.id)
+        } else {
+            prompt
         }
     }
 
@@ -307,6 +331,33 @@ public struct PlayerControls<RoutePicker: View>: View {
         }
     }
 
+    /// Skip back, play or pause and skip forward in the middle of the screen, or in the middle of the space beside the
+    /// next episode's card where the card would cover them.
+    private var transportRow: some View {
+        HStack(spacing: 0) {
+            transport
+                .onGeometryChange(for: CGSize.self) {
+                    $0.size
+                } action: {
+                    layout.transport = $0
+                }
+                .frame(maxWidth: .infinity)
+            Color.clear
+                .frame(width: transportReserve)
+        }
+        .onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .named(TransportLayout.space))
+        } action: {
+            layout.row = $0
+        }
+        .animation(Motion.animation(reduceMotion: reduceMotion), value: transportReserve)
+    }
+
+    /// The room the transport leaves at the end of its row for the next episode's card.
+    private var transportReserve: CGFloat {
+        nextEpisode == nil ? 0 : layout.reserve(for: layout.card)
+    }
+
     private var transport: some View {
         HStack(spacing: Spacing.xLarge) {
             GlassIconButton(
@@ -381,6 +432,7 @@ extension PlayerControls where RoutePicker == EmptyView {
         fillsScreen: Bool? = nil,
         showsControls: Bool = true,
         segmentPrompt: SegmentPrompt? = nil,
+        nextEpisode: NextEpisodePrompt? = nil,
         actions: PlayerControlActions
     ) {
         self.init(
@@ -391,8 +443,49 @@ extension PlayerControls where RoutePicker == EmptyView {
             fillsScreen: fillsScreen,
             showsControls: showsControls,
             segmentPrompt: segmentPrompt,
+            nextEpisode: nextEpisode,
             actions: actions
         ) { EmptyView() }
+    }
+}
+
+/// Where the transport and the next episode's card sit among the player's controls, so the transport can make room
+/// for the card where the card would cover it, as on an iPhone on its side.
+struct TransportLayout: Equatable {
+    /// The coordinate space the frames are in: the whole of the controls.
+    static let space = "player-controls"
+    /// The space kept between the card and the transport.
+    static let gap = Spacing.small
+    /// The narrowest the card gets to leave the transport room.
+    static let minimumCardWidth: CGFloat = 240
+
+    /// The row the transport sits in the middle of, the controls' full width.
+    var row = CGRect.zero
+    /// The transport's own size.
+    var transport = CGSize.zero
+    /// The card's frame, once it has shown.
+    var card: CGRect?
+
+    /// The widest the card can be and still leave the transport room beside it, up to
+    /// ``NextEpisodeCard/maximumWidth``.
+    var cardWidth: CGFloat {
+        guard row.width > 0, transport.width > 0 else { return NextEpisodeCard.maximumWidth }
+        let room = row.width - transport.width - 2 * Self.gap
+        return min(NextEpisodeCard.maximumWidth, max(room, Self.minimumCardWidth))
+    }
+
+    /// The room to leave at the trailing end of the row so the transport, centred in what's left, clears `card`: none
+    /// when the transport in the middle of the row already does.
+    func reserve(for card: CGRect?) -> CGFloat {
+        guard let card, row.width > 0, transport != .zero else { return 0 }
+        let middle = CGRect(
+            x: row.midX - transport.width / 2,
+            y: row.midY - transport.height / 2,
+            width: transport.width,
+            height: transport.height
+        )
+        guard middle.insetBy(dx: -Self.gap, dy: -Self.gap).intersects(card) else { return 0 }
+        return max(row.maxX - card.minX + Self.gap, 0)
     }
 }
 
@@ -635,7 +728,22 @@ enum ScrubberMath {
         var isBuffering = false
         var showsControls = true
         var segmentPrompt: SegmentPrompt?
+        var offersNextEpisode = false
         private let card = MockMedia.movies[1]
+        private let next = MockMedia.episodes[1]
+
+        /// The next episode, seven seconds from playing by itself.
+        private var nextEpisode: NextEpisodePrompt? {
+            guard offersNextEpisode else { return nil }
+            let countdown = NextEpisodeCountdown(length: .seconds(10), left: .seconds(7), runningFrom: nil)
+            return NextEpisodePrompt(
+                card: next,
+                artwork: MockMedia.backdropImage(for: next),
+                tint: MockMedia.tint(for: next),
+                countdown: countdown,
+                secondsLeft: 7
+            )
+        }
 
         var body: some View {
             PlayerControls(
@@ -652,6 +760,7 @@ enum ScrubberMath {
                 fillsScreen: fillsScreen,
                 showsControls: showsControls,
                 segmentPrompt: segmentPrompt,
+                nextEpisode: nextEpisode,
                 actions: PlayerControlActions(
                     playPause: { isPlaying.toggle() },
                     seek: { elapsed = $0 },
@@ -699,5 +808,28 @@ enum ScrubberMath {
 
     #Preview("Skipped notice, controls hidden", traits: .landscapeLeft) {
         PlayerControlsSample(showsControls: false, segmentPrompt: .skipped(.recap))
+    }
+
+    #Preview("Next episode, iPhone, light", traits: .landscapeLeft) {
+        PlayerControlsSample(offersNextEpisode: true)
+    }
+
+    #Preview("Next episode, iPhone, dark, controls hidden", traits: .landscapeLeft) {
+        PlayerControlsSample(showsControls: false, offersNextEpisode: true)
+            .preferredColorScheme(.dark)
+    }
+
+    #Preview("Next episode, iPad, light", traits: .fixedLayout(width: 1194, height: 834)) {
+        PlayerControlsSample(offersNextEpisode: true)
+    }
+
+    #Preview("Next episode, iPad, dark, controls hidden", traits: .fixedLayout(width: 1194, height: 834)) {
+        PlayerControlsSample(showsControls: false, offersNextEpisode: true)
+            .preferredColorScheme(.dark)
+    }
+
+    #Preview("Next episode, largest text", traits: .landscapeLeft) {
+        PlayerControlsSample(offersNextEpisode: true)
+            .dynamicTypeSize(.accessibility5)
     }
 #endif
