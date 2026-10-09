@@ -212,6 +212,10 @@ struct LibraryView: View {
             }
             .background(Color.background)
             .navigationTitle(model.scope.title)
+            // Inline wherever the grid opens from. Pushed from the Library tab's large title it would take a large
+            // title too, which belongs to the scroll content: pulling to refresh slid it down under the chips, which
+            // stay pinned under the bar. From Home it was already inline.
+            .navigationBarTitleDisplayModeInline()
             .toolbar {
                 if model.scope.offersChips {
                     ToolbarItem(placement: .primaryAction) {
