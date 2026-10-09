@@ -51,7 +51,7 @@ rsync -a --ignore-existing media/ serafin-demo:/opt/serafin-demo/media/
 ssh serafin-demo 'cd /opt/serafin-demo && nohup ./fetch-media.sh > fetch.log 2>&1 &'
 ```
 
-Movie folders carry the TMDB ID (`Movies/Spring (2019) [tmdbid-593048]/Spring (2019).mp4`) because titles like Spring, Hero and Charge are shared with other films. TMDB lists the Caminandes films as three movies rather than a series, so `fetch-media.sh` writes the show's `tvshow.nfo` and episode NFOs itself and cuts its poster and backdrop from stills of the film.
+Movie folders carry the TMDB ID (`Movies/Spring (2019) [tmdbid-593048]/Spring (2019).mp4`) because titles like Spring, Hero and Charge are shared with other films. TMDB lists the Caminandes films as three movies rather than a series, so `fetch-media.sh` writes the show's `tvshow.nfo` and episode NFOs into `Shows/Caminandes (2013)/` itself and cuts its poster and backdrop from stills of the film. The NFOs must not carry `<lockdata>`: Jellyfin locks every new item under a locked parent, and a locked item never reads its NFO, so a locked show leaves new episodes named after their files.
 
 Big Buck Bunny comes from Kodi's mirror at `mirrors.mit.edu`, because Blender zipped its original folder in 2023 and the old URL returns 404. Tears of Steel is not included: blender.org returns 404 for it and the Purdue mirror is gone. Debian's mirror at `cdimage.debian.org/mirror/blender.org/demo/movies/` is the working fallback when a blender.org download disappears.
 

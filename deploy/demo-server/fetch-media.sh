@@ -7,7 +7,7 @@ set -euo pipefail
 
 MEDIA="${MEDIA_DIR:-$(pwd)/media}"
 TMP="${TMP_DIR:-$(pwd)/tmp}"
-SHOW="$MEDIA/Shows/Caminandes"
+SHOW="$MEDIA/Shows/Caminandes (2013)"
 mkdir -p "$MEDIA/Movies" "$SHOW/Season 01" "$TMP"
 
 download() {
@@ -123,7 +123,9 @@ episode 2 "Gran Dillama" caminandes2
 episode 3 "Llamigos" youtube "https://www.youtube.com/watch?v=L6mLFxGRFI4"
 
 # TMDB lists the three Caminandes films as separate movies, not as a series, so the show's
-# details come from these NFO files and its artwork from stills of Llamigos.
+# details come from these NFO files and its artwork from stills of Llamigos. They carry no
+# lockdata: Jellyfin locks every new item under a locked parent, so a locked show would
+# never read its episodes' NFOs.
 cat >"$SHOW/tvshow.nfo" <<'EOF'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <tvshow>
@@ -134,7 +136,6 @@ cat >"$SHOW/tvshow.nfo" <<'EOF'
   <genre>Comedy</genre>
   <genre>Family</genre>
   <studio>Blender Foundation</studio>
-  <lockdata>true</lockdata>
 </tvshow>
 EOF
 
@@ -148,7 +149,6 @@ nfo() {
   <year>$3</year>
   <plot>$4</plot>
   <director>Pablo Vazquez</director>
-  <lockdata>true</lockdata>
 </episodedetails>
 EOF
 }
