@@ -14,6 +14,17 @@ import Testing
         #expect(ScrubberMath.position(at: 2, in: length) == length)
     }
 
+    @Test func aSeekArrivesWithinHalfASecondOrAThousandthOfALongVideo() {
+        let episode = Duration.seconds(1320)
+        #expect(ScrubberMath.hasArrived(at: 0.5, from: .seconds(660), in: episode))
+        #expect(ScrubberMath.hasArrived(at: 0.5, from: .milliseconds(660_400), in: episode))
+        #expect(!ScrubberMath.hasArrived(at: 0.5, from: .seconds(650), in: episode))
+        // Three hours: within 10.8 seconds.
+        let film = Duration.seconds(10_800)
+        #expect(ScrubberMath.hasArrived(at: 0.5, from: .seconds(5_410), in: film))
+        #expect(!ScrubberMath.hasArrived(at: 0.5, from: .seconds(5_420), in: film))
+    }
+
     @Test func timesShowHoursOnlyWhenThereAreAny() {
         #expect(ScrubberMath.timecode(.seconds(754)) == "12:34")
         #expect(ScrubberMath.timecode(.seconds(5940)) == "1:39:00")

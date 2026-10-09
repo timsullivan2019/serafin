@@ -575,6 +575,9 @@ private struct Scrubber: View {
     let seek: (Duration) -> Void
     let scrubbingChanged: (Bool) -> Void
     @State private var scrubbedFraction: Double?
+    /// Where a drag let go, held until the playback position gets there, so the track never jumps back to where
+    /// playback was while the seek is under way.
+    @State private var releasedFraction: Double?
     @State private var scrubStart: Double = 0
     @State private var detentsPassed = 0
     @State private var trackWidth: CGFloat = 0
@@ -582,9 +585,15 @@ private struct Scrubber: View {
 
     private var isScrubbing: Bool { scrubbedFraction != nil }
 
-    /// The position shown: under the finger while dragging, otherwise where playback is.
+    /// The position shown: under the finger while dragging, where it let go until playback gets there, otherwise
+    /// where playback is.
     private var shownPosition: Duration {
-        scrubbedFraction.map { ScrubberMath.position(at: $0, in: duration) } ?? elapsed
+        (scrubbedFraction ?? releasedFraction).map { ScrubberMath.position(at: $0, in: duration) } ?? elapsed
+    }
+
+    /// How far through the track is filled.
+    private var shownFraction: Double {
+        scrubbedFraction ?? releasedFraction ?? ScrubberMath.fraction(of: elapsed, in: duration)
     }
 
     var body: some View {
@@ -620,7 +629,7 @@ private struct Scrubber: View {
     }
 
     private var track: some View {
-        let fraction = scrubbedFraction ?? ScrubberMath.fraction(of: elapsed, in: duration)
+        let fraction = shownFraction
         let loaded = ScrubberMath.fraction(of: buffered, in: duration)
         return Capsule()
             .fill(.white.opacity(0.25))
@@ -633,11 +642,15 @@ private struct Scrubber: View {
                             .frame(width: width * loaded)
                         Capsule()
                             .fill(.white)
-                            .frame(width: max(proxy.size.height, width * fraction))
+                            .frame(width: min(width, max(proxy.size.height, width * fraction)))
                     }
                 }
             }
-            .frame(height: isScrubbing ? 10 : 5)
+            // Only the track's thickness springs as a drag starts and ends; the fill follows the finger and playback
+            // without animating, so it never overshoots.
+            .animation(Motion.animation(reduceMotion: reduceMotion)) { track in
+                track.frame(height: isScrubbing ? 10 : 5)
+            }
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(.rect)
             .onGeometryChange(for: CGFloat.self) {
@@ -649,7 +662,7 @@ private struct Scrubber: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard trackWidth > 0 else { return }
-                        let previous = scrubbedFraction ?? ScrubberMath.fraction(of: elapsed, in: duration)
+                        let previous = shownFraction
                         if scrubbedFraction == nil {
                             scrubStart = previous
                             scrubbingChanged(true)
@@ -662,12 +675,27 @@ private struct Scrubber: View {
                     }
                     .onEnded { _ in
                         if let scrubbedFraction {
+                            releasedFraction = scrubbedFraction
                             seek(ScrubberMath.position(at: scrubbedFraction, in: duration))
                         }
                         scrubbedFraction = nil
                         scrubbingChanged(false)
                     }
             )
+            .onChange(of: elapsed) {
+                if let releasedFraction,
+                    ScrubberMath.hasArrived(at: releasedFraction, from: elapsed, in: duration)
+                {
+                    self.releasedFraction = nil
+                }
+            }
+            .task(id: releasedFraction) {
+                // Should the seek never get there, as when it fails, the track goes back to playback after a moment.
+                guard releasedFraction != nil else { return }
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                releasedFraction = nil
+            }
             .overlay(alignment: .topLeading) {
                 if let scrubbedFraction {
                     let thumbOffset = trackWidth * scrubbedFraction
@@ -682,7 +710,6 @@ private struct Scrubber: View {
                         .accessibilityHidden(true)
                 }
             }
-            .animation(Motion.animation(reduceMotion: reduceMotion), value: isScrubbing)
             .sensoryFeedback(.selection, trigger: detentsPassed)
     }
 }
@@ -693,6 +720,15 @@ enum ScrubberMath {
     static func fraction(of position: Duration, in duration: Duration) -> Double {
         guard duration > .zero else { return 0 }
         return min(max(position / duration, 0), 1)
+    }
+
+    /// Whether playback at `position` has reached `fraction` of the way through `duration`, as after a seek there: within
+    /// half a second, or within 0.1% of a long video.
+    static func hasArrived(at fraction: Double, from position: Duration, in duration: Duration) -> Bool {
+        let target = self.position(at: fraction, in: duration)
+        let slack = max(Duration.milliseconds(500), duration / 1000)
+        let distance = position > target ? position - target : target - position
+        return distance <= slack
     }
 
     /// The position `fraction` of the way through `duration`, to the millisecond.
