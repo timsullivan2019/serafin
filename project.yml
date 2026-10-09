@@ -50,7 +50,7 @@ targets:
         UIBackgroundModes:
           - audio
         UILaunchScreen: {}
-        # iPhone is portrait only; the player screen (plan task 1.7) rotates to landscape on its own.
+        # iPhone is portrait only; the player screen also turns to either side (InterfaceOrientations).
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:

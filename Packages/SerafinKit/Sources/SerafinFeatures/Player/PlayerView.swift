@@ -6,7 +6,7 @@ import SwiftUI
 
 /// The full-screen player: the video under glass controls, double-tap skipping, pinching to fill the screen or fit
 /// it, the audio and subtitle picker, skipping the stretches the server marked, and the next episode's card over the
-/// credits and as an episode ends. On iPhone the interface turns to landscape while it shows.
+/// credits and as an episode ends. On iPhone it turns with the phone, upright or on either side.
 struct PlayerView: View {
     @Environment(PlaybackCoordinator.self) private var playback
 
