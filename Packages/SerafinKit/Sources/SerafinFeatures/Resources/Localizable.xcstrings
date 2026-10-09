@@ -60,6 +60,29 @@
     "%lld Mbps" : {
       "comment" : "Streaming quality cap in megabits per second, such as 8 Mbps."
     },
+    "%lld episodes" : {
+      "comment" : "How many episodes a season has, under its name in the season menu, such as 10 episodes.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld episode"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld episodes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld movies" : {
       "comment" : "How many movies a library holds, under its name on the Library tab.",
       "localizations" : {
@@ -326,6 +349,9 @@
     "Enter your server's address, such as jellyfin.example.com or 192.168.1.20:8096." : {
       "comment" : "Explanation when a server address can't be used."
     },
+    "Episode Details" : {
+      "comment" : "Menu item on an episode card that plays when tapped, which opens the episode's page."
+    },
     "Episodes" : {
       "comment" : "Search results section."
     },
@@ -524,6 +550,9 @@
     "No Matches" : {
       "comment" : "Title when filters hide everything."
     },
+    "No episodes in this season yet." : {
+      "comment" : "Shown under the season menu for a season with no episodes."
+    },
     "Nothing Added Yet" : {
       "comment" : "Title when no movies or shows have been added."
     },
@@ -593,6 +622,9 @@
     },
     "Plays from this chapter" : {
       "comment" : "Hint on a chapter card, which plays the movie or episode from the chapter's start."
+    },
+    "Plays the episode" : {
+      "comment" : "Hint on an episode card that plays when tapped."
     },
     "Plays the movie or episode you were last watching in Serafin, or the next episode of a show you're watching." : {
       "comment" : "Description of the Continue Watching shortcut."
@@ -698,9 +730,6 @@
     },
     "Searches your movies, shows and episodes in Serafin." : {
       "comment" : "Description of the Search shortcut."
-    },
-    "Seasons" : {
-      "comment" : "Row of a show's seasons."
     },
     "Serafin Is Locked" : {
       "comment" : "Title of the lock screen."
@@ -851,6 +880,9 @@
     },
     "There's nothing to continue. Start a movie or show in Serafin first." : {
       "comment" : "What Siri says when Continue Watching and Next Up are empty."
+    },
+    "These episodes didn't load." : {
+      "comment" : "Shown under the season menu when a season's episodes fail to load."
     },
     "This Collection Is Empty" : {
       "comment" : "Title for an empty collection."

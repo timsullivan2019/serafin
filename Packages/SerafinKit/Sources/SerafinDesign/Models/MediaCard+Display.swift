@@ -1,14 +1,10 @@
 import Foundation
 
 extension MediaCard {
-    /// The season and episode code shown on cards, such as "S2 E4", or nil for anything but an episode.
+    /// The season and episode code shown on cards, such as "S2 E4", or "Special 1" for one of a show's Specials, or
+    /// nil for anything but an episode.
     public var episodeCode: String? {
-        guard let episode else { return nil }
-        return String(
-            localized: "S\(episode.seasonNumber) E\(episode.episodeNumber)",
-            bundle: .module,
-            comment: "Season and episode code on cards, such as S2 E4."
-        )
+        episodeCode(locale: .current)
     }
 
     /// The line above an episode's title, such as "Caminandes · S1 E2", or the year for anything else.
@@ -22,6 +18,19 @@ extension MediaCard {
             )
         }
         return year.map(String.init)
+    }
+
+    /// The line over an episode's title on its show's page, where the season is already chosen: "Episode 3", or
+    /// "Special 1" for one of a show's Specials. Nil for anything but an episode.
+    public var episodeCaption: String? {
+        episodeCaption(locale: .current)
+    }
+
+    /// What VoiceOver says for an episode on its show's page, such as "Episode 3, A Case of Identity, 50 minutes,
+    /// Watched": the number, the title, the running time or, part way through, how much is watched and left, and
+    /// whether it's watched or a favorite.
+    public var episodeAccessibilityLabel: String {
+        episodeAccessibilityLabel(locale: .current)
     }
 
     /// The title under a poster: an episode's series title, since an episode's poster is its series', otherwise the
@@ -53,6 +62,82 @@ extension MediaCard {
         accessibilityLabel(locale: .current)
     }
 
+    func episodeCode(locale: Locale) -> String? {
+        guard let episode else { return nil }
+        if episode.seasonNumber == 0 {
+            return String(
+                localized: "Special \(episode.episodeNumber)",
+                bundle: .module,
+                locale: locale,
+                comment: "Code on cards for one of a show's Specials, which aren't in a season, such as Special 2."
+            )
+        }
+        return String(
+            localized: "S\(episode.seasonNumber) E\(episode.episodeNumber)",
+            bundle: .module,
+            locale: locale,
+            comment: "Season and episode code on cards, such as S2 E4."
+        )
+    }
+
+    func episodeCaption(locale: Locale) -> String? {
+        guard let episode else { return nil }
+        if episode.seasonNumber == 0 {
+            return episodeCode(locale: locale)
+        }
+        return String(
+            localized: "Episode \(episode.episodeNumber)",
+            bundle: .module,
+            locale: locale,
+            comment: "The number over an episode's title on its show's page, such as Episode 3. Shown in capitals."
+        )
+    }
+
+    func episodeAccessibilityLabel(locale: Locale) -> String {
+        var parts = [episodeCaption(locale: locale), title].compactMap { $0 }
+        if isInProgress {
+            let percent = progress.formatted(.percent.precision(.fractionLength(0)).locale(locale))
+            parts.append(
+                String(
+                    localized: "\(percent) watched",
+                    bundle: .module,
+                    locale: locale,
+                    comment: "Spoken progress, such as 40% watched."
+                )
+            )
+            if let runtime {
+                let remaining = Self.spokenDuration(runtime * (1 - progress), locale: locale)
+                parts.append(
+                    String(
+                        localized: "\(remaining) left",
+                        bundle: .module,
+                        locale: locale,
+                        comment: "Time left to watch, such as 32 min left."
+                    )
+                )
+            }
+        } else if let runtime {
+            parts.append(Self.spokenDuration(runtime, locale: locale))
+        }
+        if isWatched {
+            parts.append(
+                String(
+                    localized: "Watched", bundle: .module, locale: locale, comment: "Spoken state of a watched item.")
+            )
+        }
+        if isFavourite {
+            parts.append(
+                String(
+                    localized: "Favorite",
+                    bundle: .module,
+                    locale: locale,
+                    comment: "Spoken state of a favorite item."
+                )
+            )
+        }
+        return parts.formatted(.list(type: .and, width: .narrow).locale(locale))
+    }
+
     func runtimeText(locale: Locale) -> String? {
         runtime.map { Self.durationText($0, locale: locale) }
     }
@@ -77,14 +162,26 @@ extension MediaCard {
         var parts = [title]
         if let episode {
             parts.append(episode.seriesTitle)
-            parts.append(
-                String(
-                    localized: "Season \(episode.seasonNumber), episode \(episode.episodeNumber)",
-                    bundle: .module,
-                    locale: locale,
-                    comment: "Spoken season and episode number of an episode."
+            if episode.seasonNumber == 0 {
+                parts.append(
+                    String(
+                        localized: "Special \(episode.episodeNumber)",
+                        bundle: .module,
+                        locale: locale,
+                        comment:
+                            "Code on cards for one of a show's Specials, which aren't in a season, such as Special 2."
+                    )
                 )
-            )
+            } else {
+                parts.append(
+                    String(
+                        localized: "Season \(episode.seasonNumber), episode \(episode.episodeNumber)",
+                        bundle: .module,
+                        locale: locale,
+                        comment: "Spoken season and episode number of an episode."
+                    )
+                )
+            }
         } else if kind == .collection {
             parts.append(
                 String(

@@ -225,6 +225,10 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(episodes.map(\.name) == ["A Scandal in Bohemia", "The Red-Headed League"])
         let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Shows/\(series)/Episodes").first)
         #expect(request.query("seasonId") == season)
+        // Episodes carry their streams, for the badges, and seasons how many episodes they have, for the menu.
+        #expect(request.queryValues("fields").contains("MediaStreams"))
+        let seasons = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Shows/\(series)/Seasons").first)
+        #expect(seasons.queryValues("fields").contains("ChildCount"))
     }
 
     @Test func similarTitles() async throws {

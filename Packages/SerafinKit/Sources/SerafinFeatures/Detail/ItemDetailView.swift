@@ -3,14 +3,17 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// A movie, show or episode: the hero header, the overview and cast, then seasons, episodes or similar titles.
+/// A movie, show or episode: the hero header, the overview, then the rows below.
+///
+/// A show's page follows the TV app: its episodes come first, one season at a time under a season menu, then
+/// trailers, cast and crew, similar titles and the information columns.
 struct ItemDetailView: View {
     @State private var model: ItemDetailModel
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
     @Environment(AppSession.self) private var session: AppSession?
-    private let zoomSource: String
+    private let zoomSource: String?
     private let arrivesFromHomeHero: Bool
 
     /// Creates the screen.
@@ -19,6 +22,18 @@ struct ItemDetailView: View {
     init(id: String) {
         _model = State(initialValue: ItemDetailModel(id: id))
         zoomSource = id
+        arrivesFromHomeHero = false
+    }
+
+    /// Creates a show's screen listing one of its seasons, for a link to the season. Nothing on screen shows the show
+    /// to zoom in from.
+    ///
+    /// - Parameters:
+    ///   - seriesID: The show.
+    ///   - seasonID: The season to list.
+    init(seriesID: String, seasonID: String) {
+        _model = State(initialValue: ItemDetailModel(id: seriesID, seasonID: seasonID))
+        zoomSource = nil
         arrivesFromHomeHero = false
     }
 
@@ -79,60 +94,27 @@ private struct DetailContent: View {
     @State private var webTrailer: WebPage?
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.playerZoomNamespace) private var playerZoom
+    @Environment(\.media) private var media
+    @Environment(\.artwork) private var artwork
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xLarge) {
                 hero
                 about
-                if !details.trailers.isEmpty {
-                    MediaRow(
-                        String(localized: "Trailers", bundle: .module, comment: "Row of an item's trailers."),
-                        style: .landscape,
-                        items: details.trailers
-                    ) { trailer in
-                        TrailerLink(trailer: trailer, item: details.item) { webTrailer = WebPage(url: $0) }
-                    }
-                }
-                if !details.chapters.isEmpty {
-                    MediaRow(
-                        String(
-                            localized: "Chapters", bundle: .module, comment: "Row of a movie's or episode's chapters."),
-                        style: .landscape,
-                        items: details.chapters
-                    ) { chapter in
-                        ChapterLink(chapter: chapter, item: details.item)
-                    }
-                }
-                if !details.cast.isEmpty {
-                    MediaRow(
-                        String(localized: "Cast & Crew", bundle: .module, comment: "Row of an item's cast and crew."),
-                        style: .people,
-                        items: details.cast
-                    ) { person in
-                        PersonLink(person: person)
-                    }
-                }
-                if !details.seasons.isEmpty {
-                    MediaRow(
-                        String(localized: "Seasons", bundle: .module, comment: "Row of a show's seasons."),
-                        style: .posters,
-                        items: details.seasons
-                    ) { PosterLink(item: $0) }
-                }
-                if !details.seasonEpisodes.isEmpty {
-                    MediaRow(
-                        String(localized: "More Episodes", bundle: .module, comment: "Row of other episodes."),
-                        style: .landscape,
-                        items: details.seasonEpisodes
-                    ) { LandscapeLink(item: $0) }
-                }
-                if !details.similar.isEmpty {
-                    MediaRow(
-                        String(localized: "More Like This", bundle: .module, comment: "Row of similar titles."),
-                        style: .posters,
-                        items: details.similar
-                    ) { PosterLink(item: $0) }
+                if isSeries {
+                    episodes
+                    trailers
+                    cast
+                    similar
+                } else {
+                    trailers
+                    chapters
+                    cast
+                    moreEpisodes
+                    similar
                 }
                 InformationColumns(columns: details.information)
                     .padding(.horizontal, Spacing.medium)
@@ -164,6 +146,17 @@ private struct DetailContent: View {
             WebPageView(url: page.url)
                 .ignoresSafeArea()
         }
+        // Each season's picture downloads ahead, at the hero's size, so picking a season never waits for it.
+        .task(id: SeasonPrefetch(seasons: details.seasons.map(\.id), hero: heroGeometry)) {
+            model.prefetchSeasonArtwork(artwork: artwork, hero: heroGeometry)
+        }
+        .onChange(of: heroGeometry.isCompact) {
+            model.heroChanged(to: heroGeometry, artwork: artwork)
+        }
+    }
+
+    private var isSeries: Bool {
+        details.item.card.kind == .series
     }
 
     private var hero: some View {
@@ -174,18 +167,21 @@ private struct DetailContent: View {
             ItemArtwork(details.item, role: .logo, width: HomeHeroPage.logoWidth) { logo in
                 HeroHeader(
                     card: playCard,
-                    backdrop: backdrop,
+                    // A picked season's own picture, once it has one; the show's otherwise.
+                    backdrop: model.seasonArtwork?.image ?? backdrop,
                     logo: logo,
                     tint: model.tint ?? ArtworkTint.neutral,
                     playZoomNamespace: playerZoom,
                     startOver: {
-                        playback.play(details.playable ?? details.item, from: .beginning, zoomSource: pillZoom)
+                        playback.play(playable, from: .beginning, zoomSource: pillZoom)
                     },
                     arrivesFromHomeHero: arrivesFromHomeHero,
-                    badges: details.badges,
-                    nextEpisode: details.item.card.kind == .series ? details.playable?.card : nil
+                    badges: model.badges,
+                    nextEpisode: isSeries ? model.playable?.card : nil,
+                    artworkID: model.seasonArtwork?.seasonID ?? details.item.id,
+                    artworkAnchor: model.seasonArtwork?.isPoster == true ? .top : .center
                 ) {
-                    playback.play(details.playable ?? details.item, zoomSource: pillZoom)
+                    playback.play(playable, zoomSource: pillZoom)
                 }
             }
         }
@@ -194,6 +190,16 @@ private struct DetailContent: View {
         } action: {
             heroSize = $0
         }
+    }
+
+    /// What the hero's Play starts: the item, or for a show its episode.
+    private var playable: MediaItem {
+        model.playable ?? details.item
+    }
+
+    /// The hero's size, and whether the screen is compact, which decide the size and kind of a season's picture.
+    private var heroGeometry: ItemDetailModel.HeroGeometry {
+        ItemDetailModel.HeroGeometry(size: heroSize, scale: displayScale, isCompact: sizeClass != .regular)
     }
 
     /// The play pill's zoom source, so the player grows out of it.
@@ -205,22 +211,284 @@ private struct DetailContent: View {
     /// episode's progress.
     private var playCard: MediaCard {
         var card = details.item.card
-        if card.kind == .series, let next = details.playable?.card {
+        if isSeries, let next = model.playable?.card, next.kind == .episode {
             card.progress = next.progress
             card.runtime = next.runtime
         }
         return card
     }
 
-    /// The overview, kept to a readable line length on wide screens. Genres are listed under Information.
+    /// The overview, kept to a readable line length on wide screens. A show's is kept to three lines, with More for
+    /// the rest. Genres are listed under Information.
     @ViewBuilder private var about: some View {
         if let overview = details.item.card.overview {
-            Text(overview)
-                .typography(.body)
-                .foregroundStyle(.textPrimary)
-                .textSelection(.enabled)
-                .frame(maxWidth: 680, alignment: .leading)
+            Group {
+                if isSeries {
+                    ExpandableText(overview, lineLimit: 3)
+                } else {
+                    Text(overview)
+                }
+            }
+            .typography(.body)
+            .foregroundStyle(.textPrimary)
+            .textSelection(.enabled)
+            .frame(maxWidth: 680, alignment: .leading)
+            .padding(.horizontal, Spacing.medium)
+        }
+    }
+
+    /// A show's episodes, one season at a time.
+    @ViewBuilder private var episodes: some View {
+        if let selected = model.selectedSeasonID {
+            EpisodesSection(
+                seasons: details.seasons,
+                selection: Binding {
+                    selected
+                } set: { seasonID in
+                    model.selectSeason(seasonID, from: media, artwork: artwork, hero: heroGeometry)
+                },
+                model: model
+            ) {
+                model.followSelectedSeason(from: media, artwork: artwork, hero: heroGeometry)
+            }
+        }
+    }
+
+    @ViewBuilder private var trailers: some View {
+        if !details.trailers.isEmpty {
+            MediaRow(
+                String(localized: "Trailers", bundle: .module, comment: "Row of an item's trailers."),
+                style: .landscape,
+                items: details.trailers
+            ) { trailer in
+                TrailerLink(trailer: trailer, item: details.item) { webTrailer = WebPage(url: $0) }
+            }
+        }
+    }
+
+    @ViewBuilder private var chapters: some View {
+        if !details.chapters.isEmpty {
+            MediaRow(
+                String(localized: "Chapters", bundle: .module, comment: "Row of a movie's or episode's chapters."),
+                style: .landscape,
+                items: details.chapters
+            ) { chapter in
+                ChapterLink(chapter: chapter, item: details.item)
+            }
+        }
+    }
+
+    @ViewBuilder private var cast: some View {
+        if !details.cast.isEmpty {
+            MediaRow(
+                String(localized: "Cast & Crew", bundle: .module, comment: "Row of an item's cast and crew."),
+                style: .people,
+                items: details.cast
+            ) { person in
+                PersonLink(person: person)
+            }
+        }
+    }
+
+    @ViewBuilder private var moreEpisodes: some View {
+        if !details.seasonEpisodes.isEmpty {
+            MediaRow(
+                String(localized: "More Episodes", bundle: .module, comment: "Row of other episodes."),
+                style: .landscape,
+                items: details.seasonEpisodes
+            ) { LandscapeLink(item: $0) }
+        }
+    }
+
+    @ViewBuilder private var similar: some View {
+        if !details.similar.isEmpty {
+            MediaRow(
+                String(localized: "More Like This", bundle: .module, comment: "Row of similar titles."),
+                style: .posters,
+                items: details.similar
+            ) { PosterLink(item: $0) }
+        }
+    }
+}
+
+/// What the season pictures were prefetched for: the seasons, at one hero size.
+private struct SeasonPrefetch: Equatable {
+    let seasons: [String]
+    let hero: ItemDetailModel.HeroGeometry
+}
+
+/// A show's episodes, one season at a time: the season menu, then a row of episode cards on a phone, with the next
+/// one peeking in, or two columns of them on a wider screen.
+private struct EpisodesSection: View {
+    let seasons: [ShowSeason]
+    @Binding var selection: String
+    let model: ItemDetailModel
+    /// Loads the season's episodes again after they failed to.
+    let retry: () -> Void
+    @Environment(\.media) private var media
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.small) {
+            SeasonMenu(seasons: seasons.map(\.menuEntry), selection: $selection)
                 .padding(.horizontal, Spacing.medium)
+                .sensoryFeedback(.selection, trigger: selection)
+            if let episodes = model.episodes[selection] {
+                if episodes.isEmpty {
+                    Text(
+                        String(
+                            localized: "No episodes in this season yet.", bundle: .module,
+                            comment: "Shown under the season menu for a season with no episodes.")
+                    )
+                    .typography(.body)
+                    .foregroundStyle(.textSecondary)
+                    .padding(.horizontal, Spacing.medium)
+                } else if sizeClass == .regular {
+                    EpisodeGrid(episodes: episodes)
+                } else {
+                    // A season's row starts afresh, at its episode to watch next.
+                    EpisodeRow(episodes: episodes, start: model.startingEpisode(in: selection))
+                        .id(selection)
+                }
+            } else if model.failedSeasons.contains(selection) {
+                SeasonFailure(retry: retry)
+                    .padding(.horizontal, Spacing.medium)
+            } else {
+                EpisodePlaceholders()
+                    .task(id: selection) { await model.loadEpisodes(of: selection, from: media) }
+            }
+        }
+    }
+}
+
+extension ShowSeason {
+    /// The season as its show's season menu lists it, with how many episodes it has.
+    var menuEntry: SeasonMenu.Season {
+        SeasonMenu.Season(
+            id: id,
+            title: title,
+            detail: episodeCount.map { count in
+                String(
+                    localized: "\(count) episodes", bundle: .module,
+                    comment: "How many episodes a season has, under its name in the season menu, such as 10 episodes.")
+            }
+        )
+    }
+}
+
+/// A season's episodes in a row that scrolls sideways, each card about four fifths of the row wide so the next one
+/// peeks in. It starts at the episode to watch next.
+private struct EpisodeRow: View {
+    let episodes: [MediaItem]
+    let start: String?
+    @State private var position = ScrollPosition(idType: String.self)
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        // Every card keeps room for a synopsis when any has one, so the cards are one height and the lazy row never
+        // changes height as it scrolls.
+        let reservesSynopsis = episodes.contains { $0.card.overview != nil }
+        ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: Spacing.small) {
+                ForEach(episodes) { episode in
+                    EpisodeLink(item: episode, reservesSynopsisSpace: reservesSynopsis)
+                        .containerRelativeFrame(.horizontal) { length, _ in cardWidth(in: length) }
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .contentMargins(.horizontal, Spacing.medium, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition($position, anchor: .leading)
+        .onAppear {
+            if let start, start != episodes.first?.id {
+                position.scrollTo(id: start, anchor: .leading)
+            }
+        }
+    }
+
+    /// About four fifths of the row, or more at accessibility text sizes, where the words need the room.
+    private func cardWidth(in length: CGFloat) -> CGFloat {
+        max((length - Spacing.medium) * (dynamicTypeSize.isAccessibilitySize ? 0.9 : 0.8), 0)
+    }
+}
+
+/// A season's episodes in two columns, for iPad.
+private struct EpisodeGrid: View {
+    let episodes: [MediaItem]
+
+    var body: some View {
+        let reservesSynopsis = episodes.contains { $0.card.overview != nil }
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: Spacing.large, alignment: .top), count: 2),
+            spacing: Spacing.large
+        ) {
+            ForEach(episodes) { episode in
+                EpisodeLink(item: episode, reservesSynopsisSpace: reservesSynopsis)
+            }
+        }
+        .padding(.horizontal, Spacing.medium)
+    }
+}
+
+/// Where a season's episodes go while they load, laid out as the row or grid they stand in for.
+private struct EpisodePlaceholders: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        Group {
+            if sizeClass == .regular {
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: Spacing.large, alignment: .top), count: 2),
+                    spacing: Spacing.large
+                ) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        SkeletonCard(aspectRatio: 16 / 9)
+                    }
+                }
+                .padding(.horizontal, Spacing.medium)
+            } else {
+                // In a row of its own, as the episodes are: sized against the page instead, cards four fifths of its
+                // width would widen the page, and with it the cards, on every pass.
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: Spacing.small) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            SkeletonCard(aspectRatio: 16 / 9)
+                                .containerRelativeFrame(.horizontal) { length, _ in
+                                    max((length - Spacing.medium) * 0.8, 0)
+                                }
+                        }
+                    }
+                }
+                .contentMargins(.horizontal, Spacing.medium, for: .scrollContent)
+                .scrollDisabled(true)
+            }
+        }
+        .redacted(reason: .placeholder)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Says a season's episodes didn't load, with Try Again.
+private struct SeasonFailure: View {
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.small) {
+            Text(
+                String(
+                    localized: "These episodes didn't load.", bundle: .module,
+                    comment: "Shown under the season menu when a season's episodes fail to load.")
+            )
+            .typography(.body)
+            .foregroundStyle(.textSecondary)
+            Button(
+                String(localized: "Try Again", bundle: .module, comment: "Button that retries a request."),
+                action: retry
+            )
+            .buttonStyle(.bordered)
         }
     }
 }
@@ -407,10 +675,26 @@ extension MediaItem {
             .previewEnvironment()
     }
 
-    #Preview("Series, dark") {
-        TabStack { ItemDetailView(id: "series-sherlock-holmes") }
+    #Preview("Show, one season") {
+        TabStack { ItemDetailView(id: "series-caminandes") }
+            .previewEnvironment()
+    }
+
+    #Preview("Show, sixteen seasons, dark") {
+        TabStack { ItemDetailView(id: "series-oz") }
             .previewEnvironment()
             .preferredColorScheme(.dark)
+    }
+
+    #Preview("Show with Specials, largest text") {
+        TabStack { ItemDetailView(id: "series-sherlock-holmes") }
+            .previewEnvironment()
+            .dynamicTypeSize(.accessibility5)
+    }
+
+    #Preview("Show on a link to its Specials") {
+        TabStack { ItemDetailView(seriesID: "series-sherlock-holmes", seasonID: "series-sherlock-holmes-s0") }
+            .previewEnvironment()
     }
 
     #Preview("Episode, largest text") {

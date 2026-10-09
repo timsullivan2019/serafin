@@ -57,6 +57,9 @@
     "Direct play" : {
       "comment" : "How a video plays: the original file as it is."
     },
+    "Episode %lld" : {
+      "comment" : "The number over an episode's title on its show's page, such as Episode 3. Shown in capitals."
+    },
     "Favorite" : {
       "comment" : "Spoken state of a favorite item."
     },
@@ -95,6 +98,12 @@
     },
     "Mint" : {
       "comment" : "Accent colour: a blue-green."
+    },
+    "More" : {
+      "comment" : "Shows the rest of a description."
+    },
+    "More for %@" : {
+      "comment" : "Spoken label of the ellipsis button that opens an episode's menu, such as More for Silver Blaze."
     },
     "Off" : {
       "comment" : "Choice that turns subtitles off."
@@ -149,6 +158,9 @@
     "Plays in %@" : {
       "comment" : "Countdown before the next episode plays, such as Plays in 7 seconds."
     },
+    "Plays the episode" : {
+      "comment" : "Hint on an episode card on a show's page."
+    },
     "Purple" : {
       "comment" : "Accent colour."
     },
@@ -163,6 +175,28 @@
     },
     "Resume" : {
       "comment" : "Accessibility action that resumes a featured item on Home."
+    },
+    "Resume %@ · %@" : {
+      "comment" : "Button on a show's page that resumes its episode, such as Resume S2 E2 · 23 min left.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resume %1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "Resume %@, %@" : {
+      "comment" : "Spoken label of a show's resume button, such as Resume S2 E2, 23 min left.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resume %1$@, %2$@"
+          }
+        }
+      }
     },
     "Resume · %@" : {
       "comment" : "Button that resumes playback, such as Resume · 32 min left."
@@ -181,6 +215,12 @@
     },
     "Shows everything in this row" : {
       "comment" : "Hint on a row title."
+    },
+    "Shows the other seasons" : {
+      "comment" : "Hint on the season menu over a show's episodes."
+    },
+    "Shows the whole description" : {
+      "comment" : "Hint on the More button at the end of a shortened description."
     },
     "Skip Ad" : {
       "comment" : "Button that skips an advert."
@@ -206,8 +246,14 @@
     "Sky" : {
       "comment" : "Accent colour: a light, sky blue."
     },
+    "Special %lld" : {
+      "comment" : "Code on cards for one of a show's Specials, which aren't in a season, such as Special 2."
+    },
     "Subtitles" : {
       "comment" : "Heading of the subtitle tracks."
+    },
+    "Synopsis" : {
+      "comment" : "Name of the more-content item that holds an episode's synopsis, for VoiceOver."
     },
     "Teal" : {
       "comment" : "Accent colour."

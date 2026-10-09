@@ -131,6 +131,11 @@ private let bareEpisode = BaseItemDto(
         #expect(Artwork.pixelWidth(points: points, scale: scale) == pixels)
     }
 
+    @Test(arguments: [CGFloat(1e18), 5000, .infinity, .nan])
+    func aViewMeasuredWiderThanAnyScreenAsksForTheWidestImageRatherThanOverflowing(points: CGFloat) {
+        #expect(Artwork.pixelWidth(points: points, scale: 3) == Artwork.maximumPixelWidth)
+    }
+
     @Test func requestsCarryTheHeaderAndAreDecodedAtTheirWidth() throws {
         let artwork = Artwork(
             urls: urls,

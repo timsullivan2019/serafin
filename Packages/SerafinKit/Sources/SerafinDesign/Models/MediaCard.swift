@@ -23,7 +23,7 @@ public struct MediaCard: Identifiable, Hashable, Sendable {
         public var seriesID: String
         /// The series title, shown above the episode title.
         public var seriesTitle: String
-        /// The season number, starting from 1.
+        /// The season number, starting from 1, or 0 for Specials.
         public var seasonNumber: Int
         /// The episode number within the season, starting from 1.
         public var episodeNumber: Int

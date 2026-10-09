@@ -49,7 +49,7 @@ struct ItemArtwork<Content: View>: View {
             }
             .pipeline(artwork.pipeline)
             .onCompletion { [onLoad] result in
-                if let onLoad, let image = try? result.get().image.serafinCGImage {
+                if let onLoad, let image = try? result.get().image.bitmap {
                     onLoad(image)
                 }
             }
@@ -108,7 +108,7 @@ struct PersonPhoto<Content: View>: View {
 
 extension PlatformImage {
     /// The image's bitmap, for deriving a tint.
-    fileprivate var serafinCGImage: CGImage? {
+    var bitmap: CGImage? {
         #if canImport(UIKit)
             cgImage
         #else

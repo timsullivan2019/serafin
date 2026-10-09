@@ -3,9 +3,10 @@ public enum MockLibrary {
     /// Movies and episodes that have been started but not finished, in fixture order.
     public static let continueWatching: [MediaCard] = (MockMedia.movies + MockMedia.episodes).filter(\.isInProgress)
 
-    /// For each series that has been started, the first episode not yet played or started.
+    /// For each series that has been started, the first episode not yet played or started, leaving out Specials as
+    /// a server does.
     public static let nextUp: [MediaCard] = MockMedia.series.compactMap { series in
-        let episodes = MockMedia.seasons(of: series).flatMap(\.episodes)
+        let episodes = MockMedia.seasons(of: series).filter { $0.number > 0 }.flatMap(\.episodes)
         guard episodes.contains(where: \.isPlayed) else { return nil }
         return episodes.first { !$0.isPlayed && $0.progress == 0 }
     }

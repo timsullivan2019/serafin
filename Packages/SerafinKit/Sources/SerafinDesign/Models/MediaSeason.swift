@@ -4,7 +4,7 @@ public struct MediaSeason: Identifiable, Hashable, Sendable {
     public var id: String
     /// The ``MediaCard/id`` of the series.
     public var seriesID: String
-    /// The season number, starting from 1.
+    /// The season number, starting from 1, or 0 for Specials.
     public var number: Int
     /// The season's display name, such as "Season 1", as the server provides it.
     public var title: String
@@ -16,7 +16,7 @@ public struct MediaSeason: Identifiable, Hashable, Sendable {
     /// - Parameters:
     ///   - id: A stable identifier for the season.
     ///   - seriesID: The identifier of the series.
-    ///   - number: The season number.
+    ///   - number: The season number, or 0 for Specials.
     ///   - title: The season's display name.
     ///   - episodes: The episodes, in airing order.
     public init(id: String, seriesID: String, number: Int, title: String, episodes: [MediaCard]) {
