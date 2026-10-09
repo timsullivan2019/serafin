@@ -95,6 +95,10 @@ public enum PlaybackState: Equatable, Sendable {
     private let languagePreferences: (@Sendable () async throws -> LanguagePreferences)?
     /// Settings' subtitle rules for what's playing, or nil when the account's settings couldn't be read.
     @ObservationIgnored private var subtitleRules: SubtitleRules?
+    /// The languages the viewer reads, most wanted first: Settings' subtitle language, or the device's languages.
+    private var viewerLanguages: [String] {
+        subtitleRules?.languages ?? Locale.preferredLanguages.compactMap(SubtitleRules.language)
+    }
     /// The legible option the engine selected in the current item, so a change made by anything else is undone.
     @ObservationIgnored private var legible: LegibleSelection?
     /// How many times a legible selection the engine didn't make has been undone in the current item.
@@ -850,9 +854,15 @@ public enum PlaybackState: Equatable, Sendable {
             return Self.isBurnedIn(subtitles.serverIndex, in: plan.streams(.subtitle)) ? subtitles : .off
         }
         let options = Self.legibleOptions(of: group, in: playerItem)
-        let generated = Self.generatedPosition(among: options, audioLanguage: plan.audioLanguage)
-        generatedSubtitles = generated.map { GeneratedSubtitles(languageTag: group.options[$0].extendedLanguageTag) }
-        let (position, shown) = Self.legiblePosition(for: subtitles, in: plan, among: options)
+        let generated = Self.generatedPosition(
+            among: options, audioLanguage: plan.audioLanguage, viewerLanguages: viewerLanguages)
+        generatedSubtitles = generated.map { position in
+            GeneratedSubtitles(
+                languageTag: group.options[position].extendedLanguageTag,
+                isTranslation: Self.isTranslation(options[position], audioLanguage: plan.audioLanguage))
+        }
+        let (position, shown) = Self.legiblePosition(
+            for: subtitles, in: plan, among: options, viewerLanguages: viewerLanguages)
         let option = position.map { group.options[$0] }
         legible = LegibleSelection(group: group, option: option)
         playerItem.select(option, in: group)
@@ -866,7 +876,8 @@ public enum PlaybackState: Equatable, Sendable {
         let group = legible?.group
         guard group != nil || selection == .off else { return false }
         let options = group.map { Self.legibleOptions(of: $0, in: playerItem) } ?? []
-        guard Self.legiblePosition(for: selection, in: plan, among: options).shown == selection else { return false }
+        let showable = Self.legiblePosition(for: selection, in: plan, among: options, viewerLanguages: viewerLanguages)
+        guard showable.shown == selection else { return false }
         // A stream on its way with other subtitles is no longer wanted.
         cancelStreamRequest()
         let shown = select(selection, in: group, of: playerItem, playing: plan)
@@ -998,6 +1009,7 @@ public enum PlaybackState: Equatable, Sendable {
         return group.options.map { option in
             LegibleOption(
                 isGenerated: option.hasMediaCharacteristic(.machineGenerated),
+                isTranslation: option.hasMediaCharacteristic(.languageTranslation),
                 isClosedCaptions: option.mediaType == .closedCaption,
                 language: SubtitleRules.language(option.extendedLanguageTag ?? option.locale?.identifier),
                 isForced: option.hasMediaCharacteristic(.containsOnlyForcedSubtitles),
@@ -1032,13 +1044,15 @@ public enum PlaybackState: Equatable, Sendable {
     nonisolated static func legiblePosition(
         for selection: SubtitleSelection,
         in plan: PlaybackPlan,
-        among options: [LegibleOption]
+        among options: [LegibleOption],
+        viewerLanguages: [String] = []
     ) -> (position: Int?, shown: SubtitleSelection) {
         switch selection {
         case .off:
             return (nil, .off)
         case .generated:
-            let position = generatedPosition(among: options, audioLanguage: plan.audioLanguage)
+            let position = generatedPosition(
+                among: options, audioLanguage: plan.audioLanguage, viewerLanguages: viewerLanguages)
             return (position, position == nil ? .off : .generated)
         case .stream(let index):
             if isBurnedIn(index, in: plan.streams(.subtitle)) {
@@ -1094,12 +1108,33 @@ public enum PlaybackState: Equatable, Sendable {
         return nil
     }
 
-    /// Where iOS's generated subtitles for the audio playing are among an item's legible `options`, or nil when there
-    /// are none that can show: the ones in the audio's language, or the first.
-    nonisolated static func generatedPosition(among options: [LegibleOption], audioLanguage: String?) -> Int? {
+    /// Where among `options` the subtitles iOS generates for the viewer are: in the first of the viewer's
+    /// `viewerLanguages` that iOS offers, else in the audio's language, or nil. Only options that can show anything
+    /// count. iOS also offers translations into languages of its own choosing, as when the video already has subtitles
+    /// in the audio's language, and one in neither the viewer's languages nor the audio's isn't offered.
+    nonisolated static func generatedPosition(
+        among options: [LegibleOption],
+        audioLanguage: String?,
+        viewerLanguages: [String] = []
+    ) -> Int? {
         let generated = options.indices.filter { options[$0].isGenerated && options[$0].isSelectable }
-        let language = SubtitleRules.language(audioLanguage)
-        return generated.first { options[$0].language == language && language != nil } ?? generated.first
+        let wanted = viewerLanguages + [SubtitleRules.language(audioLanguage)].compactMap { $0 }
+        for language in wanted {
+            if let position = generated.first(where: { options[$0].language == language }) {
+                return position
+            }
+        }
+        return nil
+    }
+
+    /// Whether generated subtitles in `option` translate audio in `audioLanguage` rather than transcribe it: iOS marks
+    /// them as a translation, or their language isn't the audio's.
+    nonisolated static func isTranslation(_ option: LegibleOption, audioLanguage: String?) -> Bool {
+        if option.isTranslation {
+            return true
+        }
+        guard let language = option.language, let audio = SubtitleRules.language(audioLanguage) else { return false }
+        return language != audio
     }
 
     /// Whether the subtitles `streamIndex` names are burned into the picture.
@@ -1431,10 +1466,17 @@ extension PlaybackPlan {
 public struct GeneratedSubtitles: Hashable, Sendable {
     /// Their language, as a BCP 47 tag such as "en-US", when iOS says.
     public var languageTag: String?
+    /// Whether iOS translates the audio into them, rather than writing down what's said.
+    public var isTranslation: Bool
 
     /// Creates a description of generated subtitles.
-    public init(languageTag: String?) {
+    ///
+    /// - Parameters:
+    ///   - languageTag: Their language, as a BCP 47 tag, or nil when iOS doesn't say.
+    ///   - isTranslation: Whether iOS translates the audio into them.
+    public init(languageTag: String?, isTranslation: Bool = false) {
         self.languageTag = languageTag
+        self.isTranslation = isTranslation
     }
 }
 
@@ -1442,6 +1484,8 @@ public struct GeneratedSubtitles: Hashable, Sendable {
 struct LegibleOption: Equatable {
     /// Whether iOS generated it from the audio.
     var isGenerated: Bool
+    /// Whether it's marked as a translation.
+    var isTranslation: Bool
     /// Whether it's the closed captions the player looks for inside the video. The server never lists them, and they
     /// only show when the video carries them.
     var isClosedCaptions: Bool
@@ -1456,6 +1500,7 @@ struct LegibleOption: Equatable {
 
     init(
         isGenerated: Bool = false,
+        isTranslation: Bool = false,
         isClosedCaptions: Bool = false,
         language: String? = nil,
         isForced: Bool = false,
@@ -1463,6 +1508,7 @@ struct LegibleOption: Equatable {
         isSelectable: Bool = true
     ) {
         self.isGenerated = isGenerated
+        self.isTranslation = isTranslation
         self.isClosedCaptions = isClosedCaptions
         self.language = language
         self.isForced = isForced

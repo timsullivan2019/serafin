@@ -917,6 +917,9 @@
     "Track %lld" : {
       "comment" : "A track with no language or name."
     },
+    "Translated from the audio" : {
+      "comment" : "Detail of subtitles the device generates by translating a video's audio into another language."
+    },
     "Trust This Certificate" : {
       "comment" : "Button that pins a certificate."
     },
