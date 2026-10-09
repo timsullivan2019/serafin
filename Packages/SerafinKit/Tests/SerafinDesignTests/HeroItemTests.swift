@@ -138,6 +138,13 @@ import Testing
 }
 
 @Suite struct HeroScrollTests {
+    @Test func theArtworkStretchesOnlyWhileHomeIsPulledDown() {
+        #expect(HomeHeroLayout.stretch(top: 0, height: 500) == 1)
+        #expect(HomeHeroLayout.stretch(top: -120, height: 500) == 1)
+        #expect(HomeHeroLayout.stretch(top: 50, height: 500) == 1.1)
+        #expect(HomeHeroLayout.stretch(top: 50, height: 0) == 1)
+    }
+
     @Test func aPageCountsAsScrolledOnceItMovesAndAtRestOnceBack() {
         #expect(!HomeHeroLayout.isScrolled(offset: 0, wasScrolled: false))
         #expect(!HomeHeroLayout.isScrolled(offset: -40, wasScrolled: false))

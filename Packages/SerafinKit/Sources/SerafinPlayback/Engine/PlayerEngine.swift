@@ -6,6 +6,7 @@ import os
 
 #if canImport(UIKit)
     import AVKit
+    import Synchronization
 #endif
 
 /// What the player is doing.
@@ -123,6 +124,11 @@ public enum PlaybackState: Equatable, Sendable {
         /// Called when the user returns from Picture in Picture to the app, so the app can bring back the player
         /// screen.
         @ObservationIgnored public var restoreFromPictureInPicture: (() -> Void)?
+        /// Called when Picture in Picture ends without returning to the app, closed from its window, or when it fails
+        /// to start, so the app can stop playback if nothing else shows the video.
+        @ObservationIgnored public var pictureInPictureDidClose: (() -> Void)?
+        /// Picture in Picture's wait for a player screen to show the video it's handing back.
+        @ObservationIgnored private var pendingRestore: PictureInPictureRestore?
     #endif
 
     /// Creates an engine for the signed-in account.
@@ -286,9 +292,22 @@ public enum PlaybackState: Equatable, Sendable {
             }
         }
 
+        /// Starts Picture in Picture from the player screen's video, as when the screen is put away while it plays.
+        /// Check ``isPictureInPicturePossible`` first; ``pictureInPictureDidStart`` follows once it has started, or
+        /// ``pictureInPictureDidClose`` if it can't.
+        public func startPictureInPicture() {
+            guard let pictureInPicture, !pictureInPicture.isPictureInPictureActive else { return }
+            pictureInPicture.startPictureInPicture()
+        }
+
         /// Brings the video back from Picture in Picture, as when the player screen opens again.
         public func stopPictureInPicture() {
             pictureInPicture?.stopPictureInPicture()
+        }
+
+        /// The player screen showing the video is on screen, so Picture in Picture can hand the video back into it.
+        func surfaceEnteredWindow() {
+            finishRestore()
         }
 
         /// A player screen started showing the video.
@@ -389,15 +408,43 @@ public enum PlaybackState: Equatable, Sendable {
             pictureInPictureDidStart?()
         }
 
-        fileprivate func pictureInPictureEnded() {
+        /// Picture in Picture stopped, or couldn't start. Unless it handed the video back to the app, it was closed.
+        fileprivate func pictureInPictureEnded(restored: Bool) {
             isPictureInPictureEngaged = false
             if !isSurfaceShowing {
                 hostedVideoView?.playerLayer.player = nil
             }
+            if !restored {
+                pictureInPictureDidClose?()
+            }
         }
 
-        fileprivate func restoreUserInterface() {
+        /// Picture in Picture is handing the video back to the app. The app brings back a player screen, and Picture in
+        /// Picture is told it may finish once that screen is on screen: told any sooner, it hands the video to a
+        /// layer that isn't on screen yet, and AVKit pauses it.
+        fileprivate func restoreUserInterface(_ restore: PictureInPictureRestore) {
+            pendingRestore?.finish()
+            pendingRestore = restore
             restoreFromPictureInPicture?()
+            if isSurfaceShowing, hostedVideoView?.window != nil {
+                // A player screen is up already, as when Picture in Picture started on the way to the background.
+                finishRestore()
+                return
+            }
+            // A screen that never comes doesn't hold Picture in Picture open.
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1))
+                self?.finishRestore(restore)
+            }
+        }
+
+        /// Lets Picture in Picture finish handing the video back, if it's waiting.
+        ///
+        /// - Parameter restore: The hand-back to finish, or nil for whichever is waiting.
+        private func finishRestore(_ restore: PictureInPictureRestore? = nil) {
+            guard let pendingRestore, restore == nil || restore === pendingRestore else { return }
+            self.pendingRestore = nil
+            pendingRestore.finish()
         }
     #endif
 
@@ -776,6 +823,9 @@ public enum PlaybackState: Equatable, Sendable {
     /// thread, but returning from Picture in Picture to the app arrives on a background queue.
     private final class PictureInPictureEvents: NSObject, AVPictureInPictureControllerDelegate {
         private weak var engine: PlayerEngine?
+        /// Whether Picture in Picture is handing the video back to the app. Set off the main thread ahead of the stop,
+        /// so it's kept here rather than on the engine, where it could arrive after the stop.
+        private let isRestoring = Mutex(false)
 
         init(engine: PlayerEngine) {
             self.engine = engine
@@ -808,19 +858,43 @@ public enum PlaybackState: Equatable, Sendable {
             _ controller: AVPictureInPictureController,
             failedToStartPictureInPictureWithError error: any Error
         ) {
-            withEngine { $0.pictureInPictureEnded() }
+            isRestoring.withLock { $0 = false }
+            withEngine { $0.pictureInPictureEnded(restored: false) }
         }
 
         func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-            withEngine { $0.pictureInPictureEnded() }
+            let restored = isRestoring.withLock { isRestoring in
+                defer { isRestoring = false }
+                return isRestoring
+            }
+            withEngine { $0.pictureInPictureEnded(restored: restored) }
         }
 
         func pictureInPictureController(
             _ controller: AVPictureInPictureController,
             restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
         ) {
-            withEngine { $0.restoreUserInterface() }
-            completionHandler(true)
+            isRestoring.withLock { $0 = true }
+            let restore = PictureInPictureRestore(completionHandler)
+            withEngine { $0.restoreUserInterface(restore) }
+        }
+    }
+
+    /// AVKit's completion handler for handing the video back from Picture in Picture, carried to the main actor and
+    /// called there once the player screen is on screen.
+    ///
+    /// Unchecked: AVKit calls the delegate on a background queue with a handler it doesn't mark as sendable, and this
+    /// only ever calls it once, from the main actor.
+    private final class PictureInPictureRestore: @unchecked Sendable {
+        private let completion: (Bool) -> Void
+
+        init(_ completion: @escaping (Bool) -> Void) {
+            self.completion = completion
+        }
+
+        /// Tells Picture in Picture the app is ready for the video.
+        func finish() {
+            completion(true)
         }
     }
 #endif

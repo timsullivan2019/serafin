@@ -89,8 +89,8 @@ private struct SpotlightTrigger: Equatable {
     let isLockOn: Bool
 }
 
-/// Home, Library and Search tabs, a sidebar on iPad, and the mini player in the tab bar while something plays.
-/// Settings opens as a sheet from the profile button on each tab's first screen, as in Apple's media apps.
+/// Home, Library and Search tabs, with a sidebar on iPad. Settings opens as a sheet from the profile button on each
+/// tab's first screen, as in Apple's media apps.
 struct MainTabs: View {
     @State private var selection = AppTab.home
     @State private var paths = TabPaths()
@@ -150,7 +150,7 @@ struct MainTabs: View {
         // at the bottom of the screen. On iPad the search screen keeps its field under its title.
         .tabViewSearchActivation(sizeClass == .regular ? .automatic : .searchTabSelection)
         // Home's hero and every detail screen's are a share of the screen, measured here, outside the tabs, where the
-        // tab bar and the mini player don't reach: they match, and keep their size as the mini player comes and goes.
+        // tab bar doesn't reach: they match, and keep their size whatever the tab bar does.
         .heroScreen()
         .background {
             TabShortcuts(selection: $selection, searchRequest: $searchRequest, showsSettings: $showsSettings)
@@ -325,12 +325,12 @@ private struct OutsideRequests: ViewModifier {
         }
     }
 
-    /// Closes Settings and shrinks the full-screen player into the mini player, where playback carries on, so a page
-    /// or results shown for a request don't go unseen under them.
+    /// Closes Settings and puts the full-screen player away, as its minimize button does, so a page or results shown
+    /// for a request don't go unseen under them.
     private func putPlayerAway() {
         showsSettings = false
         if playback.isPlayerPresented {
-            playback.minimize()
+            playback.dismissPlayer()
         }
     }
 
@@ -370,8 +370,9 @@ private struct SettingsSheet: View {
     }
 }
 
-/// The tab bar's behaviour: the tab bar minimizes on scroll, the mini player rides in its accessory while something
-/// plays, and the full-screen player covers everything. On iPad the tab bar can open into a sidebar.
+/// The tab bar's behaviour: the tab bar minimizes on scroll, and the full-screen player covers everything. There's no
+/// mini player for video: put away while it plays, a video carries on in Picture in Picture. On iPad the tab bar can
+/// open into a sidebar.
 private struct TabChrome: ViewModifier {
     @Bindable var playback: PlaybackCoordinator
     let playerZoom: Namespace.ID
@@ -380,8 +381,12 @@ private struct TabChrome: ViewModifier {
         #if os(iOS)
             content
                 .tabBarMinimizeBehavior(.onScrollDown)
-                .tabViewBottomAccessory(isEnabled: playback.nowPlaying != nil) {
-                    NowPlayingAccessory()
+                // The player screen ends a video itself, with Up Next for an episode. Away, as in Picture in Picture,
+                // the end comes here.
+                .onChange(of: playback.engine?.state) { _, state in
+                    if state == .ended, !playback.isPlayerPresented {
+                        playback.endedWithoutThePlayer()
+                    }
                 }
                 .fullScreenCover(isPresented: $playback.isPlayerPresented) {
                     PlayerView()
@@ -399,44 +404,6 @@ private struct TabChrome: ViewModifier {
                         .environment(playback)
                 }
         #endif
-    }
-}
-
-/// The mini player for whatever is playing.
-private struct NowPlayingAccessory: View {
-    @Environment(PlaybackCoordinator.self) private var playback
-
-    var body: some View {
-        if let item = playback.nowPlaying {
-            ItemArtwork(item, role: .landscape, width: 72) { artwork in
-                MiniPlayer(
-                    title: item.card.title,
-                    subtitle: item.card.eyebrowText,
-                    artwork: artwork,
-                    isPlaying: playback.isPlaying,
-                    playPause: { playback.togglePlayPause() },
-                    close: { playback.stop() },
-                    open: { playback.showPlayer() }
-                )
-                .modifier(MiniPlayerZoomSource())
-            }
-        }
-    }
-}
-
-/// Makes the mini player the source of the player's zoom transition.
-private struct MiniPlayerZoomSource: ViewModifier {
-    @Environment(\.playerZoomNamespace) private var namespace
-
-    func body(content: Content) -> some View {
-        if let namespace {
-            // A rounded rectangle as round as the bar is tall: the only shape transition sources accept.
-            content.matchedTransitionSource(id: PlaybackCoordinator.miniPlayerZoomSource, in: namespace) { source in
-                source.clipShape(.rect(cornerRadius: 24, style: .continuous))
-            }
-        } else {
-            content
-        }
     }
 }
 

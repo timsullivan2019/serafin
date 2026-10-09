@@ -455,6 +455,9 @@
     "Maximum" : {
       "comment" : "Streaming quality: no cap."
     },
+    "Minimize to Picture in Picture" : {
+      "comment" : "Settings switch: putting the player away while a video plays carries it on in Picture in Picture."
+    },
     "Mono" : {
       "comment" : "One audio channel."
     },

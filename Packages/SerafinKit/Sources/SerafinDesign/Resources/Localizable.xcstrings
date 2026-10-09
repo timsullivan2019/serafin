@@ -91,7 +91,7 @@
       "comment" : "Accent colour."
     },
     "Minimize Player" : {
-      "comment" : "Button that shrinks the player into the mini player, which keeps playing."
+      "comment" : "Button that puts the player away; a video that's playing carries on in Picture in Picture."
     },
     "Mint" : {
       "comment" : "Accent colour: a blue-green."

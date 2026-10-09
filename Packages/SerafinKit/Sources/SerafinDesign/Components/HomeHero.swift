@@ -55,6 +55,21 @@ public enum HomeHeroLayout {
         return Double(min(max((top - end) / (start - end), 0), 1))
     }
 
+    /// How much a hero's artwork grows while Home is pulled down past its top: by the distance pulled, from its
+    /// bottom edge, so it always reaches the top of the screen.
+    ///
+    /// Only pulling down puts the hero's top below the top of the scroll view, so nothing else, such as the space the
+    /// tab bar takes changing, ever stretches it.
+    ///
+    /// - Parameters:
+    ///   - top: How far the hero's top edge is below the top of the scroll view, in points: positive only while
+    ///     pulled down.
+    ///   - height: The hero's height.
+    public static func stretch(top: CGFloat, height: CGFloat) -> CGFloat {
+        guard top > 0, height > 0 else { return 1 }
+        return (height + top) / height
+    }
+
     /// Whether a page with a hero at its top has been scrolled at all, so the top edge effect should cover what
     /// passes under the status bar. At rest the artwork runs clear to the top of the screen.
     ///
@@ -504,7 +519,7 @@ private struct HeroPageBackdrop: View {
                     content
                     // Slower than the scroll going up; stretched to fill the gap when pulled down.
                     .offset(y: moves && minY < 0 ? -minY * 0.3 : 0)
-                    .scaleEffect(moves && minY > 0 ? (height + minY) / height : 1, anchor: .bottom)
+                    .scaleEffect(moves ? HomeHeroLayout.stretch(top: minY, height: height) : 1, anchor: .bottom)
             }
             // Clipped to the page's sides and bottom, so it never covers the next page while swiping, but open at the
             // top, so the stretch can reach the top of the screen.

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// What the player's controls do. Each action defaults to doing nothing.
 public struct PlayerControlActions {
-    /// Puts the player away into the mini player, which keeps playing.
+    /// Puts the player away. A video that's playing carries on in Picture in Picture.
     public var minimize: () -> Void
     /// Toggles between playing and paused.
     public var playPause: () -> Void
@@ -194,7 +194,8 @@ public struct PlayerControls<RoutePicker: View>: View {
                 label: String(
                     localized: "Minimize Player",
                     bundle: .module,
-                    comment: "Button that shrinks the player into the mini player, which keeps playing."
+                    comment:
+                        "Button that puts the player away; a video that's playing carries on in Picture in Picture."
                 ),
                 action: actions.minimize
             )

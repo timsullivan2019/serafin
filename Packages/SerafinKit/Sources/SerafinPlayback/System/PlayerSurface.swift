@@ -55,6 +55,12 @@
             engine.surfaceAppeared()
         }
 
+        override public func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil, let engine, engine.videoView.superview === self else { return }
+            engine.surfaceEnteredWindow()
+        }
+
         /// Gives the video view back, unless a newer screen has taken it already.
         func release() {
             defer { engine = nil }
