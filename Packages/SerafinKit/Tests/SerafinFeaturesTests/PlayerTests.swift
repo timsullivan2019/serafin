@@ -215,21 +215,26 @@ import Testing
         #expect(playback.zoomSource == nil)
     }
 
-    @Test func puttingThePlayerAwayHandsAPlayingVideoToPictureInPictureOnlyWhenItCan() {
+    @Test func puttingThePlayerAwayHandsAPlayingOrPausedVideoToPictureInPictureOnlyWhenItCan() {
+        for state in [PlaybackState.playing, .paused] {
+            #expect(
+                PlaybackCoordinator.dismissal(
+                    minimizesToPictureInPicture: true, state: state, isPictureInPicturePossible: true)
+                    == .pictureInPicture)
+        }
+        // Turned off in Settings, or with Picture in Picture unable to start, playback stops instead.
         #expect(
             PlaybackCoordinator.dismissal(
-                minimizesToPictureInPicture: true, isPlaying: true, isPictureInPicturePossible: true)
-                == .pictureInPicture)
-        // Turned off in Settings, paused, or with Picture in Picture unable to start, playback stops instead.
+                minimizesToPictureInPicture: false, state: .paused, isPictureInPicturePossible: true) == .stop)
         #expect(
             PlaybackCoordinator.dismissal(
-                minimizesToPictureInPicture: false, isPlaying: true, isPictureInPicturePossible: true) == .stop)
-        #expect(
-            PlaybackCoordinator.dismissal(
-                minimizesToPictureInPicture: true, isPlaying: false, isPictureInPicturePossible: true) == .stop)
-        #expect(
-            PlaybackCoordinator.dismissal(
-                minimizesToPictureInPicture: true, isPlaying: true, isPictureInPicturePossible: false) == .stop)
+                minimizesToPictureInPicture: true, state: .playing, isPictureInPicturePossible: false) == .stop)
+        // So does a video still loading, one that has ended, or one that failed.
+        for state in [PlaybackState.loading, .ready, .ended, .failed, .idle] {
+            #expect(
+                PlaybackCoordinator.dismissal(
+                    minimizesToPictureInPicture: true, state: state, isPictureInPicturePossible: true) == .stop)
+        }
     }
 
     @Test func pictureInPictureIsOnUntilTurnedOffInSettings() {

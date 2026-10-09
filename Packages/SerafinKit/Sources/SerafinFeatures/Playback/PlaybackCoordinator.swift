@@ -235,12 +235,14 @@ import SerafinPlayback
         case stop
     }
 
-    /// What putting the player away does: a video that's playing carries on in Picture in Picture, when Settings
-    /// allows it and Picture in Picture can start. Anything else stops.
-    static func dismissal(minimizesToPictureInPicture: Bool, isPlaying: Bool, isPictureInPicturePossible: Bool)
+    /// What putting the player away does: a video that's playing or paused carries on in Picture in Picture, paused
+    /// if it was, when Settings allows it and Picture in Picture can start. Anything else, such as a video still
+    /// loading or one that has ended, stops.
+    static func dismissal(minimizesToPictureInPicture: Bool, state: PlaybackState, isPictureInPicturePossible: Bool)
         -> Dismissal
     {
-        minimizesToPictureInPicture && isPlaying && isPictureInPicturePossible ? .pictureInPicture : .stop
+        let hasVideo = state == .playing || state == .paused
+        return minimizesToPictureInPicture && hasVideo && isPictureInPicturePossible ? .pictureInPicture : .stop
     }
 
     /// Whether putting the player away hands a playing video to Picture in Picture, as set in Settings: on unless
@@ -249,15 +251,16 @@ import SerafinPlayback
         defaults.object(forKey: minimizesToPictureInPictureKey) as? Bool ?? true
     }
 
-    /// Puts the full-screen player away, as its minimize button and a swipe down do. A video that's playing carries
-    /// on in Picture in Picture when Settings allows it and Picture in Picture can start, and the player screen goes
-    /// once it has. Otherwise playback stops where it is, the server hears where, and the screen behind shows again.
+    /// Puts the full-screen player away, as its minimize button and a swipe down do. A video that's playing or paused
+    /// carries on in Picture in Picture when Settings allows it and Picture in Picture can start, and the player
+    /// screen goes once it has; closing the floating window stops it. Otherwise playback stops where it is, the server
+    /// hears where, and the screen behind shows again.
     func dismissPlayer() {
         #if canImport(UIKit)
             if let engine,
                 Self.dismissal(
                     minimizesToPictureInPicture: Self.minimizesToPictureInPicture(in: defaults),
-                    isPlaying: engine.state == .playing,
+                    state: engine.state,
                     isPictureInPicturePossible: engine.isPictureInPicturePossible
                 ) == .pictureInPicture
             {

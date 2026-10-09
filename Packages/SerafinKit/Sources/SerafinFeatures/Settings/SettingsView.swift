@@ -122,7 +122,7 @@ private struct PlaybackSection: View {
                 String(
                     localized: "Minimize to Picture in Picture", bundle: .module,
                     comment:
-                        "Settings switch: putting the player away while a video plays carries it on in Picture in Picture."
+                        "Settings switch: putting the player away while a video plays or is paused carries it on in Picture in Picture."
                 ),
                 isOn: $minimizesToPictureInPicture
             )
