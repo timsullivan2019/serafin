@@ -183,11 +183,11 @@ import Testing
         // Playing on, as Up Next does, keeps the control the player came from.
         playback.play(item, zoomSource: "something-else")
         #expect(playback.zoomSource == "hero-play-1")
-        // Coming back from Picture in Picture keeps it too.
+        // Coming back from Picture in Picture, the control may have gone, so the player comes back as usual.
         playback.isPlayerPresented = false
         playback.showPlayer()
         #expect(playback.isPlayerPresented)
-        #expect(playback.zoomSource == "hero-play-1")
+        #expect(playback.zoomSource == nil)
     }
 
     @Test func puttingThePlayerAwayHandsAPlayingVideoToPictureInPictureOnlyWhenItCan() {

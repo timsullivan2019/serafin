@@ -54,4 +54,15 @@ import Testing
         #expect(abs(sizing.across(in: 200) - 1.05) < 0.001)
         #expect(sizing.cardWidth(in: 200) > 0)
     }
+
+    @Test func aRowWithNoWidthYetSizesItsCardsToNothingRatherThanLessThanNothing() {
+        // The first layout pass gives a row no width; a negative card width there made SwiftUI log a fault per card.
+        for style in [MediaRowStyle.posters, .landscape, .people] {
+            for isRegular in [false, true] {
+                let sizing = RowSizing(style: style, isRegular: isRegular, isLarge: false)
+                #expect(sizing.cardWidth(in: 0) == 0)
+                #expect(sizing.cardWidth(in: 10) == 0)
+            }
+        }
+    }
 }
