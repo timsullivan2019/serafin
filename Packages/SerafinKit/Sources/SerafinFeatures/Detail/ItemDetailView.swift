@@ -331,11 +331,11 @@ private struct DetailToolbar: ToolbarContent {
                 Label(
                     item.card.isFavourite
                         ? String(
-                            localized: "Remove from Favourites", bundle: .module,
-                            comment: "Button and menu item that takes an item out of the favourites.")
+                            localized: "Remove from Favorites", bundle: .module,
+                            comment: "Button and menu item that takes an item out of the favorites.")
                         : String(
-                            localized: "Add to Favourites", bundle: .module,
-                            comment: "Button and menu item that adds an item to the favourites."),
+                            localized: "Add to Favorites", bundle: .module,
+                            comment: "Button and menu item that adds an item to the favorites."),
                     systemImage: item.card.isFavourite ? "heart.fill" : "heart"
                 )
             }

@@ -159,10 +159,10 @@ struct ShortcutEmptyState: View {
         switch shortcut {
         case .favourites:
             EmptyState(
-                String(localized: "No Favourites", bundle: .module, comment: "Title when there are no favourites."),
+                String(localized: "No Favorites", bundle: .module, comment: "Title when there are no favorites."),
                 message: String(
-                    localized: "Movies and shows you mark as favourites appear here.", bundle: .module,
-                    comment: "Explanation when there are no favourites."),
+                    localized: "Movies and shows you mark as favorites appear here.", bundle: .module,
+                    comment: "Explanation when there are no favorites."),
                 systemImage: "heart"
             )
         case .recentlyAdded:
@@ -452,8 +452,8 @@ private struct LibraryChips: View {
             if model.scope.offersFavouritesChip {
                 GlassChip(
                     String(
-                        localized: "Favourites", bundle: .module,
-                        comment: "Favourites: the library filter chip, and the Library tab's Browse row and grid."),
+                        localized: "Favorites", bundle: .module,
+                        comment: "Favorites: the library filter chip, and the Library tab's Browse row and grid."),
                     systemImage: "heart",
                     isSelected: model.options.favouritesOnly
                 ) { animate { model.options.favouritesOnly.toggle() } }

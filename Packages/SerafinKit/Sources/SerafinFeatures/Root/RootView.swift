@@ -45,6 +45,8 @@ public struct RootView: View {
         // The accent chosen in Settings, for system controls and for the controls that set their own tint.
         .tint(accent.color)
         .environment(\.accent, accent.color)
+        // No scroll bar anywhere, in any direction. Sheets don't take this from here, so each sets it too.
+        .scrollIndicators(.never)
         .appLock(lock)
         // Here rather than on the tabs, so a result tapped while the app is still starting isn't lost.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
@@ -366,6 +368,7 @@ private struct SettingsSheet: View {
                     }
                 }
         }
+        .scrollIndicators(.never)
         .presentationDetents([.large])
     }
 }

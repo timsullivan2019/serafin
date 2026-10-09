@@ -12,7 +12,7 @@
                 VStack(alignment: .leading, spacing: Spacing.xLarge) {
                     Text(verbatim: "Serafin tokens")
                         .typography(.largeTitle)
-                    TokenSection(title: "Colour") { ColourSwatches() }
+                    TokenSection(title: "Color") { ColourSwatches() }
                     TokenSection(title: "Typography") { TypographySamples() }
                     TokenSection(title: "Spacing") { SpacingScale() }
                     TokenSection(title: "Radius") { RadiusScale() }

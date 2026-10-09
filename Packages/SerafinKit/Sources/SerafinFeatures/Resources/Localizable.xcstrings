@@ -158,8 +158,8 @@
     "About" : {
       "comment" : "Settings section header."
     },
-    "Accent Colour" : {
-      "comment" : "Title of the accent colour screen, and its row in Settings."
+    "Accent Color" : {
+      "comment" : "Title of the accent color screen, and its row in Settings."
     },
     "Accounts, playback, appearance and privacy" : {
       "comment" : "Hint on the profile button, which opens Settings."
@@ -173,11 +173,11 @@
     "Add a movie or TV library on your server and it appears here." : {
       "comment" : "Explanation when there are no movie or TV libraries."
     },
-    "Add to Favourites" : {
-      "comment" : "Button and menu item that adds an item to the favourites."
+    "Add to Favorites" : {
+      "comment" : "Button and menu item that adds an item to the favorites."
     },
-    "Added to Favourites" : {
-      "comment" : "Spoken once a favourite is added."
+    "Added to Favorites" : {
+      "comment" : "Spoken once a favorite is added."
     },
     "After 1 Hour" : {
       "comment" : "Lock grace period."
@@ -224,8 +224,8 @@
     "Browse" : {
       "comment" : "Library tab section of other ways in."
     },
-    "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are." : {
-      "comment" : "Settings footer under the accent colour choices."
+    "Buttons, links, selections and the tab bar take this color. Colors taken from artwork stay as they are." : {
+      "comment" : "Settings footer under the accent color choices."
     },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
@@ -338,8 +338,8 @@
     "Extra Large" : {
       "comment" : "Subtitle size."
     },
-    "Favourites" : {
-      "comment" : "Favourites: the library filter chip, and the Library tab's Browse row and grid."
+    "Favorites" : {
+      "comment" : "Favorites: the library filter chip, and the Library tab's Browse row and grid."
     },
     "Fills in this name" : {
       "comment" : "Hint on a user picture on the sign-in screen, for a user with a password."
@@ -422,8 +422,8 @@
     "Library" : {
       "comment" : "Title of the library tab."
     },
-    "Licences" : {
-      "comment" : "Title of the licences screen, and its row in Settings."
+    "Licenses" : {
+      "comment" : "Title of the licenses screen, and its row in Settings."
     },
     "Loading" : {
       "comment" : "Spoken while content loads."
@@ -479,9 +479,6 @@
     "Movies" : {
       "comment" : "Search results section."
     },
-    "Movies and episodes you start appear here until you finish them." : {
-      "comment" : "Explanation when Continue Watching's screen has nothing in it."
-    },
     "Movies and shows added to your server appear here, newest first." : {
       "comment" : "Explanation when no movies or shows have been added."
     },
@@ -494,8 +491,8 @@
     "Movies and shows you add to your server appear here." : {
       "comment" : "Explanation when the home screen is empty."
     },
-    "Movies and shows you mark as favourites appear here." : {
-      "comment" : "Explanation when there are no favourites."
+    "Movies and shows you mark as favorites appear here." : {
+      "comment" : "Explanation when there are no favorites."
     },
     "Movies and shows your server matches to this genre appear here." : {
       "comment" : "Explanation for an empty genre."
@@ -515,8 +512,8 @@
     "No Collections" : {
       "comment" : "Title when there are no collections."
     },
-    "No Favourites" : {
-      "comment" : "Title when there are no favourites."
+    "No Favorites" : {
+      "comment" : "Title when there are no favorites."
     },
     "No Genres" : {
       "comment" : "Title when the server lists no genres."
@@ -527,17 +524,11 @@
     "No Matches" : {
       "comment" : "Title when filters hide everything."
     },
-    "No Next Episodes" : {
-      "comment" : "Title when Next Up's screen has nothing in it."
-    },
     "Nothing Added Yet" : {
       "comment" : "Title when no movies or shows have been added."
     },
     "Nothing Here Yet" : {
       "comment" : "Title when the home screen is empty."
-    },
-    "Nothing Started" : {
-      "comment" : "Title when Continue Watching's screen has nothing in it."
     },
     "Nothing in This Genre" : {
       "comment" : "Title for an empty genre."
@@ -657,14 +648,14 @@
     "Remove Server" : {
       "comment" : "Settings row."
     },
-    "Remove from Favourites" : {
-      "comment" : "Button and menu item that takes an item out of the favourites."
+    "Remove from Favorites" : {
+      "comment" : "Button and menu item that takes an item out of the favorites."
     },
     "Remove this server?" : {
       "comment" : "Title of the remove server dialog."
     },
-    "Removed from Favourites" : {
-      "comment" : "Spoken once a favourite is taken out."
+    "Removed from Favorites" : {
+      "comment" : "Spoken once a favorite is taken out."
     },
     "Removes saved artwork, and the copy of Home that shows when your server can't be reached. Both download again as you browse." : {
       "comment" : "Settings footer under Clear Cache."
@@ -717,8 +708,8 @@
     "Serafin couldn't open its list of servers. Unlock your device and try again." : {
       "comment" : "Explanation when the saved server list can't be read."
     },
-    "Serafin is open source under the MIT licence. The Jellyfin SDK's files stay under the Mozilla Public License 2.0." : {
-      "comment" : "Footer under the list of open-source licences."
+    "Serafin is open source under the MIT license. The Jellyfin SDK's files stay under the Mozilla Public License 2.0." : {
+      "comment" : "Footer under the list of open-source licenses."
     },
     "Serafin locks when it opens, and again once it has been in the background for this long. Spotlight and Siri don't show your library while the lock is on." : {
       "comment" : "Settings footer under the lock while it's on."
@@ -842,9 +833,6 @@
     },
     "The Code Expired" : {
       "comment" : "Title when a Quick Connect code expires."
-    },
-    "The next episode of each show you're watching appears here." : {
-      "comment" : "Explanation when Next Up's screen has nothing in it."
     },
     "The play button, the selected tab and a Settings value in %@" : {
       "comment" : "Spoken for the accent colour preview, such as The play button, the selected tab and a Settings value in Red."

@@ -10,8 +10,8 @@ struct AccentColourView: View {
     /// The screen's title, which is also its row in Settings.
     static var title: String {
         String(
-            localized: "Accent Colour", bundle: .module,
-            comment: "Title of the accent colour screen, and its row in Settings.")
+            localized: "Accent Color", bundle: .module,
+            comment: "Title of the accent color screen, and its row in Settings.")
     }
 
     var body: some View {
@@ -22,9 +22,9 @@ struct AccentColourView: View {
                 Text(
                     String(
                         localized:
-                            "Buttons, links, selections and the tab bar take this colour. Colours taken from artwork stay as they are.",
+                            "Buttons, links, selections and the tab bar take this color. Colors taken from artwork stay as they are.",
                         bundle: .module,
-                        comment: "Settings footer under the accent colour choices."
+                        comment: "Settings footer under the accent color choices."
                     )
                 )
             }

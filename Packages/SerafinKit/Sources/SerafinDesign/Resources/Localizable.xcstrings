@@ -57,8 +57,8 @@
     "Direct play" : {
       "comment" : "How a video plays: the original file as it is."
     },
-    "Favourite" : {
-      "comment" : "Spoken state of a favourite item."
+    "Favorite" : {
+      "comment" : "Spoken state of a favorite item."
     },
     "Featured" : {
       "comment" : "Spoken name of Home's featured items' page dots."
@@ -177,7 +177,7 @@
       "comment" : "Spoken season and episode number of an episode."
     },
     "Show Details" : {
-      "comment" : "Button and accessibility action that opens a featured item's detail screen on Home."
+      "comment" : "Accessibility action that opens a featured item's detail screen on Home."
     },
     "Shows everything in this row" : {
       "comment" : "Hint on a row title."

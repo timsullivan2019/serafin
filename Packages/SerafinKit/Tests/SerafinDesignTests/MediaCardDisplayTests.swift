@@ -90,7 +90,7 @@ import Testing
         card.isFavourite = true
         #expect(
             card.accessibilityLabel(locale: english)
-                == "Gran Dillama, Caminandes, Season 1, episode 2, 3 minutes, Watched, Favourite"
+                == "Gran Dillama, Caminandes, Season 1, episode 2, 3 minutes, Watched, Favorite"
         )
     }
 

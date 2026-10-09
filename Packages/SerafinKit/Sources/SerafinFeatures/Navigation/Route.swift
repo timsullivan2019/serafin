@@ -10,10 +10,6 @@ enum Route: Hashable {
     /// hero's artwork rather than from a card showing the same item. It carries the item, and for a show the episode
     /// Play starts, so the screen shows its hero at once while the rest loads.
     case featured(MediaItem, playable: MediaItem?)
-    /// Every started movie and episode, from Continue Watching's chevron on Home.
-    case continueWatching
-    /// The next episode of every show in progress, from Next Up's chevron on Home.
-    case nextUp
     /// One library's full grid.
     case library(MediaLibrary)
     /// The genres of every library.
@@ -120,10 +116,6 @@ private struct RouteDestination: View {
             ItemDetailView(id: id)
         case .featured(let item, let playable):
             ItemDetailView(featured: item, playable: playable)
-        case .continueWatching:
-            WatchListView(list: .continueWatching)
-        case .nextUp:
-            WatchListView(list: .nextUp)
         case .library(let library):
             LibraryView(scope: .library(library))
         case .genres:

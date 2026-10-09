@@ -186,6 +186,7 @@ struct PlayerView: View {
                     selectAudio: { index in Task { await engine.selectAudio(index) } },
                     selectSubtitle: { index in Task { await engine.selectSubtitle(index) } }
                 )
+                .scrollIndicators(.never)
                 .presentationDetents([.medium, .large])
                 // The player is always dark, so its sheet is too.
                 .preferredColorScheme(.dark)

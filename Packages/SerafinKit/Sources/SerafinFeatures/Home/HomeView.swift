@@ -28,7 +28,6 @@ struct HomeView: View {
     @Environment(MediaActions.self) private var actions
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.displayScale) private var displayScale
-    @Environment(\.navigate) private var navigate
     private let network = NetworkWatcher.shared
 
     var body: some View {
@@ -124,20 +123,14 @@ struct HomeView: View {
                             .padding(.horizontal, Spacing.medium)
                     }
                     if !home.continueWatching.isEmpty {
-                        MediaRow(
-                            WatchList.continueWatching.title,
-                            style: .landscape,
-                            items: home.continueWatching,
-                            seeAll: { navigate(.continueWatching) }
-                        ) { LandscapeLink(item: $0, showsPlayedBadge: false, role: .watching) }
+                        MediaRow(Self.continueWatchingTitle, style: .landscape, items: home.continueWatching) {
+                            LandscapeLink(item: $0, showsPlayedBadge: false, role: .watching)
+                        }
                     }
                     if !home.nextUp.isEmpty {
-                        MediaRow(
-                            WatchList.nextUp.title,
-                            style: .landscape,
-                            items: home.nextUp,
-                            seeAll: { navigate(.nextUp) }
-                        ) { LandscapeLink(item: $0, role: .watching) }
+                        MediaRow(Self.nextUpTitle, style: .landscape, items: home.nextUp) {
+                            LandscapeLink(item: $0, role: .watching)
+                        }
                     }
                     ForEach(home.latest.filter { !$0.items.isEmpty }) { row in
                         LatestRowView(row: row)
@@ -185,6 +178,18 @@ struct HomeView: View {
         case .loaded: hero.entries.isEmpty
         case .failed: true
         }
+    }
+
+    /// The title of Home's row of started movies and episodes. The row is the whole list: it has no screen of its own.
+    static var continueWatchingTitle: String {
+        String(
+            localized: "Continue Watching", bundle: .module,
+            comment: "Started movies and episodes: the Home row, and the shortcut that plays the latest of them.")
+    }
+
+    /// The title of Home's row of each show's next episode. The row is the whole list: it has no screen of its own.
+    static var nextUpTitle: String {
+        String(localized: "Next Up", bundle: .module, comment: "Home row of next episodes.")
     }
 
     private func prefetchNextPage() {

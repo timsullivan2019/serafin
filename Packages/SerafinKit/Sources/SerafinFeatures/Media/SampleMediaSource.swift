@@ -26,14 +26,6 @@ struct SampleMediaSource: MediaSource {
         (MockLibrary.continueWatching + MockLibrary.nextUp).map(Self.item)
     }
 
-    func continueWatching() async throws -> [MediaItem] {
-        MockLibrary.continueWatching.map(Self.item)
-    }
-
-    func nextUp() async throws -> [MediaItem] {
-        MockLibrary.nextUp.map(Self.item)
-    }
-
     func playable(ofSeries id: String) async throws -> MediaItem? {
         guard let series = MockMedia.series.first(where: { $0.id == id }) else { return nil }
         let episodes = MockMedia.seasons(of: series).flatMap(\.episodes)

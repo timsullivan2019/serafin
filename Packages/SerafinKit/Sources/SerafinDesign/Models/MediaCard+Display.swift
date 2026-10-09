@@ -130,10 +130,10 @@ extension MediaCard {
         if isFavourite {
             parts.append(
                 String(
-                    localized: "Favourite",
+                    localized: "Favorite",
                     bundle: .module,
                     locale: locale,
-                    comment: "Spoken state of a favourite item."
+                    comment: "Spoken state of a favorite item."
                 )
             )
         }
