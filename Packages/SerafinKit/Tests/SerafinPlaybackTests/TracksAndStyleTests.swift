@@ -83,14 +83,16 @@ import Testing
 
     @Test func burnedInSubtitlesOnlyChangeWithANewStream() throws {
         let burnedIn = try plan(.transcode, subtitle: 5)
-        #expect(PlayerEngine.needsNewStream(toShow: nil, in: burnedIn))
+        #expect(PlayerEngine.needsNewStream(toShow: .off, in: burnedIn))
         // The stream carries the English text too, but switching to it would leave the old ones in the picture.
-        #expect(PlayerEngine.needsNewStream(toShow: 2, in: burnedIn))
+        #expect(PlayerEngine.needsNewStream(toShow: .stream(2), in: burnedIn))
+        #expect(PlayerEngine.needsNewStream(toShow: .generated, in: burnedIn))
 
         let text = try plan(.directStream, subtitle: 2)
-        #expect(!PlayerEngine.needsNewStream(toShow: nil, in: text))
-        #expect(!PlayerEngine.needsNewStream(toShow: 4, in: text))
-        #expect(PlayerEngine.needsNewStream(toShow: 5, in: text))
+        #expect(!PlayerEngine.needsNewStream(toShow: .off, in: text))
+        #expect(!PlayerEngine.needsNewStream(toShow: .stream(4), in: text))
+        #expect(!PlayerEngine.needsNewStream(toShow: .generated, in: text))
+        #expect(PlayerEngine.needsNewStream(toShow: .stream(5), in: text))
     }
 
     @Test func askingAgainNamesTheVersionSoTheServerKeepsTheChoice() throws {
@@ -102,9 +104,13 @@ import Testing
 
     @Test func aChoiceCarriesOnToTheNextEpisodeByLanguageAndKind() throws {
         let next = try plan(.directStream, subtitle: 2)
-        #expect(PlayerEngine.choice(showing: nil, in: next) == .off)
-        #expect(PlayerEngine.choice(showing: 3, in: next) == .language("eng", isForced: false, isHearingImpaired: true))
+        #expect(PlayerEngine.choice(for: .off, in: next) == .off)
+        #expect(PlayerEngine.choice(for: .generated, in: next) == .generated)
+        #expect(
+            PlayerEngine.choice(for: .stream(3), in: next) == .language("eng", isForced: false, isHearingImpaired: true)
+        )
         #expect(PlayerEngine.streamIndex(for: .off, in: next) == -1)
+        #expect(PlayerEngine.streamIndex(for: .generated, in: next) == -1)
         #expect(
             PlayerEngine.streamIndex(for: .language("eng", isForced: false, isHearingImpaired: true), in: next) == 3)
         #expect(
@@ -126,6 +132,189 @@ import Testing
         #expect(PlayerEngine.allowsDirectPlay(showing: -1, in: plan))
         #expect(PlayerEngine.allowsDirectPlay(showing: 2, in: plan))
         #expect(!PlayerEngine.allowsDirectPlay(showing: 3, in: plan))
+    }
+}
+
+@Suite struct LegibleSelectionTests {
+    /// English audio; English PGS the server burns in; English and French text it sends in its HLS stream.
+    private let source = MediaSourceInfo(
+        id: "source-1",
+        mediaStreams: [
+            MediaStream(index: 0, type: .video),
+            MediaStream(index: 1, language: "eng", type: .audio),
+            MediaStream(codec: "pgssub", deliveryMethod: .encode, index: 2, language: "eng", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 3, language: "eng", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 4, language: "fre", type: .subtitle),
+        ]
+    )
+
+    private func plan(subtitle: Int?) throws -> PlaybackPlan {
+        PlaybackPlan(
+            itemID: "item-1", mediaSource: source, url: try #require(URL(string: "https://example.com/master.m3u8")),
+            method: .directStream, playSessionID: nil, startPosition: .zero, audioStreamIndex: 1,
+            subtitleStreamIndex: subtitle)
+    }
+
+    /// The legible options AVPlayer lists for such a stream on iOS 27: the closed captions it looks for in the video,
+    /// the two text renditions, and the subtitles iOS generates from the English audio.
+    private let options = [
+        LegibleOption(isClosedCaptions: true),
+        LegibleOption(language: "en"),
+        LegibleOption(language: "fr"),
+        LegibleOption(isGenerated: true, language: "en"),
+    ]
+
+    @Test func textSubtitlesSelectTheirOwnOptionNotTheCaptionsOrTheGeneratedOnes() throws {
+        let text = try plan(subtitle: 3)
+        #expect(PlayerEngine.legiblePosition(for: .stream(3), in: text, among: options) == (1, .stream(3)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(4), in: text, among: options) == (2, .stream(4)))
+        // Without iOS's extra options the positions are the plain ones.
+        let plain = [LegibleOption(language: "en"), LegibleOption(language: "fr")]
+        #expect(PlayerEngine.legiblePosition(for: .stream(4), in: text, among: plain) == (1, .stream(4)))
+        // When the options don't line up with the server's streams, nothing is guessed and nothing shows.
+        #expect(PlayerEngine.legiblePosition(for: .stream(4), in: text, among: [plain[0]]) == (nil, .off))
+    }
+
+    @Test func burnedInSubtitlesAndOffSelectNoOptionAtAll() throws {
+        let burnedIn = try plan(subtitle: 2)
+        #expect(PlayerEngine.legiblePosition(for: .stream(2), in: burnedIn, among: options) == (nil, .stream(2)))
+        #expect(PlayerEngine.legiblePosition(for: .off, in: burnedIn, among: options) == (nil, .off))
+    }
+
+    @Test func generatedSubtitlesAreTheOnesForTheAudioPlaying() throws {
+        let off = try plan(subtitle: -1)
+        let spanishToo = options + [LegibleOption(isGenerated: true, language: "es")]
+        #expect(PlayerEngine.legiblePosition(for: .generated, in: off, among: spanishToo) == (3, .generated))
+        #expect(PlayerEngine.generatedPosition(among: spanishToo, audioLanguage: "spa") == 4)
+        // Ones that can't show anything now don't count, and without any, generated subtitles can't show.
+        let unselectable = [LegibleOption(isGenerated: true, language: "en", isSelectable: false)]
+        #expect(PlayerEngine.generatedPosition(among: unselectable, audioLanguage: "eng") == nil)
+        #expect(PlayerEngine.legiblePosition(for: .generated, in: off, among: unselectable) == (nil, .off))
+    }
+
+    @Test func aVideoStartsWithWhatSettingsSayUnlessPlayingOnFromAPick() throws {
+        // The server remembered English PGS from an earlier playback, but Settings say Off.
+        let remembered = try plan(subtitle: 2)
+        let off = SubtitleRules(mode: .none, languages: ["eng"])
+        #expect(PlayerEngine.startingSubtitles(carrying: nil, rules: off, in: remembered) == .off)
+        let always = SubtitleRules(mode: .always, languages: ["eng"])
+        #expect(PlayerEngine.startingSubtitles(carrying: nil, rules: always, in: try plan(subtitle: -1)) == .stream(3))
+        // A pick carried on from the episode before wins.
+        let french = SubtitleChoice.language("fre", isForced: false, isHearingImpaired: false)
+        #expect(PlayerEngine.startingSubtitles(carrying: french, rules: off, in: remembered) == .stream(4))
+        #expect(PlayerEngine.startingSubtitles(carrying: .generated, rules: off, in: remembered) == .generated)
+        #expect(PlayerEngine.startingSubtitles(carrying: .off, rules: always, in: remembered) == .off)
+        // A language this episode lacks falls back to Settings.
+        let german = SubtitleChoice.language("ger", isForced: false, isHearingImpaired: false)
+        #expect(PlayerEngine.startingSubtitles(carrying: german, rules: always, in: remembered) == .stream(3))
+        // Without the account's settings, the server's choice stands.
+        #expect(PlayerEngine.startingSubtitles(carrying: nil, rules: nil, in: remembered) == .stream(2))
+        #expect(PlayerEngine.startingSubtitles(carrying: nil, rules: nil, in: try plan(subtitle: nil)) == .off)
+    }
+}
+
+@Suite struct MergedSubtitleTests {
+    /// Text subtitles as a file with many languages lists them: two German and three Spanish tracks with the same
+    /// names, one English, and English forced subtitles, all sent in the server's HLS stream.
+    private let source = MediaSourceInfo(
+        id: "source-1",
+        mediaStreams: [
+            MediaStream(index: 1, language: "eng", type: .audio),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 19, language: "deu", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 20, language: "deu", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 21, language: "eng", type: .subtitle),
+            MediaStream(
+                codec: "subrip", deliveryMethod: .hls, index: 22, isForced: true, language: "eng", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 23, language: "spa", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 24, language: "spa", type: .subtitle),
+            MediaStream(codec: "subrip", deliveryMethod: .hls, index: 25, language: "spa", type: .subtitle),
+        ]
+    )
+
+    private func plan(subtitle: Int) throws -> PlaybackPlan {
+        PlaybackPlan(
+            itemID: "item-1", mediaSource: source, url: try #require(URL(string: "https://example.com/master.m3u8")),
+            method: .directStream, playSessionID: nil, startPosition: .zero, audioStreamIndex: 1,
+            subtitleStreamIndex: subtitle)
+    }
+
+    /// The options AVPlayer lists for that stream: one per language and kind, as it merges the tracks it can't tell
+    /// apart, plus the closed captions it looks for in the video.
+    private let options = [
+        LegibleOption(isClosedCaptions: true),
+        LegibleOption(language: "de"),
+        LegibleOption(language: "en"),
+        LegibleOption(language: "en", isForced: true),
+        LegibleOption(language: "es"),
+    ]
+
+    @Test func mergedTracksMatchTheOptionInTheirLanguageAndKind() throws {
+        let text = try plan(subtitle: 21)
+        #expect(PlayerEngine.legiblePosition(for: .stream(19), in: text, among: options) == (1, .stream(19)))
+        // The second German track was merged into the first, which shows for it.
+        #expect(PlayerEngine.legiblePosition(for: .stream(20), in: text, among: options) == (1, .stream(20)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(21), in: text, among: options) == (2, .stream(21)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(22), in: text, among: options) == (3, .stream(22)))
+        #expect(PlayerEngine.legiblePosition(for: .stream(25), in: text, among: options) == (4, .stream(25)))
+        // A language AVPlayer doesn't list can't show.
+        let noSpanish = Array(options.dropLast())
+        #expect(PlayerEngine.legiblePosition(for: .stream(24), in: text, among: noSpanish) == (nil, .off))
+    }
+
+    @Test func theServersStreamCarriesTextSubtitlesOnlyWhenItWasAskedForOne() throws {
+        // Asked for with subtitles off, the server's playlist lists no subtitles, so picking one takes a new stream.
+        let off = try plan(subtitle: -1)
+        #expect(PlayerEngine.carriedSubtitles(of: off).isEmpty)
+        #expect(PlayerEngine.needsNewStream(toShow: .stream(21), in: off))
+        #expect(!PlayerEngine.needsNewStream(toShow: .generated, in: off))
+        // Asked for with one, it lists them all, and they stay listed after switching to none in place.
+        let text = try plan(subtitle: 21)
+        #expect(PlayerEngine.carriedSubtitles(of: text).map(\.index) == [19, 20, 21, 22, 23, 24, 25])
+        let switchedOff = text.with(subtitle: -1)
+        #expect(switchedOff.subtitleStreamIndex == -1)
+        #expect(PlayerEngine.carriedSubtitles(of: switchedOff).count == 7)
+        #expect(!PlayerEngine.needsNewStream(toShow: .stream(23), in: switchedOff))
+        #expect(PlayerEngine.carriedSubtitles(of: switchedOff.with(audio: 1).with(subtitle: 23)).count == 7)
+    }
+}
+
+@Suite struct SubtitleDiagnosticsTests {
+    @Test func theLogListsSubtitleRenditionsWithoutTheirAddresses() {
+        let playlist = """
+            #EXTM3U
+            #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,LANGUAGE="eng",URI="https://example.com/sub.m3u8?api_key=secret"
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Stereo",URI="https://example.com/audio.m3u8?api_key=secret"
+            #EXT-X-STREAM-INF:BANDWIDTH=1000000,SUBTITLES="subs"
+            main.m3u8?api_key=secret
+            """
+        let renditions = SubtitleDiagnostics.subtitleRenditions(inPlaylist: playlist)
+        #expect(renditions.count == 1)
+        #expect(renditions[0].contains("LANGUAGE=\"eng\""))
+        #expect(renditions[0].contains("DEFAULT=YES"))
+        #expect(!renditions[0].contains("secret"))
+        // Jellyfin doesn't say whether its video carries closed captions.
+        #expect(SubtitleDiagnostics.closedCaptions(inPlaylist: playlist) == ["CLOSED-CAPTIONS absent"])
+        #expect(
+            SubtitleDiagnostics.closedCaptions(
+                inPlaylist: "#EXT-X-STREAM-INF:BANDWIDTH=1,CLOSED-CAPTIONS=NONE\nmain.m3u8")
+                == ["CLOSED-CAPTIONS=NONE"])
+    }
+
+    @Test func theLogSaysWhenSubtitlesAreBurnedIn() throws {
+        let source = MediaSourceInfo(
+            id: "source-1",
+            mediaStreams: [
+                MediaStream(codec: "pgssub", deliveryMethod: .encode, index: 3, language: "eng", type: .subtitle),
+                MediaStream(codec: "subrip", deliveryMethod: .hls, index: 4, language: "eng", type: .subtitle),
+            ]
+        )
+        let plan = PlaybackPlan(
+            itemID: "item-1", mediaSource: source, url: try #require(URL(string: "https://example.com/master.m3u8")),
+            method: .transcode, playSessionID: nil, startPosition: .zero, audioStreamIndex: nil, subtitleStreamIndex: 3)
+        let line = SubtitleDiagnostics.describe(plan)
+        #expect(line.contains("burnIn=true"))
+        #expect(line.contains("#3 pgssub eng Encode"))
+        #expect(line.contains("#4 subrip eng Hls"))
     }
 }
 

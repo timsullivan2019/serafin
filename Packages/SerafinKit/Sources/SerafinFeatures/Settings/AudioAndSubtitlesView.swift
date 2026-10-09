@@ -104,7 +104,8 @@ private struct LanguagesSection: View {
             ) {
                 Text(
                     String(
-                        localized: "Any Language", bundle: .module, comment: "Subtitle language: none in particular.")
+                        localized: "Device Language", bundle: .module,
+                        comment: "Subtitle language: none chosen, so the languages the device is set to.")
                 )
                 .tag(String?.none)
                 languageOptions

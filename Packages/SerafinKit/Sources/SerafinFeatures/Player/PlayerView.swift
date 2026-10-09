@@ -176,15 +176,22 @@ struct PlayerView: View {
 
         @ViewBuilder private var tracks: some View {
             if let plan = engine.plan {
-                let choices = TrackChoices(plan: plan)
+                let choices = TrackChoices(
+                    plan: plan,
+                    subtitles: engine.subtitleSelection,
+                    pending: engine.pendingSubtitleSelection,
+                    generated: engine.generatedSubtitles
+                )
                 TrackPicker(
                     delivery: PlaybackDelivery(plan.method),
                     audio: choices.audio,
                     selectedAudio: choices.selectedAudio,
                     subtitles: choices.subtitles,
-                    selectedSubtitle: choices.selectedSubtitle,
+                    generatedSubtitles: choices.generatedSubtitles,
+                    selectedSubtitles: choices.selectedSubtitles,
+                    pendingSubtitles: choices.pendingSubtitles,
                     selectAudio: { index in Task { await engine.selectAudio(index) } },
-                    selectSubtitle: { index in Task { await engine.selectSubtitle(index) } }
+                    selectSubtitles: { pick in Task { await engine.selectSubtitles(TrackChoices.selection(pick)) } }
                 )
                 .scrollIndicators(.never)
                 .presentationDetents([.medium, .large])

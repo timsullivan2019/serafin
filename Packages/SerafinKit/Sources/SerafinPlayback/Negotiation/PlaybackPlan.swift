@@ -39,6 +39,14 @@ public struct PlaybackPlan: Sendable {
     public let audioStreamIndex: Int?
     /// The subtitle stream asked for, if one was.
     public let subtitleStreamIndex: Int?
+    /// The subtitle stream the server made the stream for, when a switch in place has since changed
+    /// ``subtitleStreamIndex``. Nil when they're the same.
+    var negotiatedSubtitles: Int?
+
+    /// The subtitle stream the server made the stream for, which decides the subtitles the stream carries as text.
+    var streamSubtitleStreamIndex: Int? {
+        negotiatedSubtitles ?? subtitleStreamIndex
+    }
 
     /// The chosen version's ID.
     public var mediaSourceID: String {
@@ -48,6 +56,12 @@ public struct PlaybackPlan: Sendable {
     /// The streams of one kind in the chosen version, such as its audio tracks.
     public func streams(_ type: MediaStreamType) -> [MediaStream] {
         (mediaSource.mediaStreams ?? []).filter { $0.type == type }
+    }
+
+    /// The language of the audio playing, as the server names it, such as "eng", or nil when it's unknown.
+    public var audioLanguage: String? {
+        let index = audioStreamIndex ?? mediaSource.defaultAudioStreamIndex
+        return streams(.audio).first { $0.index == index }?.language
     }
 }
 
