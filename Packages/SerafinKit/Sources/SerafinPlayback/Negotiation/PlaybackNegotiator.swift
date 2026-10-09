@@ -17,12 +17,15 @@ public struct PlaybackNegotiator: Sendable {
     /// - Parameters:
     ///   - client: The signed-in account's client.
     ///   - userID: The account's user ID.
-    ///   - video: The AV1 and Dolby Vision the device plays, or nil to read it from the device at the first plan,
-    ///     which takes a few hundredths of a second, away from the main thread.
+    ///   - video: The AV1 and Dolby Vision the device plays, or nil to read it from the device, away from the main
+    ///     thread. The reading starts now, in the background, so the first plan needn't wait for it.
     public init(client: JellyfinClient, userID: String, video: VideoSupport? = nil) {
         self.client = client
         self.userID = userID
         self.video = video
+        if video == nil {
+            VideoSupport.prepare()
+        }
     }
 
     /// The plan for playing `itemID` with `options`.

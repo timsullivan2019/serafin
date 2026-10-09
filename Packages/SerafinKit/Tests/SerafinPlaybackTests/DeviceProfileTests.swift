@@ -117,6 +117,18 @@ import Testing
         let noDolbyVision = detect(hardware: [kCMVideoCodecType_AV1]) { _ in true }
         #expect(!noDolbyVision.dolbyVisionInAV1)
     }
+
+    @Test func timingAQuestionKeepsItsAnswer() {
+        #expect(VideoSupport.timed("dvh1.05.06") { true })
+        #expect(!VideoSupport.timed("dav1.10.06") { false })
+        #expect(VideoSupport.fourCharacters(kCMVideoCodecType_HEVC) == "hvc1")
+        #expect(VideoSupport.fourCharacters(kCMVideoCodecType_AV1) == "av01")
+    }
+
+    @Test func timesAreLoggedInSecondsToTwoPlaces() {
+        #expect(Duration.milliseconds(350).loggedSeconds == "0.35 s")
+        #expect(Duration.seconds(7).loggedSeconds == "7.00 s")
+    }
 }
 
 @Suite struct TicksTests {

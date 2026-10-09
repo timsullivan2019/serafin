@@ -14,10 +14,18 @@ enum PlaybackAudioSession {
     static func activate() async {
         #if canImport(UIKit)
             await onSessionQueue {
+                let clock = ContinuousClock()
+                let started = clock.now
                 do {
                     let session = AVAudioSession.sharedInstance()
                     try session.setCategory(.playback, mode: .moviePlayback)
+                    let categorized = clock.now
                     try session.setActive(true)
+                    // Only the kinds of output, such as Speaker or AirPlay, never their names.
+                    let outputs = session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ", ")
+                    logger.debug(
+                        "Audio session started in \((clock.now - started).loggedSeconds, privacy: .public), the category taking \((categorized - started).loggedSeconds, privacy: .public), playing to \(outputs, privacy: .public)"
+                    )
                 } catch {
                     logger.error("Could not start the audio session: \(error.localizedDescription, privacy: .public)")
                 }
