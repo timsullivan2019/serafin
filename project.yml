@@ -53,8 +53,9 @@ targets:
               NSIncludesSubdomains: true
         NSFaceIDUsageDescription: Serafin uses Face ID to unlock when you turn on its lock in Settings.
         NSLocalNetworkUsageDescription: Serafin looks for Jellyfin servers on your network.
+        # One window: the player, Now Playing and Picture in Picture belong to a single scene.
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: true
+          UIApplicationSupportsMultipleScenes: false
         UIBackgroundModes:
           - audio
         UILaunchScreen: {}
