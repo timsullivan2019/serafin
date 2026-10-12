@@ -291,7 +291,7 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
     func aSecondStopWaitsForTheFirstToBeAnswered() async throws {
         let host = "overlapping-stops.example.com"
         stubReports(on: host)
-        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped"))
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped", .json(204, "")))
         let reporter = ProgressReporter(client: try stubClient(on: host), plan: try await plan(on: host))
         await reporter.start(at: .zero, isPaused: false)
 
@@ -316,7 +316,8 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
     func aStopWaitsForAProgressReportOnItsWay() async throws {
         let host = "late-progress.example.com"
         stubReports(on: host)
-        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Progress", .held("\(host) progress"))
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Sessions/Playing/Progress", .held("\(host) progress", .json(204, "")))
         let reporter = ProgressReporter(client: try stubClient(on: host), plan: try await plan(on: host))
         await reporter.start(at: .zero, isPaused: false)
 
@@ -337,7 +338,7 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
     func aStopDuringASwitchToANewPlanEndsTheReports() async throws {
         let host = "stopped-switch.example.com"
         stubReports(on: host)
-        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped"))
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped", .json(204, "")))
         let first = try await plan(on: host)
         let reporter = ProgressReporter(client: try stubClient(on: host), plan: first)
         await reporter.start(at: .zero, isPaused: false)

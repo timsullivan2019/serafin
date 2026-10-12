@@ -10,9 +10,9 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         case failure(URLError.Code)
         /// Never answers, until the request is cancelled.
         case hang
-        /// Answers 204 with no body once ``release(_:)`` is called with this name, so a test can act while the request
-        /// is on its way.
-        case held(String)
+        /// Answers with the reply once ``release(_:)`` is called with this name, so a test can act while the request is
+        /// on its way.
+        indirect case held(String, Reply)
     }
 
     /// A request the stub received, with its body read out of the stream URLSession hands to protocols.
@@ -55,6 +55,7 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     private struct Held: @unchecked Sendable {
         let stub: StubURLProtocol
         let url: URL
+        let reply: Reply
         let runLoop: CFRunLoop
     }
 
@@ -104,7 +105,7 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         }
     }
 
-    /// Answers the requests held under `name`, and any that arrive later, with 204 and no body.
+    /// Answers the requests held under `name`, and any that arrive later.
     static func release(_ name: String) {
         let waiting = holds.withLock { holds -> [Held] in
             holds.released.insert(name)
@@ -112,7 +113,7 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         }
         for held in waiting {
             CFRunLoopPerformBlock(held.runLoop, CFRunLoopMode.commonModes.rawValue) {
-                held.stub.answer(held.url, status: 204, body: "")
+                held.stub.respond(with: held.reply, to: held.url)
             }
             CFRunLoopWakeUp(held.runLoop)
         }
@@ -152,42 +153,42 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
             }
             return first
         }
+        respond(with: reply, to: url)
+    }
+
+    override func stopLoading() {}
+
+    private func respond(with reply: Reply?, to url: URL) {
         switch reply {
         case .json(let status, let body):
-            answer(url, status: status, body: body)
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: status,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )
+            if let response {
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            }
+            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocolDidFinishLoading(self)
         case .failure(let code):
             client?.urlProtocol(self, didFailWithError: URLError(code))
         case .hang:
             break
-        case .held(let name):
-            let held = Held(stub: self, url: url, runLoop: CFRunLoopGetCurrent())
+        case .held(let name, let later):
+            let held = Held(stub: self, url: url, reply: later, runLoop: CFRunLoopGetCurrent())
             let isReleased = Self.holds.withLock { holds -> Bool in
                 guard !holds.released.contains(name) else { return true }
                 holds.waiting[name, default: []].append(held)
                 return false
             }
             if isReleased {
-                answer(url, status: 204, body: "")
+                respond(with: later, to: url)
             }
         case nil:
             client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
         }
-    }
-
-    override func stopLoading() {}
-
-    private func answer(_ url: URL, status: Int, body: String) {
-        let response = HTTPURLResponse(
-            url: url,
-            statusCode: status,
-            httpVersion: "HTTP/1.1",
-            headerFields: ["Content-Type": "application/json"]
-        )
-        if let response {
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        }
-        client?.urlProtocol(self, didLoad: Data(body.utf8))
-        client?.urlProtocolDidFinishLoading(self)
     }
 
     private static func body(of request: URLRequest) -> Data {

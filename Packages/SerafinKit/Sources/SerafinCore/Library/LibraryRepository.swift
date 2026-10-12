@@ -1,11 +1,13 @@
 import Foundation
 import JellyfinAPI
+import Synchronization
 
 /// One signed-in user's library on one server: everything Home, Library, Search and the detail screens show.
 ///
 /// Each call is one request, except ``home()``. Reads are answered from a short-lived cache when the same request was
-/// made recently, so going back to a screen is instant. Marking an item played or favourite empties the cache, since
-/// it changes what Home shows.
+/// made recently, so going back to a screen is instant, and the same read made while it's on its way waits for its
+/// answer rather than asking again. Marking an item played or favourite empties the cache, since it changes what Home
+/// shows, and a read already on its way then doesn't keep its answer, which may be from before the change.
 ///
 /// Lists ask only for the fields cards need. ``item(id:)`` returns everything a detail screen shows.
 ///
@@ -27,6 +29,10 @@ public actor LibraryRepository {
     private let client: JellyfinClient
     private let errors: ServerErrors
     private var cache: ResponseCache
+    /// Goes up whenever the cache is emptied, so a read that started before then doesn't keep its answer.
+    private var cacheGeneration = 0
+    /// The reads on their way, by cache key.
+    private var reads: [String: SharedRead] = [:]
     /// Where this account's last Home is kept, or nil to keep none.
     private let homeSnapshots: HomeSnapshotStore.Slot?
 
@@ -81,7 +87,7 @@ public actor LibraryRepository {
     /// left out.
     public func userViews() async throws -> [BaseItemDto] {
         let request = Paths.getUserViews(parameters: Paths.GetUserViewsParameters(userID: userID))
-        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        let result = try await cached(request.url, request.query) { try await self.client.send(request).value }
         return (result.items ?? []).filter { Self.supportedCollections.contains($0.collectionType) }
     }
 
@@ -94,7 +100,7 @@ public actor LibraryRepository {
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         let request = Paths.getResumeItems(parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return try await cached(request.url, request.query) { try await self.client.send(request).value }.items ?? []
     }
 
     /// The next episode to watch in each show the user is part way through. Episodes already started are in
@@ -113,7 +119,7 @@ public actor LibraryRepository {
         parameters.enableUserData = true
         parameters.enableResumable = seriesID != nil
         let request = Paths.getNextUp(parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return try await cached(request.url, request.query) { try await self.client.send(request).value }.items ?? []
     }
 
     /// The newest additions to a library, with new episodes grouped under their show, and when each was added.
@@ -132,7 +138,7 @@ public actor LibraryRepository {
         parameters.limit = limit
         parameters.isGroupItems = true
         let request = Paths.getLatestMedia(parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }
+        return try await cached(request.url, request.query) { try await self.client.send(request).value }
     }
 
     // MARK: - Browsing
@@ -152,7 +158,7 @@ public actor LibraryRepository {
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         let request = Paths.getItems(parameters: parameters)
-        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        let result = try await cached(request.url, request.query) { try await self.client.send(request).value }
         let items = result.items ?? []
         return ItemPage(items: items, start: result.startIndex ?? start, total: result.totalRecordCount ?? items.count)
     }
@@ -168,7 +174,7 @@ public actor LibraryRepository {
         parameters.nameLessThan = name
         parameters.limit = 0
         let request = Paths.getItems(parameters: parameters)
-        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        let result = try await cached(request.url, request.query) { try await self.client.send(request).value }
         return result.totalRecordCount ?? 0
     }
 
@@ -184,7 +190,7 @@ public actor LibraryRepository {
         parameters.sortOrder = [.ascending]
         parameters.enableTotalRecordCount = false
         let request = Paths.getGenres(parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return try await cached(request.url, request.query) { try await self.client.send(request).value }.items ?? []
     }
 
     /// The genres and years of a library's items, for the grid's filter menus.
@@ -196,7 +202,7 @@ public actor LibraryRepository {
         var parameters = Paths.GetQueryFiltersLegacyParameters(userID: userID, parentID: viewID)
         parameters.includeItemTypes = types
         let request = Paths.getQueryFiltersLegacy(parameters: parameters)
-        let result = try await cached(request.url, request.query) { try await client.send(request).value }
+        let result = try await cached(request.url, request.query) { try await self.client.send(request).value }
         let genres = Set(result.genres ?? []).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         return LibraryFilters(genres: genres, years: Set(result.years ?? []).sorted(by: >))
     }
@@ -209,7 +215,7 @@ public actor LibraryRepository {
         guard ItemID.isPlain(id) else { throw SerafinError.notFound }
         let request = Paths.getItem(itemID: id, userID: userID)
         return try await cached(request.url, request.query, statuses: [404: .notFound]) {
-            try await client.send(request).value
+            try await self.client.send(request).value
         }
     }
 
@@ -222,7 +228,7 @@ public actor LibraryRepository {
         parameters.enableUserData = true
         let request = Paths.getSeasons(seriesID: seriesID, parameters: parameters)
         return try await cached(request.url, request.query, statuses: [404: .notFound]) {
-            try await client.send(request).value
+            try await self.client.send(request).value
         }.items ?? []
     }
 
@@ -236,7 +242,7 @@ public actor LibraryRepository {
         parameters.enableUserData = true
         let request = Paths.getEpisodes(seriesID: seriesID, parameters: parameters)
         return try await cached(request.url, request.query, statuses: [404: .notFound]) {
-            try await client.send(request).value
+            try await self.client.send(request).value
         }.items ?? []
     }
 
@@ -245,7 +251,7 @@ public actor LibraryRepository {
         var parameters = Paths.GetSimilarItemsParameters(userID: userID, limit: limit)
         parameters.fields = Self.cardFields
         let request = Paths.getSimilarItems(itemID: itemID, parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return try await cached(request.url, request.query) { try await self.client.send(request).value }.items ?? []
     }
 
     /// Movies, shows, episodes, people and collections whose names match `term`, grouped by kind, closest names
@@ -295,7 +301,7 @@ public actor LibraryRepository {
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         let request = Paths.getItems(parameters: parameters)
-        return try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
+        return try await cached(request.url, request.query) { try await self.client.send(request).value }.items ?? []
     }
 
     // MARK: - Played and favourites
@@ -327,7 +333,7 @@ public actor LibraryRepository {
 
     /// Forgets every cached answer, so the next reads ask the server. Pull to refresh calls this first.
     public func clearCache() {
-        cache.removeAll()
+        emptyCache()
     }
 
     // MARK: - The signed-in user
@@ -353,7 +359,7 @@ public actor LibraryRepository {
     private func currentUser() async throws -> CurrentUser {
         let request = Paths.getCurrentUser
         return try await cached(request.url, request.query) {
-            let data = try await client.data(for: request).value
+            let data = try await self.client.data(for: request).value
             guard case .object(let user)? = try? JSONDecoder().decode(AnyJSON.self, from: data) else {
                 throw SerafinError.unexpectedResponse(status: nil)
             }
@@ -377,7 +383,7 @@ public actor LibraryRepository {
         try await sending(statuses: [:]) {
             _ = try await client.send(Paths.refreshItem(itemID: id, parameters: parameters))
         }
-        cache.removeAll()
+        emptyCache()
     }
 
     // MARK: - Language preferences
@@ -411,7 +417,7 @@ public actor LibraryRepository {
     /// The languages the server knows, for choosing preferences.
     public func languages() async throws -> [Language] {
         let request = Paths.getCultures
-        let cultures = try await cached(request.url, request.query) { try await client.send(request).value }
+        let cultures = try await cached(request.url, request.query) { try await self.client.send(request).value }
         var seen: Set<String> = []
         return cultures.compactMap(Language.init).filter { seen.insert($0.code).inserted }
     }
@@ -458,8 +464,8 @@ public actor LibraryRepository {
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = Self.cardImages
         let request = Paths.getItems(parameters: parameters)
-        let items = try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
-        return SearchRanking.ranked(items, for: term)
+        let result = try await cached(request.url, request.query) { try await self.client.send(request).value }
+        return SearchRanking.ranked(result.items ?? [], for: term)
     }
 
     private func searchPeople(_ term: String, limit: Int) async throws -> [BaseItemDto] {
@@ -468,11 +474,16 @@ public actor LibraryRepository {
         parameters.imageTypeLimit = 1
         parameters.enableImageTypes = [.primary]
         let request = Paths.getPersons(parameters: parameters)
-        let people = try await cached(request.url, request.query) { try await client.send(request).value }.items ?? []
-        return SearchRanking.ranked(people, for: term)
+        let result = try await cached(request.url, request.query) { try await self.client.send(request).value }
+        return SearchRanking.ranked(result.items ?? [], for: term)
     }
 
     /// Answers a read from the cache, or sends it and caches the answer.
+    ///
+    /// The same read made while one is on its way waits for that one's answer. A caller that's cancelled stops waiting
+    /// at once, and the request carries on for the others, until every caller has been cancelled. A failed read isn't
+    /// kept, and neither is the answer to one that started before the cache was last emptied, which may be from before
+    /// a change.
     ///
     /// - Parameters:
     ///   - url: The request's path, part of its cache key.
@@ -484,30 +495,182 @@ public actor LibraryRepository {
         _ url: URL?,
         _ query: [(String, String?)]?,
         statuses: [Int: SerafinError] = [:],
-        _ load: () async throws -> Value
+        _ load: @escaping @Sendable () async throws -> Value
     ) async throws -> Value {
         let key = ResponseCache.key(url, query)
         if let value: Value = cache.value(for: key) {
             return value
         }
-        let value = try await sending(statuses: statuses, load)
-        cache.store(value, for: key)
+        let read: SharedRead
+        let caller: Int
+        if let shared = reads[key], shared.generation == cacheGeneration, let joined = shared.join() {
+            read = shared
+            caller = joined
+        } else {
+            read = SharedRead(generation: cacheGeneration) {
+                do {
+                    return try await load()
+                } catch {
+                    throw self.translated(error, statuses: statuses)
+                }
+            }
+            caller = SharedRead.starter
+            reads[key] = read
+        }
+        defer {
+            if reads[key] === read, read.isOver {
+                reads[key] = nil
+            }
+        }
+        let answer = try await read.answer(for: caller)
+        // A caller cancelled just as the answer came gets nothing, as if its own request had been cancelled.
+        try Task.checkCancellation()
+        guard let value = answer as? Value else { throw SerafinError.unexpectedResponse(status: nil) }
+        if read.generation == cacheGeneration {
+            cache.store(value, for: key)
+        }
         return value
     }
 
     /// Sends a change and empties the cache, since a change shows up in many lists.
     private func changing<Value: Sendable>(_ send: () async throws -> Value) async throws -> Value {
         let value = try await sending(statuses: [404: .notFound], send)
-        cache.removeAll()
+        emptyCache()
         return value
+    }
+
+    /// Forgets every cached answer, and has the reads on their way leave theirs out.
+    private func emptyCache() {
+        cache.removeAll()
+        cacheGeneration += 1
     }
 
     private func sending<Value>(statuses: [Int: SerafinError], _ send: () async throws -> Value) async throws -> Value {
         do {
             return try await send()
         } catch {
-            let statuses = statuses.merging([401: .notSignedIn]) { mine, _ in mine }
-            throw errors.translate(error, from: client.configuration.url, statuses: statuses)
+            throw translated(error, statuses: statuses)
+        }
+    }
+
+    /// The ``SerafinError`` for `error` from a request, where `statuses` says what particular HTTP statuses mean, and a
+    /// 401 otherwise means the user's sign-in is no longer accepted.
+    private nonisolated func translated(_ error: any Error, statuses: [Int: SerafinError]) -> any Error {
+        let statuses = statuses.merging([401: .notSignedIn]) { mine, _ in mine }
+        return errors.translate(error, from: client.configuration.url, statuses: statuses)
+    }
+}
+
+/// A read on its way to the server, which the same read made meanwhile waits for too.
+///
+/// Each caller waits until the answer comes or it's cancelled. The request carries on while any caller still waits,
+/// and is cancelled once every one of them has been.
+private final class SharedRead: Sendable {
+    /// The number of the caller that started the read. ``join()`` numbers the rest.
+    static let starter = 0
+
+    private typealias Answer = Result<any Sendable, any Error>
+    private typealias Waiter = CheckedContinuation<any Sendable, any Error>
+
+    private struct State {
+        /// How many callers want the answer, or nil once every one has been cancelled, and the request with them.
+        var callers: Int? = 1
+        /// The number the last caller to join got.
+        var lastCaller = SharedRead.starter
+        /// The callers waiting for the answer, by number.
+        var waiting: [Int: Waiter] = [:]
+        /// Callers cancelled before they began to wait.
+        var cancelled: Set<Int> = []
+        /// The answer, once it's come.
+        var answer: Answer?
+        /// Sends the read.
+        var task: Task<Void, Never>?
+    }
+
+    /// The cache's generation when the read started.
+    let generation: Int
+    private let state = Mutex(State())
+
+    /// Starts the read with `load`, for the caller numbered ``starter``.
+    init(generation: Int, load: @escaping @Sendable () async throws -> any Sendable) {
+        self.generation = generation
+        let task = Task { [self] in
+            let answer: Answer
+            do {
+                answer = .success(try await load())
+            } catch {
+                answer = .failure(error)
+            }
+            finish(with: answer)
+        }
+        state.withLock { $0.task = task }
+    }
+
+    /// Whether the read is over: answered, or given up by every caller.
+    var isOver: Bool {
+        state.withLock { $0.answer != nil || $0.callers == nil }
+    }
+
+    /// Adds a caller and returns its number, or nil when every caller before has been cancelled.
+    func join() -> Int? {
+        state.withLock { state -> Int? in
+            guard let callers = state.callers else { return nil }
+            state.callers = callers + 1
+            state.lastCaller += 1
+            return state.lastCaller
+        }
+    }
+
+    /// The answer, for the caller numbered `caller`, once it comes. Throws a cancellation error as soon as the caller
+    /// is cancelled.
+    func answer(for caller: Int) async throws -> any Sendable {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: Waiter) in
+                let ready = state.withLock { state -> Answer? in
+                    if state.cancelled.remove(caller) != nil {
+                        return .failure(CancellationError())
+                    }
+                    if let answer = state.answer {
+                        return answer
+                    }
+                    state.waiting[caller] = continuation
+                    return nil
+                }
+                if let ready {
+                    continuation.resume(with: ready)
+                }
+            }
+        } onCancel: {
+            self.leave(caller)
+        }
+    }
+
+    /// Lets go of the cancelled caller numbered `caller`, and cancels the request when no caller is left.
+    private func leave(_ caller: Int) {
+        let (continuation, abandoned) = state.withLock { state -> (Waiter?, Task<Void, Never>?) in
+            guard state.answer == nil else { return (nil, nil) }
+            let continuation = state.waiting.removeValue(forKey: caller)
+            if continuation == nil {
+                state.cancelled.insert(caller)
+            }
+            let callers = (state.callers ?? 1) - 1
+            state.callers = callers > 0 ? callers : nil
+            return (continuation, callers > 0 ? nil : state.task)
+        }
+        continuation?.resume(throwing: CancellationError())
+        abandoned?.cancel()
+    }
+
+    /// Hands the answer to every caller waiting for it.
+    private func finish(with answer: Answer) {
+        let waiters = state.withLock { state -> [Waiter] in
+            state.answer = answer
+            let pending = Array(state.waiting.values)
+            state.waiting = [:]
+            return pending
+        }
+        for waiter in waiters {
+            waiter.resume(with: answer)
         }
     }
 }
