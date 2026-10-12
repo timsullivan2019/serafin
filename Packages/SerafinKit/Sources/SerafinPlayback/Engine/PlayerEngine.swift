@@ -174,6 +174,8 @@ public enum PlaybackState: Equatable, Sendable {
         @ObservationIgnored public var pictureInPictureDidClose: (() -> Void)?
         /// Picture in Picture's wait for a player screen to show the video it's handing back.
         @ObservationIgnored private var pendingRestore: PictureInPictureRestore?
+        /// Whether the hand-back under way happens in the app, where its window is seen landing in the picture.
+        @ObservationIgnored private var isHandingBackInApp = false
     #endif
 
     /// Creates an engine for the signed-in account.
@@ -459,6 +461,7 @@ public enum PlaybackState: Equatable, Sendable {
         /// carry on.
         func surfaceDisappeared() {
             isSurfaceShowing = false
+            hostedVideoView?.removeHandBackCorners()
             if !isPictureInPictureEngaged {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -538,6 +541,7 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture has the picture, the layer lets go of the player and the film carries on as sound. If iOS paused it
         /// on the way, it plays on.
         private func enteredBackground() {
+            hostedVideoView?.removeHandBackCorners()
             if !isPictureInPictureEngaged {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -568,6 +572,12 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture in Picture stopped, or couldn't start. Unless it handed the video back to the app, it was closed.
         fileprivate func pictureInPictureEnded(restored: Bool) {
             isPictureInPictureEngaged = false
+            isHandingBackInApp = false
+            if restored {
+                hostedVideoView?.squareCornersAfterHandBack(reduceMotion: UIAccessibility.isReduceMotionEnabled)
+            } else {
+                hostedVideoView?.removeHandBackCorners()
+            }
             if !isSurfaceShowing {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -582,6 +592,8 @@ public enum PlaybackState: Equatable, Sendable {
         fileprivate func restoreUserInterface(_ restore: PictureInPictureRestore) {
             pendingRestore?.finish()
             pendingRestore = restore
+            // From another app, the app comes back around the window instead, so its landing isn't seen.
+            isHandingBackInApp = UIApplication.shared.applicationState == .active
             restoreFromPictureInPicture?()
             if isSurfaceShowing, hostedVideoView?.window != nil {
                 // A player screen is up already, as when Picture in Picture started on the way to the background.
@@ -601,7 +613,21 @@ public enum PlaybackState: Equatable, Sendable {
         private func finishRestore(_ restore: PictureInPictureRestore? = nil) {
             guard let pendingRestore, restore == nil || restore === pendingRestore else { return }
             self.pendingRestore = nil
+            if isHandingBackInApp, let hostedVideoView, let window = hostedVideoView.window {
+                hostedVideoView.roundCornersForHandBack(radius: Self.screenCornerRadius(of: window))
+            }
             pendingRestore.finish()
+        }
+
+        /// The corner radius of the screen `window` is on, which Picture in Picture's window takes on its top corners
+        /// as it lands in the picture: 30 points on an 11-inch iPad Pro, 62 on an iPhone 17 Pro Max.
+        private static func screenCornerRadius(of window: UIWindow) -> CGFloat {
+            // A view in the window's corner whose corners follow the window's has the window's own radius.
+            let probe = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+            window.addSubview(probe)
+            defer { probe.removeFromSuperview() }
+            probe.cornerConfiguration = .corners(radius: .containerConcentric())
+            return probe.effectiveRadius(corner: .topLeft)
         }
     #endif
 
