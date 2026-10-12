@@ -4,6 +4,7 @@ import Observation
 import SerafinCore
 import SerafinDesign
 import SerafinPlayback
+import SwiftUI
 
 #if canImport(UIKit)
     import UIKit
@@ -142,7 +143,7 @@ import SerafinPlayback
             engine.pictureInPictureDidStart = { [weak self] in self?.pictureInPictureStarted() }
             engine.restoreFromPictureInPicture = { [weak self] in
                 guard let self, nowPlaying != nil else { return }
-                presentPlayer()
+                presentPlayer(animated: false)
             }
             engine.pictureInPictureDidClose = { [weak self] in self?.pictureInPictureClosed() }
             // A video in Picture in Picture comes back into the player screen, which now plays this one. Not in the
@@ -203,9 +204,11 @@ import SerafinPlayback
     /// Brings back the full-screen player for what is playing, out of Picture in Picture if need be.
     func showPlayer() {
         guard nowPlaying != nil else { return }
-        presentPlayer()
         #if canImport(UIKit)
+            presentPlayer(animated: engine?.isPictureInPictureActive != true)
             engine?.stopPictureInPicture()
+        #else
+            presentPlayer(animated: true)
         #endif
     }
 
@@ -214,7 +217,10 @@ import SerafinPlayback
     ///
     /// The control the player first grew out of may have gone by now, with the screen behind changed while the video
     /// was away, so the player comes back as usual rather than zooming out of it.
-    private func presentPlayer() {
+    ///
+    /// - Parameter animated: Whether the screen slides up. Coming out of Picture in Picture it's simply there, as
+    ///   Apple's players do it, and the floating window's own flight carries the video into it.
+    private func presentPlayer(animated: Bool) {
         zoomSource = nil
         if closing != nil {
             // Changed course while the interface was turning upright to close: keep the player.
@@ -224,7 +230,11 @@ import SerafinPlayback
                 InterfaceOrientations.playerAppeared()
             #endif
         }
-        isPlayerPresented = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = !animated
+        withTransaction(transaction) {
+            isPlayerPresented = true
+        }
     }
 
     /// What putting the player away does.

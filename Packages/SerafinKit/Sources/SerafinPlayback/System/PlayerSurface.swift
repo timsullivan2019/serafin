@@ -76,11 +76,29 @@
         public let playerLayer = AVPlayerLayer()
         /// Whether the picture fills the view, cropping what spills past its edges, rather than fitting inside it.
         public private(set) var fillsBounds = false
+        /// A second layer of the same video under the main one, which shows only while Picture in Picture hands the
+        /// video back. See ``fillHandBack(from:)``.
+        let underlay = AVPlayerLayer()
+        private var handBack: Task<Void, Never>?
+
+        /// The player whose video the view shows, or nil while the view lets go of it, as in the background.
+        public var player: AVPlayer? {
+            get { playerLayer.player }
+            set {
+                playerLayer.player = newValue
+                // Always together: attached in the middle of a video, a layer can show an older frame, and letting go
+                // of one can move a paused picture to another frame.
+                underlay.player = newValue
+            }
+        }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
             backgroundColor = .black
             playerLayer.videoGravity = .resizeAspect
+            underlay.videoGravity = .resizeAspect
+            underlay.opacity = 0
+            layer.addSublayer(underlay)
             layer.addSublayer(playerLayer)
             isAccessibilityElement = false
         }
@@ -104,6 +122,7 @@
             CATransaction.setAnimationDuration(0.3)
             CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
             playerLayer.videoGravity = fills ? .resizeAspectFill : .resizeAspect
+            underlay.videoGravity = playerLayer.videoGravity
             CATransaction.commit()
         }
 
@@ -112,6 +131,52 @@
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             playerLayer.frame = bounds
+            underlay.frame = bounds
+            CATransaction.commit()
+        }
+
+        /// Shows the picture under the main layer from `delay` on, while Picture in Picture hands the video back into
+        /// this view.
+        ///
+        /// Picture in Picture's window flies into the picture with its top corners rounded, and keeps them until it
+        /// gives the video back, a moment after it lands. The main layer shows nothing while Picture in Picture has
+        /// the video, so the corners showed the black behind as notches in the picture. The picture underneath fills
+        /// them. It fades in only as the window lands, so it never shows beside the window in flight.
+        ///
+        /// - Parameter delay: How long the window takes to all but land.
+        func fillHandBack(from delay: Duration) {
+            handBack?.cancel()
+            handBack = Task { [weak self] in
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled, let self else { return }
+                CATransaction.begin()
+                CATransaction.setAnimationDuration(0.08)
+                underlay.opacity = 1
+                CATransaction.commit()
+            }
+        }
+
+        /// Hides the picture under the main layer after `delay`, by which time the main layer shows the video again.
+        ///
+        /// - Parameter delay: How long to keep it, or zero to hide it at once.
+        func endHandBack(after delay: Duration = .zero) {
+            handBack?.cancel()
+            handBack = nil
+            guard delay > .zero else {
+                hideUnderlay()
+                return
+            }
+            handBack = Task { [weak self] in
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled else { return }
+                self?.hideUnderlay()
+            }
+        }
+
+        private func hideUnderlay() {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            underlay.opacity = 0
             CATransaction.commit()
         }
     }

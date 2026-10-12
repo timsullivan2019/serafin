@@ -174,6 +174,8 @@ public enum PlaybackState: Equatable, Sendable {
         @ObservationIgnored public var pictureInPictureDidClose: (() -> Void)?
         /// Picture in Picture's wait for a player screen to show the video it's handing back.
         @ObservationIgnored private var pendingRestore: PictureInPictureRestore?
+        /// Whether the hand-back under way happens in the app, where its window is seen landing in the picture.
+        @ObservationIgnored private var isHandingBackInApp = false
     #endif
 
     /// Creates an engine for the signed-in account.
@@ -399,7 +401,7 @@ public enum PlaybackState: Equatable, Sendable {
                 return hostedVideoView
             }
             let view = PlayerLayerView()
-            view.playerLayer.player = player
+            view.player = player
             view.setFillsBounds(fillsScreen, animated: false)
             hostedVideoView = view
             setUpPictureInPicture(for: view.playerLayer)
@@ -451,7 +453,7 @@ public enum PlaybackState: Equatable, Sendable {
         /// A player screen started showing the video.
         func surfaceAppeared() {
             isSurfaceShowing = true
-            hostedVideoView?.playerLayer.player = player
+            hostedVideoView?.player = player
         }
 
         /// The player screen stopped showing the video. Unless Picture in Picture has the picture, the layer lets go
@@ -459,8 +461,9 @@ public enum PlaybackState: Equatable, Sendable {
         /// carry on.
         func surfaceDisappeared() {
             isSurfaceShowing = false
+            hostedVideoView?.endHandBack()
             if !isPictureInPictureEngaged {
-                hostedVideoView?.playerLayer.player = nil
+                hostedVideoView?.player = nil
             }
         }
 
@@ -538,8 +541,9 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture has the picture, the layer lets go of the player and the film carries on as sound. If iOS paused it
         /// on the way, it plays on.
         private func enteredBackground() {
+            hostedVideoView?.endHandBack()
             if !isPictureInPictureEngaged {
-                hostedVideoView?.playerLayer.player = nil
+                hostedVideoView?.player = nil
             }
             if wasPlayingOnResign, player.currentItem != nil, player.timeControlStatus == .paused, state != .ended {
                 Self.logger.debug("Playing on after iOS paused for the background")
@@ -550,7 +554,7 @@ public enum PlaybackState: Equatable, Sendable {
         /// The app is coming back, so a player screen that's showing gets its picture back.
         private func enteringForeground() {
             if isSurfaceShowing || isPictureInPictureEngaged {
-                hostedVideoView?.playerLayer.player = player
+                hostedVideoView?.player = player
             }
         }
 
@@ -558,7 +562,7 @@ public enum PlaybackState: Equatable, Sendable {
             isPictureInPictureEngaged = true
             // Going home can reach the background before Picture in Picture starts, and the layer lets go of the
             // player there, so it takes it back for the floating window.
-            hostedVideoView?.playerLayer.player = player
+            hostedVideoView?.player = player
         }
 
         fileprivate func pictureInPictureStarted() {
@@ -568,8 +572,11 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture in Picture stopped, or couldn't start. Unless it handed the video back to the app, it was closed.
         fileprivate func pictureInPictureEnded(restored: Bool) {
             isPictureInPictureEngaged = false
+            isHandingBackInApp = false
+            // Kept a moment once the video is back, in case the main layer takes a frame or two to show it.
+            hostedVideoView?.endHandBack(after: restored ? .milliseconds(250) : .zero)
             if !isSurfaceShowing {
-                hostedVideoView?.playerLayer.player = nil
+                hostedVideoView?.player = nil
             }
             if !restored {
                 pictureInPictureDidClose?()
@@ -582,6 +589,8 @@ public enum PlaybackState: Equatable, Sendable {
         fileprivate func restoreUserInterface(_ restore: PictureInPictureRestore) {
             pendingRestore?.finish()
             pendingRestore = restore
+            // From another app, the app comes back around the window instead, so its landing isn't seen.
+            isHandingBackInApp = UIApplication.shared.applicationState == .active
             restoreFromPictureInPicture?()
             if isSurfaceShowing, hostedVideoView?.window != nil {
                 // A player screen is up already, as when Picture in Picture started on the way to the background.
@@ -602,7 +611,15 @@ public enum PlaybackState: Equatable, Sendable {
             guard let pendingRestore, restore == nil || restore === pendingRestore else { return }
             self.pendingRestore = nil
             pendingRestore.finish()
+            if isHandingBackInApp, let hostedVideoView, hostedVideoView.window != nil {
+                hostedVideoView.fillHandBack(from: Self.handBackLanding)
+            }
         }
+
+        /// How long Picture in Picture's window takes to all but land in the picture, once it may hand the video
+        /// back. Its flight takes about half a second: on an iPad with iOS 27 it was within 4 points of its place
+        /// 0.38 seconds in, within 1 point at 0.46, and gave the video back at about 0.52.
+        static let handBackLanding = Duration.milliseconds(380)
     #endif
 
     // MARK: - Controls
