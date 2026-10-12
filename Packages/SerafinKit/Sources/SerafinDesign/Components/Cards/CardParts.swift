@@ -140,13 +140,10 @@ struct PointerHighlight: ViewModifier {
 /// and two lines would cut the title off.
 struct CardTitleLines: ViewModifier {
     let standard: Int
-    /// Whether the title takes the height of all its lines even when it needs fewer. The height follows the text
-    /// size, since it's measured in lines of the title's own font.
-    var reservesSpace = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
-        content.lineLimit(dynamicTypeSize.isAccessibilitySize ? standard + 2 : standard, reservesSpace: reservesSpace)
+        content.lineLimit(dynamicTypeSize.isAccessibilitySize ? standard + 2 : standard)
     }
 }
 
