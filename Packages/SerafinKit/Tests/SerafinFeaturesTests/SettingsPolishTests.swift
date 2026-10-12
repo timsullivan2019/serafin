@@ -56,10 +56,13 @@ import Testing
     }
 }
 
-/// The account's preferences on a pretend server, which can refuse to save.
+/// The account's preferences on a pretend server, which can refuse to save, and hold saves until told to answer.
 private actor FakeLanguageStore: LanguagePreferenceStore {
     var saved = LanguagePreferences(subtitles: "fre", subtitleMode: .smart)
     var refusesToSave = false
+    private var refusesNextSave = false
+    private var holdsSaves = false
+    private var heldSaves: [CheckedContinuation<Void, Never>] = []
     private(set) var saves: [LanguagePreferences] = []
 
     func languages() async throws -> [Language] {
@@ -70,11 +73,32 @@ private actor FakeLanguageStore: LanguagePreferenceStore {
 
     func setLanguagePreferences(_ preferences: LanguagePreferences) async throws {
         saves.append(preferences)
-        if refusesToSave { throw SerafinError.serverUnreachable }
+        if holdsSaves {
+            await withCheckedContinuation { heldSaves.append($0) }
+        }
+        if refusesToSave || refusesNextSave {
+            refusesNextSave = false
+            throw SerafinError.serverUnreachable
+        }
         saved = preferences
     }
 
     func refuse() { refusesToSave = true }
+
+    /// Refuses only the next save.
+    func refuseNextSave() { refusesNextSave = true }
+
+    /// Has saves wait for ``releaseSaves()`` before they're answered.
+    func holdSaves() { holdsSaves = true }
+
+    /// Answers the saves held, and the ones after them at once.
+    func releaseSaves() {
+        holdsSaves = false
+        for save in heldSaves {
+            save.resume()
+        }
+        heldSaves = []
+    }
 }
 
 @MainActor
@@ -129,6 +153,26 @@ private actor FakeLanguageStore: LanguagePreferenceStore {
         await model.finishSaving()
         #expect(model.preferences.audio == nil)
         #expect(model.failure?.title == "Can't Reach the Server")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aChoiceMadeWhileAFailingSaveWasOnItsWayStandsAndIsSaved() async {
+        let store = FakeLanguageStore()
+        let model = LanguagesModel(store: store)
+        await model.load()
+        await store.refuseNextSave()
+        await store.holdSaves()
+        model.setAudio("jpn")
+        while await store.saves.isEmpty {
+            await Task.yield()
+        }
+        model.setSubtitles("eng")
+        await store.releaseSaves()
+        await model.finishSaving()
+        let chosen = LanguagePreferences(audio: "jpn", subtitles: "eng", subtitleMode: .smart)
+        #expect(model.preferences == chosen)
+        #expect(await store.saved == chosen)
+        #expect(model.failure == nil)
     }
 
     @Test func modesReadAsSettingsListsThem() {
