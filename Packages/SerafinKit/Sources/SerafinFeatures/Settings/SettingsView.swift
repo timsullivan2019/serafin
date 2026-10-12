@@ -17,22 +17,7 @@ struct SettingsView: View {
             DeliverySection()
             LockSection()
             StorageSection()
-            Section(String(localized: "About", bundle: .module, comment: "Settings section header.")) {
-                NavigationLink(value: Route.licences) {
-                    Text(
-                        String(
-                            localized: "Licenses", bundle: .module,
-                            comment: "Title of the licenses screen, and its row in Settings."))
-                }
-                LabeledContent(
-                    String(
-                        localized: "Version", bundle: .module,
-                        comment:
-                            "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
-                    ),
-                    value: Self.version
-                )
-            }
+            AboutSection()
             #if DEBUG
                 DesignSection()
             #endif
@@ -43,6 +28,44 @@ struct SettingsView: View {
             await session.refreshServerNames()
         }
     }
+}
+
+/// The privacy policy and support pages, the licenses, and the version.
+private struct AboutSection: View {
+    var body: some View {
+        Section(String(localized: "About", bundle: .module, comment: "Settings section header.")) {
+            if let privacyPolicy = Website.privacyPolicy {
+                Link(destination: privacyPolicy) {
+                    Text(
+                        String(
+                            localized: "Privacy Policy", bundle: .module,
+                            comment: "Settings row that opens Serafin's privacy policy on its website."))
+                }
+            }
+            if let support = Website.support {
+                Link(destination: support) {
+                    Text(
+                        String(
+                            localized: "Support", bundle: .module,
+                            comment: "Settings row that opens Serafin's support page on its website."))
+                }
+            }
+            NavigationLink(value: Route.licences) {
+                Text(
+                    String(
+                        localized: "Licenses", bundle: .module,
+                        comment: "Title of the licenses screen, and its row in Settings."))
+            }
+            LabeledContent(
+                String(
+                    localized: "Version", bundle: .module,
+                    comment:
+                        "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
+                ),
+                value: Self.version
+            )
+        }
+    }
 
     /// The app version and build, such as "0.1.0 (1)".
     private static var version: String {
@@ -51,6 +74,14 @@ struct SettingsView: View {
         let build = info?["CFBundleVersion"] as? String ?? "–"
         return "\(short) (\(build))"
     }
+}
+
+/// Serafin's own pages on its website.
+enum Website {
+    /// What Serafin keeps, where, and what reaches anyone else: nothing reaches the developer.
+    static let privacyPolicy = URL(string: "https://getserafin.app/privacy/")
+    /// Help with Serafin, and how to reach the developer.
+    static let support = URL(string: "https://getserafin.app/support/")
 }
 
 /// The accent colour, for buttons, links, selections and the tab bar, as a row that opens its own screen.
