@@ -229,6 +229,34 @@ private struct AccountsSection: View {
                     )
                 }
                 .tint(.red)
+                // On the row itself, so the dialog's popover points at the button that asked.
+                .confirmationDialog(
+                    String(
+                        localized: "Remove this server?", bundle: .module, comment: "Title of the remove server dialog."
+                    ),
+                    isPresented: Binding(
+                        get: { serverToRemove?.id == server.id },
+                        set: { if !$0 { serverToRemove = nil } }),
+                    titleVisibility: .visible
+                ) {
+                    Button(
+                        String(
+                            localized: "Remove \(server.displayName)", bundle: .module,
+                            comment: "Button that removes a server."
+                        ),
+                        role: .destructive
+                    ) {
+                        Task { await run { try await session.remove(server) } }
+                    }
+                } message: {
+                    Text(
+                        String(
+                            localized: "Everyone signed in to it on this device is signed out.",
+                            bundle: .module,
+                            comment: "Message in the remove server dialog."
+                        )
+                    )
+                }
             } header: {
                 Text(server.displayName)
             } footer: {
@@ -248,29 +276,6 @@ private struct AccountsSection: View {
             if let failure {
                 FailureMessage(message: failure)
             }
-        }
-        .confirmationDialog(
-            String(localized: "Remove this server?", bundle: .module, comment: "Title of the remove server dialog."),
-            isPresented: Binding(get: { serverToRemove != nil }, set: { if !$0 { serverToRemove = nil } }),
-            titleVisibility: .visible,
-            presenting: serverToRemove
-        ) { server in
-            Button(
-                String(
-                    localized: "Remove \(server.displayName)", bundle: .module, comment: "Button that removes a server."
-                ),
-                role: .destructive
-            ) {
-                Task { await run { try await session.remove(server) } }
-            }
-        } message: { _ in
-            Text(
-                String(
-                    localized: "Everyone signed in to it on this device is signed out.",
-                    bundle: .module,
-                    comment: "Message in the remove server dialog."
-                )
-            )
         }
     }
 
