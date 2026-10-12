@@ -157,10 +157,12 @@ import SerafinPlayback
         let subtitle = card.episode == nil ? nil : card.eyebrowText
         engine.describe(title: card.title, subtitle: subtitle, artwork: nil)
         loading?.cancel()
-        // Started at once, so the engine's change to the new item lands in the same update as its title here.
+        // Started at once, so the engine's change to the new item lands in the same update as its title here. The
+        // Lock Screen's artwork loads alongside the video.
         loading = Task.immediate { [artwork] in
+            async let lockScreenJPEG = Self.lockScreenArtwork(for: source, from: artwork)
             await engine.load(source, options: options, keepsSubtitleChoice: continuing)
-            guard !Task.isCancelled, let jpeg = await Self.lockScreenArtwork(for: source, from: artwork) else { return }
+            guard !Task.isCancelled, let jpeg = await lockScreenJPEG else { return }
             engine.describe(title: card.title, subtitle: subtitle, artwork: jpeg)
         }
     }

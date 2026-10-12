@@ -114,7 +114,6 @@ struct LiveMediaSource: MediaSource {
             async let similar = library.similar(to: id)
             async let next = library.nextUp(limit: 1, series: id)
             details.seasons = ShowSeason.ordered(try await seasons.compactMap(ShowSeason.init))
-            details.similar = MediaItem.from((try? await similar) ?? [])
             // Next Up for one show includes an episode part way through, which Play resumes.
             let playable = MediaItem.from((try? await next) ?? []).first
             // The page opens on that episode's season. Nothing is next before a show is started or once it's watched
@@ -133,6 +132,8 @@ struct LiveMediaSource: MediaSource {
                 details.playable = playable
             }
             details.badges = details.playable?.source.map(MediaBadges.badges(for:)) ?? []
+            // Similar titles load alongside, so the opening season's episodes don't wait for them.
+            details.similar = MediaItem.from((try? await similar) ?? [])
         case .episode:
             if let seriesID = source.seriesID, let seasonID = source.seasonID {
                 let episodes = (try? await library.episodes(series: seriesID, season: seasonID)) ?? []
