@@ -284,10 +284,13 @@ import SwiftUI
     }
 
     /// Starts downloading every season's hero picture at the hero's size, so a season picked later shows its picture
-    /// without waiting on the network. The pictures are kept on disk, not decoded, until a season is picked.
+    /// without waiting on the network. The pictures are kept on disk, not decoded, until a season is picked. None
+    /// download over a connection in Low Data Mode.
     func prefetchSeasonArtwork(artwork: Artwork?, hero: HeroGeometry) {
         guard let artwork, let seasons = details?.seasons, hero.size.width > 0, hero.size.height > 0 else { return }
-        let requests = seasons.compactMap { Self.request(for: $0, artwork: artwork, hero: hero) }
+        let requests = seasons.compactMap {
+            Self.request(for: $0, artwork: artwork, hero: hero, allowsConstrainedNetwork: false)
+        }
         guard !requests.isEmpty else { return }
         if prefetcher == nil {
             prefetcher = ImagePrefetcher(pipeline: artwork.pipeline, destination: .diskCache)
@@ -327,13 +330,18 @@ import SwiftUI
     }
 
     /// The request for the picture `season` shows in the hero, or nil when it keeps the show's.
-    private static func request(for season: ShowSeason, artwork: Artwork, hero: HeroGeometry) -> ImageRequest? {
+    ///
+    /// - Parameter allowsConstrainedNetwork: Whether it may download over a connection in Low Data Mode.
+    private static func request(
+        for season: ShowSeason, artwork: Artwork, hero: HeroGeometry, allowsConstrainedNetwork: Bool = true
+    ) -> ImageRequest? {
         guard let role = season.heroRole(isCompact: hero.isCompact), let source = season.item.source else {
             return nil
         }
         let width = pictureWidth(role, of: season.id, hero: hero)
         guard width > 0 else { return nil }
-        return artwork.request(role, of: source, width: width, scale: hero.scale)
+        return artwork.request(
+            role, of: source, width: width, scale: hero.scale, allowsConstrainedNetwork: allowsConstrainedNetwork)
     }
 
     /// Loads the picture `season` shows in the hero and measures its tint, or nil when it has none to show, in which

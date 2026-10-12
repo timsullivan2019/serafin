@@ -155,6 +155,19 @@ private let bareEpisode = BaseItemDto(
         #expect(request.thumbnail == decodedSize)
     }
 
+    @Test func aDownloadMadeAheadStaysOffConnectionsInLowDataMode() throws {
+        let artwork = Artwork(
+            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x")
+        let shown = try #require(artwork.request(.poster, of: movie, width: 120, scale: 3))
+        let ahead = try #require(
+            artwork.request(.poster, of: movie, width: 120, scale: 3, allowsConstrainedNetwork: false))
+
+        #expect(shown.urlRequest?.allowsConstrainedNetworkAccess == true)
+        #expect(ahead.urlRequest?.allowsConstrainedNetworkAccess == false)
+        // The same image either way, so the one downloaded ahead is found in the cache when it shows.
+        #expect(ahead.imageID == shown.imageID)
+    }
+
     @Test func decodedImagesKeepAtMostEightyMegabytes() throws {
         let pipeline = ImagePipeline.serafin(pinning: nil, diskCacheName: nil)
         let cache = try #require(pipeline.configuration.imageCache as? ImageCache)
