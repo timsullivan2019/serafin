@@ -5,6 +5,11 @@ import SerafinDesign
 
 /// The built-in sample titles, so every screen previews without a server.
 struct SampleMediaSource: MediaSource {
+    /// Whether the samples have collections. Previews turn it off to show the Library tab of a server with none.
+    var includesCollections = true
+    /// Whether the samples have favourites. Previews turn it off to show the Library tab of a user with none.
+    var includesFavourites = true
+
     func home() async throws -> HomeContent {
         HomeContent(
             continueWatching: MockLibrary.continueWatching.map(Self.item),
@@ -49,12 +54,10 @@ struct SampleMediaSource: MediaSource {
 
     func refreshMetadata(of item: MediaItem) async throws {}
 
-    func cover(of library: MediaLibrary) async -> MediaItem? {
-        nil
-    }
-
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
-        let cards = Self.cards(in: scope, options: options)
+        var cards = Self.cards(in: scope, options: options)
+        if !includesCollections, scope == .collections { cards = [] }
+        if !includesFavourites, options.favouritesOnly { cards = [] }
         let page = cards.dropFirst(start).prefix(limit)
         return MediaPage(items: page.map(Self.item), total: cards.count)
     }
@@ -74,10 +77,6 @@ struct SampleMediaSource: MediaSource {
         return names.sorted().map { name in
             Genre(id: "genre-\(name)", name: name, count: Self.genres.values.count { $0.contains(name) })
         }
-    }
-
-    func hasCollections() async throws -> Bool {
-        !MockMedia.collections.isEmpty
     }
 
     /// A grid's samples, filtered and sorted.

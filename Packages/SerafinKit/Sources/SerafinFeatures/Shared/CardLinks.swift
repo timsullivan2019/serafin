@@ -6,12 +6,16 @@ import SwiftUI
 /// context menu.
 struct PosterLink: View {
     let item: MediaItem
+    /// Sets the card apart from others showing the same item on the screen, such as the row it's in, so the item's
+    /// screen zooms out of the card that was tapped. Nil keys the zoom by the item alone.
+    var zoomScope: String?
     @Environment(\.zoomNamespace) private var zoom
 
     var body: some View {
-        NavigationLink(value: item.route) {
+        let zoomID = zoomScope.map { "\($0)/\(item.id)" }
+        NavigationLink(value: zoomID.map(item.route(zoomingFrom:)) ?? item.route) {
             ItemArtwork(item, role: .poster) { image in
-                PosterCard(card: item.card, artwork: image, zoomNamespace: zoom) {
+                PosterCard(card: item.card, artwork: image, zoomNamespace: zoom, zoomID: zoomID) {
                     CardMenuItems(item: item)
                 }
             }
@@ -137,6 +141,12 @@ extension MediaItem {
             return nil
         }
         return .item(id: seriesID)
+    }
+
+    /// Where tapping this item goes from a card whose zoom is keyed by `zoomID` rather than the item's ID.
+    func route(zoomingFrom zoomID: String) -> Route {
+        guard case .card = route else { return route }
+        return .card(self, zoomID: zoomID)
     }
 
     /// Where tapping this item goes.

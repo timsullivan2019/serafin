@@ -83,31 +83,8 @@
         }
       }
     },
-    "%lld movies" : {
-      "comment" : "How many movies a library holds, under its name on the Library tab.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld movie"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld movies"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%lld movies and shows" : {
-      "comment" : "A number of movies and shows: in Shortcuts, and under a library's name on the Library tab.",
+      "comment" : "A number of movies and shows: in Shortcuts, and on a person's page.",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -122,29 +99,6 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld movies and shows"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "%lld shows" : {
-      "comment" : "How many shows a library holds, under its name on the Library tab.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld show"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld shows"
                 }
               }
             }
@@ -243,9 +197,6 @@
     },
     "Automatic" : {
       "comment" : "Subtitle mode: as the video marks them."
-    },
-    "Browse" : {
-      "comment" : "Library tab section of other ways in."
     },
     "Buttons, links, selections and the tab bar take this color. Colors taken from artwork stay as they are." : {
       "comment" : "Settings footer under the accent color choices."
@@ -374,7 +325,7 @@
       "comment" : "Subtitle size."
     },
     "Favorites" : {
-      "comment" : "Favorites: the library filter chip, and the Library tab's Browse row and grid."
+      "comment" : "Favorites: the library filter chip, and the Library tab's row and grid."
     },
     "Fills in this name" : {
       "comment" : "Hint on a user picture on the sign-in screen, for a user with a password."
@@ -523,9 +474,6 @@
     "Movies" : {
       "comment" : "Search results section."
     },
-    "Movies and shows added to your server appear here, newest first." : {
-      "comment" : "Explanation when no movies or shows have been added."
-    },
     "Movies and shows with %@ appear here once they're on your server." : {
       "comment" : "Explanation on a person's page when nothing on the server features them."
     },
@@ -533,7 +481,7 @@
       "comment" : "Explanation for an empty library or collection."
     },
     "Movies and shows you add to your server appear here." : {
-      "comment" : "Explanation when the home screen is empty."
+      "comment" : "Explanation when Home or the Library tab is empty."
     },
     "Movies and shows you mark as favorites appear here." : {
       "comment" : "Explanation when there are no favorites."
@@ -571,11 +519,8 @@
     "No episodes in this season yet." : {
       "comment" : "Shown under the season menu for a season with no episodes."
     },
-    "Nothing Added Yet" : {
-      "comment" : "Title when no movies or shows have been added."
-    },
     "Nothing Here Yet" : {
-      "comment" : "Title when the home screen is empty."
+      "comment" : "Title when Home or the Library tab is empty."
     },
     "Nothing in This Genre" : {
       "comment" : "Title for an empty genre."
@@ -685,9 +630,6 @@
     },
     "Recent" : {
       "comment" : "Heading over recent searches."
-    },
-    "Recently Added" : {
-      "comment" : "Library Browse row and grid of the newest additions."
     },
     "Refresh Metadata" : {
       "comment" : "Menu item that asks the server to look up an item's details again."
@@ -984,7 +926,7 @@
       "comment" : "Title when a certificate isn't trusted."
     },
     "Unwatched" : {
-      "comment" : "Unwatched: the library filter chip, and the Library tab's Browse row and grid."
+      "comment" : "Unwatched: the library filter chip, and the Library tab's row and grid."
     },
     "Username" : {
       "comment" : "Label of the username field."

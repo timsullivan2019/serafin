@@ -24,6 +24,9 @@
         }
       }
     },
+    "%@, see all" : {
+      "comment" : "Spoken name of a row's title, which opens the whole row, such as Movies, see all."
+    },
     "%@×" : {
       "comment" : "A playback speed, such as 1.25×."
     },
@@ -218,9 +221,6 @@
     },
     "Show Details" : {
       "comment" : "Accessibility action that opens a featured item's detail screen on Home."
-    },
-    "Shows everything in this row" : {
-      "comment" : "Hint on a row title."
     },
     "Shows the other seasons" : {
       "comment" : "Hint on the season menu over a show's episodes."
