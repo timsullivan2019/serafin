@@ -72,14 +72,24 @@
 
     /// A view that shows an `AVPlayerLayer` filling its bounds, with the picture fitted inside or filling it.
     public final class PlayerLayerView: UIView {
+        /// Where the picture is in a hand-back from Picture in Picture inside the app. See ``hideForHandBack()``.
+        enum HandBack: Equatable {
+            /// No hand-back: the picture fills the view and shows.
+            case none
+            /// Shrunk to nothing in the view's middle, so Picture in Picture has no picture to fly its window into.
+            case hidden
+            /// Back to full size, still clear, until the video is back.
+            case waiting
+        }
+
         /// The layer showing the video.
         public let playerLayer = AVPlayerLayer()
         /// Whether the picture fills the view, cropping what spills past its edges, rather than fitting inside it.
         public private(set) var fillsBounds = false
-        /// Black corners over the picture's corners while Picture in Picture hands the video back. See
-        /// ``roundCornersForHandBack(radius:)``.
-        private(set) var handBackCorners: [CAShapeLayer] = []
-        private var handBackCornerRadius: CGFloat = 0
+        /// Where the picture is in a hand-back from Picture in Picture.
+        private(set) var handBack = HandBack.none
+        /// The key of the animation fading the picture in after a hand-back.
+        static let fadeInKey = "fadeInAfterHandBack"
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -115,117 +125,69 @@
             super.layoutSubviews()
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            playerLayer.frame = bounds
-            placeHandBackCorners()
+            playerLayer.frame = pictureFrame
             CATransaction.commit()
         }
 
-        /// Rounds all four of the picture's corners in black, the way Picture in Picture's window has its top ones,
-        /// while the window hands the video back into this view.
+        /// Takes the picture away while Picture in Picture hands the video back inside the app.
         ///
-        /// The window flies into the picture with its top corners rounded and keeps them until it gives the video
-        /// back, so the picture showed them for a few frames and then snapped square. With the same corners on the
-        /// picture underneath, it keeps the window's shape as it takes over, and ``squareCornersAfterHandBack(reduceMotion:)``
-        /// then squares them in a short animation. The bottom corners are rounded too, so all four square off together;
-        /// the window lands with its own bottom corners square, so those round as it hands over. Until then they're black
-        /// on the black around the picture, so they show nothing.
-        ///
-        /// - Parameter radius: The window's corner radius.
-        func roundCornersForHandBack(radius: CGFloat) {
-            removeHandBackCorners()
-            guard radius > 0 else { return }
-            handBackCornerRadius = radius
-            for corner in [UIRectCorner.topLeft, .topRight, .bottomLeft, .bottomRight] {
-                let cap = CAShapeLayer()
-                cap.fillColor = UIColor.black.cgColor
-                // Each shrinks into its own corner of the picture.
-                cap.anchorPoint = CGPoint(
-                    x: corner == .topLeft || corner == .bottomLeft ? 0 : 1,
-                    y: corner == .topLeft || corner == .topRight ? 0 : 1)
-                cap.path = Self.cornerPath(radius: radius, corner: corner)
-                layer.addSublayer(cap)
-                handBackCorners.append(cap)
-            }
+        /// Picture in Picture flies its window into the picture it hands the video to, and inside the app iOS rounds
+        /// the window's corners to match the screen's as it lands there, as wide as the screen in portrait. With no
+        /// picture to fly into, the window shrinks away where it is instead. The picture comes back to full size once
+        /// iOS has looked for it (``layOutAfterHandBack()``), and fades in once the video is back
+        /// (``showAfterHandBack()``).
+        func hideForHandBack() {
+            playerLayer.removeAnimation(forKey: Self.fadeInKey)
+            handBack = .hidden
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            placeHandBackCorners()
+            playerLayer.opacity = 0
+            playerLayer.frame = pictureFrame
             CATransaction.commit()
         }
 
-        /// Squares the picture's corners once Picture in Picture has handed the video back, shrinking the black corners
-        /// into the picture's corners, or fading them with Reduce Motion.
-        ///
-        /// - Parameter reduceMotion: Whether Reduce Motion is on.
-        func squareCornersAfterHandBack(reduceMotion: Bool) {
-            let corners = handBackCorners
-            handBackCorners = []
-            guard !corners.isEmpty else { return }
-            let duration = reduceMotion ? 0.2 : 0.3
+        /// Puts the picture back to full size, still clear, once Picture in Picture has looked for it.
+        func layOutAfterHandBack() {
+            guard handBack == .hidden else { return }
+            handBack = .waiting
             CATransaction.begin()
-            CATransaction.setAnimationDuration(duration)
-            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1))
-            for cap in corners {
-                if reduceMotion {
-                    cap.opacity = 0
-                } else {
-                    cap.transform = CATransform3DMakeScale(0.01, 0.01, 1)
-                }
-            }
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = pictureFrame
             CATransaction.commit()
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(duration + 0.1))
-                corners.forEach { $0.removeFromSuperlayer() }
-            }
         }
 
-        /// Takes the black corners away at once, as when the hand-back doesn't finish or the screen goes.
-        func removeHandBackCorners() {
-            handBackCorners.forEach { $0.removeFromSuperlayer() }
-            handBackCorners = []
+        /// Fades the picture in at full size once Picture in Picture has handed the video back.
+        func showAfterHandBack() {
+            guard handBack != .none else { return }
+            handBack = .none
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = pictureFrame
+            playerLayer.opacity = 1
+            CATransaction.commit()
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.duration = 0.25
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            playerLayer.add(fade, forKey: Self.fadeInKey)
         }
 
-        /// Puts the black corners on the picture's corners, where Picture in Picture's window lands. A picture that fills
-        /// the view has its corners off screen, so they're hidden then.
-        private func placeHandBackCorners() {
-            guard !handBackCorners.isEmpty else { return }
-            let picture = playerLayer.videoRect
-            let size = Self.cornerExtent(radius: handBackCornerRadius)
-            let fits =
-                !picture.isEmpty && bounds.insetBy(dx: -1, dy: -1).contains(picture)
-                && picture.width > size * 2 && picture.height > size * 2
-            for cap in handBackCorners {
-                cap.isHidden = !fits
-                cap.bounds = CGRect(x: 0, y: 0, width: size, height: size)
-                cap.position = CGPoint(
-                    x: cap.anchorPoint.x == 0 ? picture.minX : picture.maxX,
-                    y: cap.anchorPoint.y == 0 ? picture.minY : picture.maxY)
-            }
+        /// Shows the picture at full size at once, as when the hand-back doesn't finish or the screen goes.
+        func cancelHandBack() {
+            playerLayer.removeAnimation(forKey: Self.fadeInKey)
+            guard handBack != .none else { return }
+            handBack = .none
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = pictureFrame
+            playerLayer.opacity = 1
+            CATransaction.commit()
         }
 
-        /// How big the black outside a corner of `radius` is: a quarter circle a little tighter than the radius, which
-        /// follows the continuous corner of Picture in Picture's window to within a pixel.
-        static func cornerExtent(radius: CGFloat) -> CGFloat {
-            radius * 0.92
-        }
-
-        /// The black outside a rounded `corner` of `radius`: a square as big as the corner, less a quarter circle.
-        /// Drawn as one shape, so no edge runs through the picture.
-        static func cornerPath(radius: CGFloat, corner: UIRectCorner) -> CGPath {
-            let size = cornerExtent(radius: radius)
-            let path = CGMutablePath()
-            path.move(to: .zero)
-            path.addLine(to: CGPoint(x: size, y: 0))
-            path.addArc(
-                center: CGPoint(x: size, y: size), radius: size, startAngle: -.pi / 2, endAngle: -.pi, clockwise: true)
-            path.closeSubpath()
-            guard corner != .topLeft else { return path }
-            // The same, mirrored across to the corner asked for.
-            let flipsAcross = corner == .topRight || corner == .bottomRight
-            let flipsDown = corner == .bottomLeft || corner == .bottomRight
-            var mirror = CGAffineTransform(
-                a: flipsAcross ? -1 : 1, b: 0, c: 0, d: flipsDown ? -1 : 1, tx: flipsAcross ? size : 0,
-                ty: flipsDown ? size : 0)
-            return path.copy(using: &mirror) ?? path
+        /// Where the video layer goes: the whole view, or nothing in its middle while it's hidden for a hand-back.
+        private var pictureFrame: CGRect {
+            handBack == .hidden ? CGRect(x: bounds.midX, y: bounds.midY, width: 0, height: 0) : bounds
         }
     }
 

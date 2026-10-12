@@ -174,8 +174,13 @@ public enum PlaybackState: Equatable, Sendable {
         @ObservationIgnored public var pictureInPictureDidClose: (() -> Void)?
         /// Picture in Picture's wait for a player screen to show the video it's handing back.
         @ObservationIgnored private var pendingRestore: PictureInPictureRestore?
-        /// Whether the hand-back under way happens in the app, where its window is seen landing in the picture.
+        /// Whether the hand-back under way happens in the app, where the picture is hidden from Picture in Picture so
+        /// its window shrinks away instead of flying in.
         @ObservationIgnored private var isHandingBackInApp = false
+        /// Until when the video plays on if iOS pauses it as Picture in Picture hands it back inside the app, or nil
+        /// when it wasn't playing. With no picture to fly into, iOS treats the hand-back like closing the window and
+        /// pauses, a few milliseconds in.
+        @ObservationIgnored private var playsOnAfterHandBack: ContinuousClock.Instant?
     #endif
 
     /// Creates an engine for the signed-in account.
@@ -461,7 +466,8 @@ public enum PlaybackState: Equatable, Sendable {
         /// carry on.
         func surfaceDisappeared() {
             isSurfaceShowing = false
-            hostedVideoView?.removeHandBackCorners()
+            playsOnAfterHandBack = nil
+            hostedVideoView?.cancelHandBack()
             if !isPictureInPictureEngaged {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -541,7 +547,8 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture has the picture, the layer lets go of the player and the film carries on as sound. If iOS paused it
         /// on the way, it plays on.
         private func enteredBackground() {
-            hostedVideoView?.removeHandBackCorners()
+            playsOnAfterHandBack = nil
+            hostedVideoView?.cancelHandBack()
             if !isPictureInPictureEngaged {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -574,10 +581,17 @@ public enum PlaybackState: Equatable, Sendable {
             isPictureInPictureEngaged = false
             isHandingBackInApp = false
             if restored {
-                hostedVideoView?.squareCornersAfterHandBack(reduceMotion: UIAccessibility.isReduceMotionEnabled)
+                hostedVideoView?.showAfterHandBack()
+                // iOS paused on the way and the video wasn't played on yet.
+                if let deadline = playsOnAfterHandBack, ContinuousClock.now < deadline,
+                    player.timeControlStatus == .paused, state != .ended
+                {
+                    player.playImmediately(atRate: rate)
+                }
             } else {
-                hostedVideoView?.removeHandBackCorners()
+                hostedVideoView?.cancelHandBack()
             }
+            playsOnAfterHandBack = nil
             if !isSurfaceShowing {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -592,7 +606,7 @@ public enum PlaybackState: Equatable, Sendable {
         fileprivate func restoreUserInterface(_ restore: PictureInPictureRestore) {
             pendingRestore?.finish()
             pendingRestore = restore
-            // From another app, the app comes back around the window instead, so its landing isn't seen.
+            // From another app, the window flies into the app as it opens and lands square, so it keeps its flight.
             isHandingBackInApp = UIApplication.shared.applicationState == .active
             restoreFromPictureInPicture?()
             if isSurfaceShowing, hostedVideoView?.window != nil {
@@ -613,21 +627,14 @@ public enum PlaybackState: Equatable, Sendable {
         private func finishRestore(_ restore: PictureInPictureRestore? = nil) {
             guard let pendingRestore, restore == nil || restore === pendingRestore else { return }
             self.pendingRestore = nil
-            if isHandingBackInApp, let hostedVideoView, let window = hostedVideoView.window {
-                hostedVideoView.roundCornersForHandBack(radius: Self.screenCornerRadius(of: window))
+            // Inside the app, iOS rounds the window's corners to match the screen's as it lands in the picture. With
+            // the picture hidden it has nowhere to land, so it shrinks away where it is, and the picture fades in
+            // once the video is back.
+            if isHandingBackInApp, let hostedVideoView, hostedVideoView.window != nil {
+                playsOnAfterHandBack = player.timeControlStatus == .paused ? nil : .now + .seconds(2)
+                hostedVideoView.hideForHandBack()
             }
             pendingRestore.finish()
-        }
-
-        /// The corner radius of the screen `window` is on, which Picture in Picture's window takes on its top corners
-        /// as it lands in the picture: 30 points on an 11-inch iPad Pro, 62 on an iPhone 17 Pro Max.
-        private static func screenCornerRadius(of window: UIWindow) -> CGFloat {
-            // A view in the window's corner whose corners follow the window's has the window's own radius.
-            let probe = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
-            window.addSubview(probe)
-            defer { probe.removeFromSuperview() }
-            probe.cornerConfiguration = .corners(radius: .containerConcentric())
-            return probe.effectiveRadius(corner: .topLeft)
         }
     #endif
 
@@ -1390,6 +1397,19 @@ public enum PlaybackState: Equatable, Sendable {
 
     private func statusChanged() {
         isWaiting = player.currentItem != nil && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        #if canImport(UIKit)
+            // iOS paused as Picture in Picture hands the video back inside the app, having looked for the picture
+            // and not found it. The picture comes back to full size, and the video plays on.
+            if let deadline = playsOnAfterHandBack, player.timeControlStatus == .paused {
+                playsOnAfterHandBack = nil
+                hostedVideoView?.layOutAfterHandBack()
+                if ContinuousClock.now < deadline, state != .ended {
+                    Self.logger.debug("Playing on after Picture in Picture paused to hand back")
+                    player.playImmediately(atRate: rate)
+                    return
+                }
+            }
+        #endif
         guard !isStarting, state != .failed, state != .ended, player.currentItem?.status == .readyToPlay else { return }
         switch player.timeControlStatus {
         case .playing: state = .playing
