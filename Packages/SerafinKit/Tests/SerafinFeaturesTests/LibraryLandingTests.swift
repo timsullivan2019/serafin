@@ -55,11 +55,17 @@ import Testing
         func query(_ row: Row) throws -> LibraryQuery {
             LiveMediaSource.query(for: try #require(row.scope), options: row.options)
         }
-        for row in [Row.library(library), .collections, .shortcut(.favourites), .shortcut(.unwatched)] {
+        for row in [Row.library(library), .collections, .shortcut(.favourites)] {
             let asked = try query(row)
             #expect(asked.sort == .dateAdded)
             #expect(!asked.ascending)
         }
+        // Unwatched goes by rating, highest first, so it doesn't repeat the newest titles in the rows above it.
+        let byRating = try query(.shortcut(.unwatched))
+        #expect(byRating.sort == .rating)
+        #expect(!byRating.ascending)
+        // Its header opens the Unwatched grid, which keeps its own order.
+        #expect(GridScope.shortcut(.unwatched).initialOptions.sort == .name)
         let movies = try query(.library(library))
         #expect(movies.parentID == library.id)
         #expect(movies.types == [.movie])

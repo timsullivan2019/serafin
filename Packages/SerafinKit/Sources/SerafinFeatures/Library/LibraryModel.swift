@@ -21,7 +21,7 @@ import SerafinDesign
         case library(MediaLibrary)
         /// The newest collections, shown when the server has any.
         case collections
-        /// The newest favourites, or the newest titles not yet watched, from every library, shown when there are any.
+        /// The newest favourites, or the best-rated titles not yet watched, from every library, shown when there are any.
         case shortcut(LibraryShortcut)
         /// The genres, as tiles, shown when the server lists any.
         case genres
@@ -182,8 +182,13 @@ extension LibrariesModel.Row {
     }
 
     /// How the row asks for its titles: the newest additions first, with its grid's filter, such as favourites only.
+    /// Unwatched goes highest rated first instead, newest among equals, so it doesn't repeat the newest titles the
+    /// library rows above it already show.
     var options: GridOptions {
         var options = LibrariesModel.newestFirst
+        if case .shortcut(.unwatched) = self {
+            options.sort = .rating
+        }
         options.unplayedOnly = scope?.initialOptions.unplayedOnly ?? false
         options.favouritesOnly = scope?.initialOptions.favouritesOnly ?? false
         return options

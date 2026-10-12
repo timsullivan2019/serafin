@@ -178,6 +178,8 @@ One PR. Replace the Library root's tiles and Browse list with a vertically scrol
 
 Reserve the Live TV, Music and Downloads rows behind their phase flags; do not scaffold them.
 
+Follow-up from the owner's review: the Unwatched row sorts by `CommunityRating` descending, falling back to `DateCreated` where ratings are absent, so it doesn't repeat the Movies and Shows rows; its header still opens the Unwatched grid with its own sort. Poster cards reserve two title lines (`lineLimit(2, reservesSpace: true)`, four at accessibility sizes) with the year on its own line below, so years line up across a row.
+
 ### Gate 3.5
 
 Owner review on device of Home, Library, a movie detail, a series detail, Search, Settings and sign-in in light and dark. Then 1.0 proceeds through Phase 3.

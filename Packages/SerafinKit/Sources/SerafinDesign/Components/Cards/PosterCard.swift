@@ -44,10 +44,11 @@ public struct PosterCard<Menu: View>: View {
                 .cardZoomSource(id: zoomID ?? card.id, in: zoomNamespace)
                 .cardHoverEffect()
             VStack(alignment: .leading, spacing: 2) {
+                // Always as tall as two lines, so the years line up across a row whatever each title's length.
                 Text(card.posterTitle)
                     .typography(.cardTitle)
                     .foregroundStyle(.textPrimary)
-                    .modifier(CardTitleLines(standard: 2))
+                    .modifier(CardTitleLines(standard: 2, reservesSpace: true))
                 if let caption = card.posterCaption {
                     Text(caption)
                         .typography(.caption)

@@ -2,8 +2,8 @@ import SerafinDesign
 import SwiftUI
 
 /// The Library tab, laid out like the browse pages of the Apple TV and App Store apps: a row of each library's newest
-/// titles under the library's own name, then rows of the newest collections, favourites and unwatched titles, then
-/// the genres. A row's title opens its full grid.
+/// titles under the library's own name, then rows of the newest collections and favourites, the best-rated unwatched
+/// titles, then the genres. A row's title opens its full grid.
 struct LibrariesView: View {
     @State private var model = LibrariesModel()
     @Environment(\.media) private var media
