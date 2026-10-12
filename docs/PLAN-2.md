@@ -86,6 +86,8 @@ The current screen is two rows and a Browse link with 70% of the screen empty.
 
 Acceptance: no empty space below the fold on an iPhone 17 with two libraries; tiles load without pop; previews with `MockLibrary`.
 
+The tiles and the Browse list were replaced by rows in 3.5.12; the Genres screen and its collages stay.
+
 ### 3.5.3 Home fixes
 
 - Continue Watching for a movie must use Thumb → Backdrop → Primary, never the poster. Check `LandscapeCard` honours the artwork rules table.
@@ -162,6 +164,22 @@ One PR, plus a short screen recording.
 8. Previews with `MockMedia` for a one-season show, a sixteen-season show and a show with Specials; VoiceOver labels on cards include episode number, title, runtime and watched state. Record play-from-Home and play-from-show-page for the gate review.
 9. Season-aware hero: on open, the hero shows the series backdrop and logo. After the user changes the season picker, the hero follows the selection: the season's backdrop if it has one; on compact width, its poster aspect-filled with the crop anchored to the top; on regular width with no season backdrop, the series art stays. Crossfade over 0.35 s with a 1.02→1.0 scale, the logo fixed, the pill label, badges and artwork tint crossfading to the selected season's first unwatched episode, and a selection haptic; opacity only under Reduce Motion. Prefetch all season hero images at page load at hero size so the switch never shows a placeholder. A season with no artwork falls back to the series art. Include it in the screen recording.
 
+### 3.5.12 Library root as rows, Apple TV / App Store browse pattern
+
+One PR. Replace the Library root's tiles and Browse list with a vertically scrolling page of horizontal rows, reusing `MediaRow` and `PosterCard` from Home.
+
+1. Rows, in order: Movies; Shows; Collections (only when `/Items?IncludeItemTypes=BoxSet` returns any); Favorites (hidden when empty); Unwatched (hidden when empty); Genres. Each row loads its 12 most recently added items (`SortBy=DateCreated`, descending) for that group, with the row's leading item being the newest; Favorites and Unwatched span both libraries. On a server with more than one movie or show library, or libraries named differently, each library gets its own row under its own name: movie libraries first, then shows, then mixed, each kind in the server's order.
+2. Row headers are `title2` bold with the chevron and open the existing grid screen for that group with its sort and filter chips intact; the header is one accessible button labelled "Movies, see all".
+3. Genres is a row of 16:9 tiles, 160 × 90 pt on iPhone, each showing the genre name bottom-leading over a two-poster collage built from that genre's newest items with a bottom gradient; tapping opens the genre's grid. Hide the row when the server returns no genres.
+4. Remove the Recently Added row and Browse list from this screen; "Recently Added" remains reachable as a sort option in the grids. Delete the library tile component if nothing else uses it.
+5. Keep the large "Library" title, the profile button, pull to refresh, the scroll edge effect at the top, and the skeleton loading state matched to row geometry; rows render as data arrives, never a spinner on a blank page.
+6. iPad: same rows with the wider poster size from the artwork rules.
+7. Previews with `MockLibrary` in light, dark and AX5, including the empty-Favorites and no-Collections cases; before-and-after screenshots on iPhone and iPad.
+
+Reserve the Live TV, Music and Downloads rows behind their phase flags; do not scaffold them.
+
+Follow-up from the owner's review: the Unwatched row sorts by `CommunityRating` descending, falling back to `DateCreated` where ratings are absent, so it doesn't repeat the Movies and Shows rows; its header still opens the Unwatched grid with its own sort.
+
 ### Gate 3.5
 
 Owner review on device of Home, Library, a movie detail, a series detail, Search, Settings and sign-in in light and dark. Then 1.0 proceeds through Phase 3.
@@ -234,7 +252,7 @@ All in `SerafinDesign`, previews from new `MockLiveTv` fixtures (channels, 24 h 
 ### 4.7 Recordings
 
 - Recordings screen from the Live TV toolbar: segments Recorded, In Progress, Scheduled. Recorded items use `LandscapeCard`s grouped by series name when applicable, and play through the normal VOD player with resume and progress reporting. In-progress recordings play live from the start with a red dot badge. Delete via swipe (`DELETE /Items/{id}` only if the user policy allows media deletion; otherwise no delete affordance).
-- Recordings also appear in Library › Browse when any exist.
+- Recordings also appear as a row on the Library tab (3.5.12) when any exist.
 
 ### 4.8 Edge cases and server variance
 
@@ -293,7 +311,7 @@ Tests: planner decisions for five media-source fixtures; record state machine; q
 
 ### 5.4 Downloads library and management
 
-- Library › Browse › Downloads (row appears when there is at least one record). Screen groups by series, then movies; sections for In Progress and Completed; total size in the header. Edit mode for multi-delete.
+- Library › Downloads, a row on the Library tab (3.5.12) that appears when there is at least one record. Screen groups by series, then movies; sections for In Progress and Completed; total size in the header. Edit mode for multi-delete.
 - Settings › Downloads: Download over cellular (off), Download quality (Original / Lower), Auto-delete after watching (off), Delete All Downloads, and the `StorageBar`.
 - Low Power Mode pauses new downloads unless the user overrides.
 

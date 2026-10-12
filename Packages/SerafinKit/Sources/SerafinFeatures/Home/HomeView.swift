@@ -87,11 +87,13 @@ struct HomeView: View {
             FailureState(message: message) { attempt += 1 }
         case .loaded(let home) where home.isEmpty:
             EmptyState(
-                String(localized: "Nothing Here Yet", bundle: .module, comment: "Title when the home screen is empty."),
+                String(
+                    localized: "Nothing Here Yet", bundle: .module,
+                    comment: "Title when Home or the Library tab is empty."),
                 message: String(
                     localized: "Movies and shows you add to your server appear here.",
                     bundle: .module,
-                    comment: "Explanation when the home screen is empty."
+                    comment: "Explanation when Home or the Library tab is empty."
                 ),
                 systemImage: "sparkles.tv"
             )

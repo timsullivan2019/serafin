@@ -11,7 +11,7 @@ public struct MediaEntity: AppEntity, IndexedEntity {
             "Movie or Show", comment: "What Siri and Shortcuts call a movie, show or episode in the library."),
         numericFormat: LocalizedStringResource(
             "\(placeholder: .int) movies and shows",
-            comment: "A number of movies and shows: in Shortcuts, and under a library's name on the Library tab.")
+            comment: "A number of movies and shows: in Shortcuts, and on a person's page.")
     )
 
     public static let defaultQuery = MediaEntityQuery()

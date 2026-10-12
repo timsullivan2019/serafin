@@ -6,7 +6,7 @@ import SerafinDesign
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
 /// the server does, a server that refuses every change, Home saved on the device and a server that can't be reached,
-/// libraries with pictures of their own, or seasons whose episodes don't load.
+/// grids or genres that don't load, or seasons whose episodes don't load.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
@@ -18,8 +18,10 @@ struct TestMediaSource: MediaSource {
     var saved: HomeContent?
     /// Why Home fails to load, or nil when it loads the samples.
     var homeFailure: SerafinError?
-    /// The libraries that have a picture of their own on the server.
-    var covers: Set<String> = []
+    /// The grids whose pages fail to load.
+    var failingGrids: Set<GridScope> = []
+    /// Whether the genres fail to load.
+    var failsGenres = false
     /// The seasons whose episodes fail to load.
     var failingSeasons: Set<String> = []
     private let samples = SampleMediaSource()
@@ -42,16 +44,12 @@ struct TestMediaSource: MediaSource {
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
 
-    func cover(of library: MediaLibrary) async -> MediaItem? {
-        guard covers.contains(library.id) else { return await samples.cover(of: library) }
-        return MediaItem(card: MediaCard(id: library.id, kind: .collection, title: library.name), source: nil)
-    }
-
     func canRefreshMetadata() async -> Bool { false }
 
     func refreshMetadata(of item: MediaItem) async throws {}
 
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
+        if failingGrids.contains(scope) { throw URLError(.timedOut) }
         guard let cards = cards(options) else {
             return try await samples.page(of: scope, options: options, start: start, limit: limit)
         }
@@ -68,9 +66,10 @@ struct TestMediaSource: MediaSource {
         return cards.count { SampleMediaSource.sortName($0.title) < name }
     }
 
-    func genres() async throws -> [Genre] { try await samples.genres() }
-
-    func hasCollections() async throws -> Bool { try await samples.hasCollections() }
+    func genres() async throws -> [Genre] {
+        if failsGenres { throw URLError(.timedOut) }
+        return try await samples.genres()
+    }
 
     func details(of id: String) async throws -> ItemDetails { try await samples.details(of: id) }
 

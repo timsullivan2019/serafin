@@ -2,155 +2,6 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// The Library tab: a tile for each library, then other ways in: genres, collections, favourites, the newest
-/// additions and everything unwatched.
-struct LibrariesView: View {
-    @State private var model = LibrariesModel()
-    @Environment(\.media) private var media
-
-    var body: some View {
-        content
-            .navigationTitle(String(localized: "Library", bundle: .module, comment: "Title of the library tab."))
-            .profileToolbar()
-            .task { await model.load(from: media) }
-    }
-
-    @ViewBuilder private var content: some View {
-        switch model.phase {
-        case .loading:
-            Skeleton(.libraries)
-        case .failed(let message):
-            FailureState(message: message) { Task { await model.load(from: media) } }
-        case .loaded(let libraries) where libraries.isEmpty:
-            EmptyState(
-                String(localized: "No Libraries", bundle: .module, comment: "Title when the server has no libraries."),
-                message: String(
-                    localized: "Add a movie or TV library on your server and it appears here.",
-                    bundle: .module,
-                    comment: "Explanation when there are no movie or TV libraries."
-                ),
-                systemImage: "square.stack"
-            )
-        case .loaded(let libraries):
-            List {
-                Section {
-                    LibraryTiles(libraries: libraries, overviews: model.overviews)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                }
-                Section(String(localized: "Browse", bundle: .module, comment: "Library tab section of other ways in."))
-                {
-                    BrowseRow(
-                        String(localized: "Genres", bundle: .module, comment: "Genres, as a heading or a label."),
-                        systemImage: "theatermasks.fill", route: .genres)
-                    if model.hasCollections {
-                        BrowseRow(
-                            String(
-                                localized: "Collections", bundle: .module,
-                                comment: "Collections, as a heading or a label."),
-                            systemImage: "rectangle.stack.fill", route: .collections)
-                    }
-                    ForEach(LibraryShortcut.allCases, id: \.self) { shortcut in
-                        BrowseRow(shortcut.title, systemImage: shortcut.systemImage, route: .shortcut(shortcut))
-                    }
-                }
-            }
-            .refreshable {
-                await media.refresh()
-                await model.load(from: media)
-            }
-        }
-    }
-}
-
-/// The libraries as 16:9 tiles, laid out by ``LibraryTilesLayout``.
-private struct LibraryTiles: View {
-    let libraries: [MediaLibrary]
-    let overviews: [String: LibrariesModel.Overview]
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.navigate) private var navigate
-
-    var body: some View {
-        LazyVGrid(
-            columns: Array(
-                repeating: GridItem(.flexible(), spacing: Spacing.small, alignment: .top),
-                count: LibraryTilesLayout.columns(libraries: libraries.count, isRegularWidth: sizeClass == .regular)),
-            spacing: Spacing.small
-        ) {
-            ForEach(libraries) { library in
-                // A button rather than a navigation link, which a list would mark with a chevron.
-                Button {
-                    navigate(.library(library))
-                } label: {
-                    LibraryTileArtwork(library: library, overview: overviews[library.id])
-                }
-                .buttonStyle(.card)
-            }
-        }
-    }
-
-}
-
-/// How the Library tab lays out its tiles.
-enum LibraryTilesLayout {
-    /// How many tiles go in a row: three on iPad, or two when there are only two; two on iPhone, or one each when
-    /// there are only one or two. Fewer, larger tiles fill the screen when a server has few libraries.
-    static func columns(libraries: Int, isRegularWidth: Bool) -> Int {
-        if isRegularWidth { return min(3, max(2, libraries)) }
-        return libraries <= 2 ? 1 : 2
-    }
-}
-
-/// One library's tile: its own picture when the server has one, otherwise four of its newest posters side by side,
-/// or its newest title's backdrop when it has too few for that.
-private struct LibraryTileArtwork: View {
-    let library: MediaLibrary
-    let overview: LibrariesModel.Overview?
-
-    var body: some View {
-        LibraryTile(
-            name: library.name,
-            caption: overview.map { LibrariesModel.caption(total: $0.total, kind: library.kind) }
-        ) {
-            if let cover = overview?.cover {
-                ItemArtwork(cover, role: .poster) { CollagePoster(image: $0) }
-            } else if let newest = overview?.newest, newest.count >= LibrariesModel.collageSize {
-                LibraryCollage { index in
-                    ItemArtwork(newest[index], role: .poster) { CollagePoster(image: $0) }
-                }
-            } else if let first = overview?.newest.first {
-                // Too few posters for a collage: the newest title's backdrop fills the tile.
-                ItemArtwork(first, role: .backdrop) { CollagePoster(image: $0) }
-            } else {
-                CollagePoster(image: nil)
-            }
-        }
-    }
-}
-
-/// A Browse row: the accent icon, the name, and the screen it opens.
-private struct BrowseRow: View {
-    let title: String
-    let systemImage: String
-    let route: Route
-
-    init(_ title: String, systemImage: String, route: Route) {
-        self.title = title
-        self.systemImage = systemImage
-        self.route = route
-    }
-
-    var body: some View {
-        NavigationLink(value: route) {
-            Label {
-                Text(title)
-            } icon: {
-                AccentIcon(systemImage: systemImage)
-            }
-        }
-    }
-}
-
 /// What a shortcut's grid says when it holds nothing.
 struct ShortcutEmptyState: View {
     let shortcut: LibraryShortcut
@@ -164,16 +15,6 @@ struct ShortcutEmptyState: View {
                     localized: "Movies and shows you mark as favorites appear here.", bundle: .module,
                     comment: "Explanation when there are no favorites."),
                 systemImage: "heart"
-            )
-        case .recentlyAdded:
-            EmptyState(
-                String(
-                    localized: "Nothing Added Yet", bundle: .module,
-                    comment: "Title when no movies or shows have been added."),
-                message: String(
-                    localized: "Movies and shows added to your server appear here, newest first.", bundle: .module,
-                    comment: "Explanation when no movies or shows have been added."),
-                systemImage: "clock"
             )
         case .unwatched:
             EmptyState(
@@ -389,9 +230,13 @@ private struct PersonHeader: View {
                 PersonPortrait(name: person.name, photo: photo)
             }
             .frame(width: size)
-            Text(LibrariesModel.caption(total: total, kind: .mixed))
-                .typography(.body)
-                .foregroundStyle(.textSecondary)
+            Text(
+                String(
+                    localized: "\(total) movies and shows", bundle: .module,
+                    comment: "A number of movies and shows: in Shortcuts, and on a person's page.")
+            )
+            .typography(.body)
+            .foregroundStyle(.textSecondary)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
@@ -448,7 +293,7 @@ private struct LibraryChips: View {
                 GlassChip(
                     String(
                         localized: "Unwatched", bundle: .module,
-                        comment: "Unwatched: the library filter chip, and the Library tab's Browse row and grid."),
+                        comment: "Unwatched: the library filter chip, and the Library tab's row and grid."),
                     systemImage: "circle.dashed",
                     isSelected: model.options.unplayedOnly
                 ) { animate { model.options.unplayedOnly.toggle() } }
@@ -457,7 +302,7 @@ private struct LibraryChips: View {
                 GlassChip(
                     String(
                         localized: "Favorites", bundle: .module,
-                        comment: "Favorites: the library filter chip, and the Library tab's Browse row and grid."),
+                        comment: "Favorites: the library filter chip, and the Library tab's row and grid."),
                     systemImage: "heart",
                     isSelected: model.options.favouritesOnly
                 ) { animate { model.options.favouritesOnly.toggle() } }
@@ -637,11 +482,6 @@ extension LibraryQuery.Sort {
 }
 
 #if DEBUG
-    #Preview("Libraries") {
-        TabStack { LibrariesView() }
-            .previewEnvironment()
-    }
-
     #Preview("Light") {
         TabStack { LibraryView(scope: .library(MockLibrary.libraries[0])) }
             .previewEnvironment()

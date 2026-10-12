@@ -22,9 +22,10 @@ struct ItemDetailView: View {
     ///   - id: The movie, series or episode.
     ///   - preview: The item as the card that opened the screen showed it, whose watched and favorite marks the
     ///     navigation bar shows until the details load.
-    init(id: String, preview: MediaItem? = nil) {
+    ///   - zoomSource: What the card the screen zooms in from is keyed by, when not the item's ID.
+    init(id: String, preview: MediaItem? = nil, zoomSource: String? = nil) {
         _model = State(initialValue: ItemDetailModel(id: id, preview: preview))
-        zoomSource = id
+        self.zoomSource = zoomSource ?? id
         arrivesFromHomeHero = false
     }
 

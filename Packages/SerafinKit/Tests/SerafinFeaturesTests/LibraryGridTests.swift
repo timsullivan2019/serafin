@@ -164,7 +164,10 @@ private let longGrid: [String] = {
     @Test func theLibraryTabOffersCollectionsWhenThereAreAny() async {
         let model = LibrariesModel()
         await model.load(from: SampleMediaSource())
-        #expect(model.hasCollections)
+        #expect(model.visibleRows.contains(.collections))
+        let withoutCollections = LibrariesModel()
+        await withoutCollections.load(from: SampleMediaSource(includesCollections: false))
+        #expect(!withoutCollections.visibleRows.contains(.collections))
     }
 
     @Test func theSamplesBrowseByGenreAndCollection() async throws {

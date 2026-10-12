@@ -51,14 +51,6 @@ struct LiveMediaSource: MediaSource {
         try await library.refreshMetadata(of: item.id)
     }
 
-    func cover(of library: MediaLibrary) async -> MediaItem? {
-        guard
-            let view = try? await self.library.userViews().first(where: { $0.id == library.id }),
-            view.imageTags?[ImageType.primary.rawValue] != nil
-        else { return nil }
-        return MediaItem(card: MediaCard(id: library.id, kind: .collection, title: library.name), source: view)
-    }
-
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
         let page = try await library.items(Self.query(for: scope, options: options), start: start, limit: limit)
         return MediaPage(items: page.items.map(MediaItem.init), total: page.total)
@@ -75,10 +67,6 @@ struct LiveMediaSource: MediaSource {
 
     func genres() async throws -> [Genre] {
         try await library.genres().compactMap(Genre.init)
-    }
-
-    func hasCollections() async throws -> Bool {
-        try await library.items(LibraryQuery(parentID: nil, types: [.boxSet]), limit: 0).total > 0
     }
 
     /// What the server lists for a grid.
@@ -243,10 +231,7 @@ extension HomeContent {
     /// Home's rows from what the server sent, leaving out kinds of library and item Serafin doesn't show. Latest in
     /// Movies comes first, then Latest in Shows.
     init(_ snapshot: HomeSnapshot) {
-        // Movies, then shows, then mixed libraries, each kind in the server's order.
-        let libraries = snapshot.libraries.compactMap(MediaLibrary.init(view:)).enumerated()
-            .sorted { ($0.element.kind.homeOrder, $0.offset) < ($1.element.kind.homeOrder, $1.offset) }
-            .map(\.element)
+        let libraries = MediaLibrary.ordered(snapshot.libraries.compactMap(MediaLibrary.init(view:)))
         self.init(
             continueWatching: MediaItem.from(snapshot.resume),
             nextUp: MediaItem.from(snapshot.nextUp),
