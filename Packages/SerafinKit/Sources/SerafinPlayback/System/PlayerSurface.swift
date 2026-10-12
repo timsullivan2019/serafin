@@ -76,10 +76,11 @@
         public let playerLayer = AVPlayerLayer()
         /// Whether the picture fills the view, cropping what spills past its edges, rather than fitting inside it.
         public private(set) var fillsBounds = false
-        /// Black corners over the picture's corners while Picture in Picture hands the video back. See
-        /// ``roundCornersForHandBack(radius:)``.
-        private(set) var handBackCorners: [CAShapeLayer] = []
-        private var handBackCornerRadius: CGFloat = 0
+        /// How large the picture is, against the view, while Picture in Picture hands the video back, or 1 when it
+        /// isn't. See ``landSmallerForHandBack(scale:)``.
+        private(set) var handBackScale: CGFloat = 1
+        /// The key of the animation growing the picture to full size after a hand-back.
+        static let growKey = "growAfterHandBack"
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -115,117 +116,86 @@
             super.layoutSubviews()
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            playerLayer.frame = bounds
-            placeHandBackCorners()
+            playerLayer.frame = Self.frame(bounds, scaledBy: handBackScale)
             CATransaction.commit()
         }
 
-        /// Rounds all four of the picture's corners in black, the way Picture in Picture's window has its top ones,
-        /// while the window hands the video back into this view.
+        /// Shrinks the picture about its middle while Picture in Picture hands the video back, so the window lands on a
+        /// picture `scale` times its size.
         ///
-        /// The window flies into the picture with its top corners rounded and keeps them until it gives the video
-        /// back, so the picture showed them for a few frames and then snapped square. With the same corners on the
-        /// picture underneath, it keeps the window's shape as it takes over, and ``squareCornersAfterHandBack(reduceMotion:)``
-        /// then squares them in a short animation. The bottom corners are rounded too, so all four square off together;
-        /// the window lands with its own bottom corners square, so those round as it hands over. Until then they're black
-        /// on the black around the picture, so they show nothing.
+        /// Handing back inside the app, iOS gives the window rounded corners as it lands, concentric with the screen's,
+        /// when the picture it lands on is within the screen's corner radius of the screen's width or height. A
+        /// picture fitted to the screen always is, so the window landed with its top corners rounded and squared them
+        /// as it handed over. Landing on a picture that much smaller keeps every corner square, and
+        /// ``growAfterHandBack()`` then grows it to full size. ``landingScale(pictureSize:screenSize:cornerRadius:)``
+        /// works out the size.
         ///
-        /// - Parameter radius: The window's corner radius.
-        func roundCornersForHandBack(radius: CGFloat) {
-            removeHandBackCorners()
-            guard radius > 0 else { return }
-            handBackCornerRadius = radius
-            for corner in [UIRectCorner.topLeft, .topRight, .bottomLeft, .bottomRight] {
-                let cap = CAShapeLayer()
-                cap.fillColor = UIColor.black.cgColor
-                // Each shrinks into its own corner of the picture.
-                cap.anchorPoint = CGPoint(
-                    x: corner == .topLeft || corner == .bottomLeft ? 0 : 1,
-                    y: corner == .topLeft || corner == .topRight ? 0 : 1)
-                cap.path = Self.cornerPath(radius: radius, corner: corner)
-                layer.addSublayer(cap)
-                handBackCorners.append(cap)
-            }
+        /// - Parameter scale: How large the picture lands, against its full size.
+        func landSmallerForHandBack(scale: CGFloat) {
+            cancelHandBackLanding()
+            guard scale < 1 else { return }
+            handBackScale = scale
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            placeHandBackCorners()
+            playerLayer.frame = Self.frame(bounds, scaledBy: scale)
             CATransaction.commit()
         }
 
-        /// Squares the picture's corners once Picture in Picture has handed the video back, shrinking the black corners
-        /// into the picture's corners, or fading them with Reduce Motion.
-        ///
-        /// - Parameter reduceMotion: Whether Reduce Motion is on.
-        func squareCornersAfterHandBack(reduceMotion: Bool) {
-            let corners = handBackCorners
-            handBackCorners = []
-            guard !corners.isEmpty else { return }
-            let duration = reduceMotion ? 0.2 : 0.3
+        /// Grows the picture to full size once Picture in Picture has handed the video back, from the size the window
+        /// landed at.
+        func growAfterHandBack() {
+            let scale = handBackScale
+            guard scale < 1 else { return }
+            handBackScale = 1
             CATransaction.begin()
-            CATransaction.setAnimationDuration(duration)
-            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1))
-            for cap in corners {
-                if reduceMotion {
-                    cap.opacity = 0
-                } else {
-                    cap.transform = CATransform3DMakeScale(0.01, 0.01, 1)
-                }
-            }
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = bounds
             CATransaction.commit()
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(duration + 0.1))
-                corners.forEach { $0.removeFromSuperlayer() }
-            }
+            // By its transform rather than its frame, so the picture keeps its place as it grows.
+            let grow = CASpringAnimation(perceptualDuration: 0.5, bounce: 0.15)
+            grow.keyPath = "transform.scale"
+            grow.fromValue = scale
+            grow.toValue = 1
+            grow.duration = grow.settlingDuration
+            playerLayer.add(grow, forKey: Self.growKey)
         }
 
-        /// Takes the black corners away at once, as when the hand-back doesn't finish or the screen goes.
-        func removeHandBackCorners() {
-            handBackCorners.forEach { $0.removeFromSuperlayer() }
-            handBackCorners = []
+        /// Puts the picture back to full size at once, as when the hand-back doesn't finish or the screen goes.
+        func cancelHandBackLanding() {
+            playerLayer.removeAnimation(forKey: Self.growKey)
+            guard handBackScale < 1 else { return }
+            handBackScale = 1
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = bounds
+            CATransaction.commit()
         }
 
-        /// Puts the black corners on the picture's corners, where Picture in Picture's window lands. A picture that fills
-        /// the view has its corners off screen, so they're hidden then.
-        private func placeHandBackCorners() {
-            guard !handBackCorners.isEmpty else { return }
-            let picture = playerLayer.videoRect
-            let size = Self.cornerExtent(radius: handBackCornerRadius)
-            let fits =
-                !picture.isEmpty && bounds.insetBy(dx: -1, dy: -1).contains(picture)
-                && picture.width > size * 2 && picture.height > size * 2
-            for cap in handBackCorners {
-                cap.isHidden = !fits
-                cap.bounds = CGRect(x: 0, y: 0, width: size, height: size)
-                cap.position = CGPoint(
-                    x: cap.anchorPoint.x == 0 ? picture.minX : picture.maxX,
-                    y: cap.anchorPoint.y == 0 ? picture.minY : picture.maxY)
-            }
+        /// How large a picture of `pictureSize` should be for Picture in Picture's window to land on it with square
+        /// corners: small enough to stay the screen's corner radius short of the screen's width and height. 1 when it
+        /// already is, and when it covers the screen, where the window's corners land past the screen's.
+        ///
+        /// - Parameters:
+        ///   - pictureSize: The picture's full size.
+        ///   - screenSize: The size of the screen.
+        ///   - cornerRadius: The screen's corner radius.
+        /// - Returns: How large the picture should be, against its full size.
+        static func landingScale(pictureSize: CGSize, screenSize: CGSize, cornerRadius: CGFloat) -> CGFloat {
+            guard cornerRadius > 0, pictureSize.width > 0, pictureSize.height > 0 else { return 1 }
+            if pictureSize.width >= screenSize.width, pictureSize.height >= screenSize.height { return 1 }
+            // A point to spare, since sizes round to the pixel.
+            let shortfall = cornerRadius + 1
+            let scale = min(
+                1, (screenSize.width - shortfall) / pictureSize.width,
+                (screenSize.height - shortfall) / pictureSize.height)
+            // A layout this far off isn't one the player screen has, so it's left alone.
+            return scale >= 0.5 ? scale : 1
         }
 
-        /// How big the black outside a corner of `radius` is: a quarter circle a little tighter than the radius, which
-        /// follows the continuous corner of Picture in Picture's window to within a pixel.
-        static func cornerExtent(radius: CGFloat) -> CGFloat {
-            radius * 0.92
-        }
-
-        /// The black outside a rounded `corner` of `radius`: a square as big as the corner, less a quarter circle.
-        /// Drawn as one shape, so no edge runs through the picture.
-        static func cornerPath(radius: CGFloat, corner: UIRectCorner) -> CGPath {
-            let size = cornerExtent(radius: radius)
-            let path = CGMutablePath()
-            path.move(to: .zero)
-            path.addLine(to: CGPoint(x: size, y: 0))
-            path.addArc(
-                center: CGPoint(x: size, y: size), radius: size, startAngle: -.pi / 2, endAngle: -.pi, clockwise: true)
-            path.closeSubpath()
-            guard corner != .topLeft else { return path }
-            // The same, mirrored across to the corner asked for.
-            let flipsAcross = corner == .topRight || corner == .bottomRight
-            let flipsDown = corner == .bottomLeft || corner == .bottomRight
-            var mirror = CGAffineTransform(
-                a: flipsAcross ? -1 : 1, b: 0, c: 0, d: flipsDown ? -1 : 1, tx: flipsAcross ? size : 0,
-                ty: flipsDown ? size : 0)
-            return path.copy(using: &mirror) ?? path
+        /// `rect` shrunk by `scale` about its middle.
+        private static func frame(_ rect: CGRect, scaledBy scale: CGFloat) -> CGRect {
+            guard scale < 1 else { return rect }
+            return rect.insetBy(dx: rect.width * (1 - scale) / 2, dy: rect.height * (1 - scale) / 2)
         }
     }
 
