@@ -36,6 +36,8 @@ import SwiftUI
     }
 
     let id: String
+    /// The item as the card that opened the screen showed it, for the navigation bar until the details load.
+    let preview: MediaItem?
     private(set) var phase = Phase.loading
     /// Whether the user can ask the server to refresh the item's metadata, which administrators can.
     private(set) var canRefreshMetadata = false
@@ -67,8 +69,10 @@ import SwiftUI
     /// - Parameters:
     ///   - id: The movie, show or episode.
     ///   - seasonID: For a show, the season to list first, as from a link to the season.
-    init(id: String, seasonID: String? = nil) {
+    ///   - preview: The item as the card that opened the screen showed it.
+    init(id: String, seasonID: String? = nil, preview: MediaItem? = nil) {
         self.id = id
+        self.preview = preview
         requestedSeasonID = seasonID
         ownTint = ArtworkMemory.tint(for: id)
     }
@@ -78,6 +82,7 @@ import SwiftUI
     /// watched, as what was tapped said it would.
     init(showing item: MediaItem, playable: MediaItem?) {
         id = item.id
+        preview = item
         let episode = item.card.kind == .series ? playable.flatMap { $0.card.kind == .episode ? $0 : nil } : nil
         requestedSeasonID = episode?.seasonID
         pinnedEpisodeID = episode?.id

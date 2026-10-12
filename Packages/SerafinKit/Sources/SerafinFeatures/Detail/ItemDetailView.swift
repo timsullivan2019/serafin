@@ -18,9 +18,12 @@ struct ItemDetailView: View {
 
     /// Creates the screen.
     ///
-    /// - Parameter id: The movie, series or episode.
-    init(id: String) {
-        _model = State(initialValue: ItemDetailModel(id: id))
+    /// - Parameters:
+    ///   - id: The movie, series or episode.
+    ///   - preview: The item as the card that opened the screen showed it, whose watched and favorite marks the
+    ///     navigation bar shows until the details load.
+    init(id: String, preview: MediaItem? = nil) {
+        _model = State(initialValue: ItemDetailModel(id: id, preview: preview))
         zoomSource = id
         arrivesFromHomeHero = false
     }
@@ -64,7 +67,8 @@ struct ItemDetailView: View {
         .zoomTransition(from: zoomSource, in: zoom)
         .task(id: actions.revision) { await model.load(from: media) }
         .toolbar {
-            if let item = model.details?.item {
+            // From the first frame when a card opened the screen, so the buttons come in with it, as from Home's hero.
+            if let item = model.details?.item ?? model.preview {
                 DetailToolbar(
                     item: item,
                     canRefreshMetadata: model.canRefreshMetadata,
