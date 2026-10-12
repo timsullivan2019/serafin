@@ -49,6 +49,20 @@ private let longGrid: [String] = {
         #expect(model.generation > generation)
     }
 
+    @Test func aGridsLengthStaysWithinBoundsWhateverTheServerClaims() async {
+        var broken = TestMediaSource(titles: longGrid)
+        broken.claimedTotal = -1
+        let negative = LibraryModel(scope: scope)
+        await negative.reload(from: broken)
+        #expect(negative.total == 0)
+
+        broken.claimedTotal = .max
+        let huge = LibraryModel(scope: scope)
+        await huge.reload(from: broken)
+        #expect(huge.total == LibraryModel.largestTotal)
+        #expect(huge.item(at: 0) != nil)
+    }
+
     @Test func newOptionsStartTheGridOver() async {
         let model = LibraryModel(scope: scope)
         await model.reload(from: media)

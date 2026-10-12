@@ -5,11 +5,15 @@ import SerafinDesign
 @testable import SerafinFeatures
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
-/// the server does, a server that refuses every change, Home saved on the device and a server that can't be reached,
-/// grids or genres that don't load, or seasons whose episodes don't load.
+/// the server does, or the way a broken server does, a server that refuses every change, Home saved on the device and
+/// a server that can't be reached, grids or genres that don't load, or seasons whose episodes don't load.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
+    /// The length the grids of ``titles`` claim instead of their own, as a broken server's might, or nil for their own.
+    var claimedTotal: Int?
+    /// Whether the grids of ``titles`` send their first page whichever page is asked for, as a broken server might.
+    var ignoresStart = false
     /// Whether marking played or favourite fails.
     var refusesChanges = false
     /// What Continue Watching and Next Up hold instead of the samples, or nil for the samples.
@@ -53,8 +57,8 @@ struct TestMediaSource: MediaSource {
         guard let cards = cards(options) else {
             return try await samples.page(of: scope, options: options, start: start, limit: limit)
         }
-        let page = cards.dropFirst(start).prefix(limit).map { MediaItem(card: $0, source: nil) }
-        return MediaPage(items: page, total: cards.count)
+        let page = cards.dropFirst(ignoresStart ? 0 : start).prefix(limit).map { MediaItem(card: $0, source: nil) }
+        return MediaPage(items: page, total: claimedTotal ?? cards.count)
     }
 
     func filters(in scope: GridScope) async throws -> LibraryFilters { try await samples.filters(in: scope) }

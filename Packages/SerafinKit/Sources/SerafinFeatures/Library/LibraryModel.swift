@@ -244,6 +244,9 @@ extension LibrariesModel.Row {
     static let prefetchDistance = 12
     /// How long a grid sorted by name has to be to get the letter index.
     static let indexMinimum = 48
+    /// The most places a grid holds: far more titles than any real library has, and few enough that a broken server
+    /// claiming billions can't use up the device's memory.
+    static let largestTotal = 250_000
 
     let scope: GridScope
     /// The sort and filters. Changing them reloads the grid.
@@ -298,8 +301,9 @@ extension LibrariesModel.Row {
         do {
             let page = try await media.page(of: scope, options: options, start: 0, limit: Self.pageSize)
             guard options == self.options else { return }
-            if options != loadedOptions || page.total != slots.count {
-                slots = Array(repeating: nil, count: page.total)
+            let total = min(max(page.total, 0), Self.largestTotal)
+            if options != loadedOptions || total != slots.count {
+                slots = Array(repeating: nil, count: total)
                 letterPositions = [:]
             }
             loadedOptions = options

@@ -102,6 +102,7 @@ actor SpotlightIndexer {
             var written: Set<String> = []
             for library in try await media.libraries() {
                 var start = 0
+                var listed: Set<String> = []
                 while true {
                     try Task.checkCancellation()
                     let page = try await media.page(
@@ -110,12 +111,17 @@ actor SpotlightIndexer {
                         start: start,
                         limit: Self.pageSize
                     )
-                    let items = page.items.compactMap { $0 }.filter { written.insert($0.id).inserted }
+                    let found = page.items.compactMap { $0 }
+                    let alreadyListed = listed.count
+                    listed.formUnion(found.map(\.id))
+                    let items = found.filter { written.insert($0.id).inserted }
                     let entities = await Self.entities(for: items, poster: poster)
                     try Task.checkCancellation()
                     try await store.index(entities, domain: domain)
                     start += page.items.count
-                    if page.items.isEmpty || start >= page.total { break }
+                    // A page with nothing the library hasn't already listed means the server sent it again, as one
+                    // that ignores where to start would, so its total can't be trusted.
+                    if page.items.isEmpty || listed.count == alreadyListed || start >= page.total { break }
                 }
             }
             if let previous {

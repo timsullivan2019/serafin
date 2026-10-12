@@ -118,4 +118,13 @@ private final class TestDate: @unchecked Sendable {
         await (try indexer()).update(account: alice, media: shared) { _ in nil }
         #expect(await store.writes == ["test-Safety Last!": 1, "test-The Freshman": 1])
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aServerThatSendsTheSamePageAgainEndsThePass() async throws {
+        var broken = TestMediaSource(titles: ["Safety Last!", "The Freshman"])
+        broken.ignoresStart = true
+        broken.claimedTotal = .max
+        await (try indexer()).update(account: alice, media: broken) { _ in nil }
+        #expect(await store.writes == ["test-Safety Last!": 1, "test-The Freshman": 1])
+    }
 }
