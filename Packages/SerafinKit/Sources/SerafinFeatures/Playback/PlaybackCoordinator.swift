@@ -131,6 +131,8 @@ import SerafinPlayback
             if !isPlayerPresented {
                 self.zoomSource = zoomSource
             }
+            // A player still closing after a stop would otherwise close on this item, and take its title with it.
+            keepClosingPlayer()
             isPlayerPresented = true
         }
         guard let engine, let source = item.source else {
@@ -216,15 +218,18 @@ import SerafinPlayback
     /// was away, so the player comes back as usual rather than zooming out of it.
     private func presentPlayer() {
         zoomSource = nil
-        if closing != nil {
-            // Changed course while the interface was turning upright to close: keep the player.
-            closing?.cancel()
-            closing = nil
-            #if os(iOS)
-                InterfaceOrientations.playerAppeared()
-            #endif
-        }
+        keepClosingPlayer()
         isPlayerPresented = true
+    }
+
+    /// Keeps the full-screen player if it's closing, having changed course while the interface turned upright.
+    private func keepClosingPlayer() {
+        guard closing != nil else { return }
+        closing?.cancel()
+        closing = nil
+        #if os(iOS)
+            InterfaceOrientations.playerAppeared()
+        #endif
     }
 
     /// What putting the player away does.

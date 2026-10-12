@@ -141,8 +141,8 @@ public enum PlaybackState: Equatable, Sendable {
     /// How many seeks are under way. The player reports its old position until a seek lands, so the elapsed time
     /// holds at the target meanwhile.
     @ObservationIgnored private var seeksInFlight = 0
-    /// Goes up with every load and stop, so a load that finishes after another has started, or after a stop, does
-    /// nothing.
+    /// Goes up with every load and stop, so a load or stop that finishes after a newer one has started does nothing
+    /// more.
     @ObservationIgnored private var generation = 0
     #if canImport(UIKit)
         private var details: NowPlayingDetails?
@@ -315,6 +315,7 @@ public enum PlaybackState: Equatable, Sendable {
             else { return }
             reporter = ProgressReporter(client: client, plan: plan)
             await reporter?.start(at: options.startPosition, isPaused: false)
+            guard load == generation else { return }
             startReporting()
             let found = await marked
             guard load == generation else { return }
@@ -354,15 +355,18 @@ public enum PlaybackState: Equatable, Sendable {
         legible = nil
     }
 
-    /// Stops playback, reports where it stopped and unloads the item.
+    /// Stops playback, reports where it stopped and unloads the item. An item that starts loading while the server
+    /// hears about the stop has the player from then on, and this leaves it alone.
     public func stop() async {
         generation += 1
+        let stopping = generation
         streamRequest += 1
         player.pause()
         #if canImport(UIKit)
             pictureInPicture?.stopPictureInPicture()
         #endif
         await stopReporting()
+        guard stopping == generation else { return }
         reporter = nil
         player.replaceCurrentItem(with: nil)
         clearItemObservations()
@@ -644,11 +648,15 @@ public enum PlaybackState: Equatable, Sendable {
     public func play() {
         guard player.currentItem != nil else { return }
         if state == .ended {
-            // Playing again after the end starts over, as a new playback on the server.
+            // Playing again after the end starts over, as a new playback on the server, unless another item loads or
+            // playback stops meanwhile.
+            let replay = generation
             Task {
                 await seek(to: .zero)
+                guard replay == generation else { return }
                 player.playImmediately(atRate: rate)
                 await reporter?.start(at: .zero, isPaused: false)
+                guard replay == generation else { return }
                 startReporting()
             }
             return
@@ -1439,10 +1447,13 @@ public enum PlaybackState: Equatable, Sendable {
             let playing = playsWhenReady
             playsWhenReady = false
             isStarting = true
+            let starting = generation
             Task {
                 if let start {
                     await player.seek(to: CMTime(start), toleranceBefore: .zero, toleranceAfter: .zero)
                 }
+                // Another item, or another stream of this one, took over during the seek, or playback stopped.
+                guard starting == generation, player.currentItem === playerItem else { return }
                 isStarting = false
                 if playing {
                     player.playImmediately(atRate: rate)

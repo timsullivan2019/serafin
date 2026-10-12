@@ -287,6 +287,75 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func aSecondStopWaitsForTheFirstToBeAnswered() async throws {
+        let host = "overlapping-stops.example.com"
+        stubReports(on: host)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped"))
+        let reporter = ProgressReporter(client: try stubClient(on: host), plan: try await plan(on: host))
+        await reporter.start(at: .zero, isPaused: false)
+
+        // The player stops, and a new video's load stops the same playback again before the server has answered.
+        let first = Task { await reporter.stop(at: .seconds(10)) }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Sessions/Playing/Stopped")
+        let second = Task {
+            await reporter.stop(at: .seconds(10))
+            return ContinuousClock.now
+        }
+        // Long enough for a second stop that didn't wait to have returned.
+        try await Task.sleep(for: .milliseconds(100))
+        let released = ContinuousClock.now
+        StubURLProtocol.release("\(host) stopped")
+
+        #expect(await second.value >= released)
+        await first.value
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aStopWaitsForAProgressReportOnItsWay() async throws {
+        let host = "late-progress.example.com"
+        stubReports(on: host)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Progress", .held("\(host) progress"))
+        let reporter = ProgressReporter(client: try stubClient(on: host), plan: try await plan(on: host))
+        await reporter.start(at: .zero, isPaused: false)
+
+        let progress = Task { await reporter.progress(at: .seconds(10), isPaused: false) }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Sessions/Playing/Progress")
+        let stop = Task { await reporter.stop(at: .seconds(11)) }
+        // Long enough for a stop that didn't wait to have reached the server.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").isEmpty)
+
+        StubURLProtocol.release("\(host) progress")
+        await progress.value
+        await stop.value
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aStopDuringASwitchToANewPlanEndsTheReports() async throws {
+        let host = "stopped-switch.example.com"
+        stubReports(on: host)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped"))
+        let first = try await plan(on: host)
+        let reporter = ProgressReporter(client: try stubClient(on: host), plan: first)
+        await reporter.start(at: .zero, isPaused: false)
+
+        let switching = Task { await reporter.replace(with: first.with(audio: 2), at: .seconds(30), isPaused: false) }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Sessions/Playing/Stopped")
+        let stop = Task { await reporter.stop(at: .seconds(30)) }
+        while await reporter.stopCount == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        StubURLProtocol.release("\(host) stopped")
+        await switching.value
+        await stop.value
+
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing").count == 1)
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
+    }
+
     @Test func aFailedReportDoesNotThrow() async throws {
         let host = "failing-reports.example.com"
         StubURLProtocol.stub("\(host):443", .failure(.notConnectedToInternet))
