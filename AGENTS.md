@@ -64,6 +64,7 @@ Packages/SerafinKit/
   Tests/SerafinFeaturesTests/   screen logic and the mapping from server items to cards
 docs/PLAN.md         the phased work plan
 docs/SECURITY.md     threat model (written in Phase 3)
+docs/*.html  docs/privacy/  docs/support/   getserafin.app, which GitHub Pages serves from docs/ (`_config.yml` keeps the .md files off it)
 .github/workflows/ci.yml
 ```
 

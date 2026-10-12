@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Support · Serafin</title>
+  <meta name="description" content="Help with Serafin, the app for watching your Jellyfin library on iPhone and iPad, and how to get in touch.">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <a class="name" href="/">Serafin</a>
+    <nav>
+      <a href="/support/" aria-current="page">Support</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Support</h1>
+    <p class="lead">Questions, problems and ideas are welcome at <a href="mailto:support@getserafin.app">support@getserafin.app</a>. It helps to include your server's Jellyfin version and what you were doing.</p>
+
+    <h2>What you need</h2>
+    <ul>
+      <li>An iPhone or iPad with iOS or iPadOS 26.1 or later.</li>
+      <li>A Jellyfin server, version 10.10 or newer, that you run or have an account on.</li>
+    </ul>
+
+    <h2>Connecting to your server</h2>
+    <p>In Add Server, type your server's address, such as <code>https://jellyfin.example.com</code>. Servers on your Wi-Fi appear under On This Network when you allow Serafin to use your local network.</p>
+    <ul>
+      <li><strong>Addresses on your own network</strong>, such as <code>http://192.168.1.20:8096</code>, can use unencrypted HTTP after a warning. So can Tailscale addresses. Anywhere else, use your server's <code>https://</code> address.</li>
+      <li><strong>A self-signed certificate</strong> shows its fingerprint. Check it matches your server's before you trust it. From then on Serafin accepts only that certificate for that server.</li>
+      <li><strong>Can't reach the server?</strong> Check the address works in Safari on the same device, and that your server allows remote connections if you're away from home.</li>
+    </ul>
+
+    <h2>Signing in</h2>
+    <p>Sign in with your Jellyfin username and password, which iOS can fill from your passwords. To sign in without typing a password, choose Quick Connect and enter the code on a device where you're already signed in to Jellyfin. Quick Connect has to be turned on in your server's dashboard.</p>
+
+    <h2>Playing</h2>
+    <p>Serafin plays most videos directly. When a video's format won't play on your device, your server converts it as it plays, which needs a server that can keep up. You can set the streaming quality for Wi-Fi and cellular in Settings.</p>
+
+    <h2>Privacy</h2>
+    <p>Serafin collects nothing about you and talks only to your own servers. The <a href="/privacy/">privacy policy</a> has the details.</p>
+
+    <h2>Security issues</h2>
+    <p>Please report a vulnerability privately to <a href="mailto:support@getserafin.app">support@getserafin.app</a>, or through GitHub's private vulnerability reporting on <a href="https://github.com/timsullivan2019/serafin">Serafin's repository</a>, rather than in public.</p>
+  </main>
+  <footer>
+    <p>Serafin is an independent app for Jellyfin. It isn't made or endorsed by the Jellyfin project.</p>
+  </footer>
+</body>
+</html>
