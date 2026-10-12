@@ -69,6 +69,16 @@ actor SpotlightIndexer {
         pass = nil
     }
 
+    /// Empties the index unless the last full pass wrote it for `account`, so another account's titles go as soon as
+    /// this one signs in, rather than when its own pass starts, which may wait for a later launch. Entries from a pass
+    /// cut short, before it noted whose they were, go too.
+    ///
+    /// - Parameter account: Who's signed in.
+    func removeEntries(notOwnedBy account: SessionKey) async {
+        guard store.isAvailable, defaults.string(forKey: Self.accountKey) != Self.owner(of: account) else { return }
+        await removeAll()
+    }
+
     /// Stops any pass and empties the index.
     func removeAll() async {
         pass?.cancel()
@@ -87,7 +97,7 @@ actor SpotlightIndexer {
         media: any MediaSource,
         poster: @escaping @Sendable (MediaItem) async -> Data?
     ) async {
-        let owner = "\(account.serverID)/\(account.userID)"
+        let owner = Self.owner(of: account)
         do {
             if defaults.string(forKey: Self.accountKey) != owner {
                 try await store.removeAll()
@@ -136,6 +146,11 @@ actor SpotlightIndexer {
             Self.logger.error(
                 "Could not write the library to Spotlight: \(error.localizedDescription, privacy: .private)")
         }
+    }
+
+    /// How the notes name `account`.
+    private static func owner(of account: SessionKey) -> String {
+        "\(account.serverID)/\(account.userID)"
     }
 
     /// Forgets which account was written, so the next pass starts afresh.

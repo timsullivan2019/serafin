@@ -40,4 +40,9 @@ import Observation
     var isExpensive: Bool {
         monitor.currentPath.isExpensive
     }
+
+    /// Whether the user has asked the current connection to save data, with Low Data Mode.
+    var isConstrained: Bool {
+        monitor.currentPath.isConstrained
+    }
 }

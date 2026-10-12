@@ -1,4 +1,5 @@
 import Foundation
+import Nuke
 import SerafinCore
 import SerafinDesign
 
@@ -135,14 +136,18 @@ enum PosterThumbnail {
 
     /// A JPEG of the item's poster, decoded and encoded again by Serafin so the server's bytes never reach another
     /// process, or nil when it has no poster or it won't load.
+    ///
+    /// The poster isn't kept in the memory cache, which a whole library written to Spotlight would otherwise fill,
+    /// pushing out the images on screen.
     static func jpeg(of item: MediaItem, from artwork: Artwork?) async -> Data? {
         #if canImport(UIKit)
             guard
                 let artwork,
                 let source = item.source,
-                let request = artwork.request(.poster, of: source, width: width, scale: 3),
-                let image = try? await artwork.pipeline.image(for: request)
+                var request = artwork.request(.poster, of: source, width: width, scale: 3)
             else { return nil }
+            request.options.insert(.disableMemoryCacheWrites)
+            guard let image = try? await artwork.pipeline.image(for: request) else { return nil }
             return image.jpegData(compressionQuality: 0.8)
         #else
             return nil

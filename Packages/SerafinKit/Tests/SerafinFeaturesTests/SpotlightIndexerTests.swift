@@ -101,6 +101,29 @@ private final class TestDate: @unchecked Sendable {
         #expect(Set(await store.domains.keys) == everything)
     }
 
+    @Test func anotherAccountsTitlesGoAsSoonAsSomeoneElseSignsIn() async throws {
+        let indexer = try indexer()
+        await indexer.update(account: alice, media: media) { _ in nil }
+        await indexer.removeEntries(notOwnedBy: SessionKey(serverID: "server-1", userID: "bob"))
+        #expect(await store.domains.isEmpty)
+    }
+
+    @Test func theSignedInAccountsOwnTitlesStay() async throws {
+        let indexer = try indexer()
+        await indexer.update(account: alice, media: media) { _ in nil }
+        let emptied = await store.emptied
+        await indexer.removeEntries(notOwnedBy: alice)
+        #expect(await store.emptied == emptied)
+        #expect(Set(await store.domains.keys) == everything)
+    }
+
+    @Test func titlesFromAPassCutShortGoToo() async throws {
+        // A pass that never finished noted no account for what it wrote.
+        await store.addLeftover("cut-short", in: "library-a")
+        await (try indexer()).removeEntries(notOwnedBy: alice)
+        #expect(await store.domains.isEmpty)
+    }
+
     @Test func emptyingTheIndexForgetsWhatWasWritten() async throws {
         let indexer = try indexer()
         await indexer.update(account: alice, media: media) { _ in nil }

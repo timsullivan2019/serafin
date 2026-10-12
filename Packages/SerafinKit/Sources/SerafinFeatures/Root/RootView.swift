@@ -73,10 +73,14 @@ public struct RootView: View {
                 await spotlight.removeAll()
                 return
             }
+            // Another account's titles go now, even when this account's pass waits for a later launch.
+            await spotlight.removeEntries(notOwnedBy: account.key)
             guard let library = session.library else { return }
             // Home's own requests go first.
             try? await Task.sleep(for: .seconds(10))
             guard !Task.isCancelled else { return }
+            // The whole library can wait for a later launch while the device is saving power or data.
+            guard !ProcessInfo.processInfo.isLowPowerModeEnabled, !NetworkWatcher.shared.isConstrained else { return }
             let artwork = session.artwork
             await spotlight.update(account: account.key, media: LiveMediaSource(library: library)) { item in
                 await PosterThumbnail.jpeg(of: item, from: artwork)
