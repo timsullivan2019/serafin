@@ -72,10 +72,24 @@
 
     /// A view that shows an `AVPlayerLayer` filling its bounds, with the picture fitted inside or filling it.
     public final class PlayerLayerView: UIView {
+        /// Where the picture is in a hand-back from Picture in Picture inside the app. See ``hideForHandBack()``.
+        enum HandBack: Equatable {
+            /// No hand-back: the picture fills the view and shows.
+            case none
+            /// Shrunk to nothing in the view's middle, so Picture in Picture has no picture to fly its window into.
+            case hidden
+            /// Back to full size, still clear, until the video is back.
+            case waiting
+        }
+
         /// The layer showing the video.
         public let playerLayer = AVPlayerLayer()
         /// Whether the picture fills the view, cropping what spills past its edges, rather than fitting inside it.
         public private(set) var fillsBounds = false
+        /// Where the picture is in a hand-back from Picture in Picture.
+        private(set) var handBack = HandBack.none
+        /// The key of the animation fading the picture in after a hand-back.
+        static let fadeInKey = "fadeInAfterHandBack"
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -111,8 +125,69 @@
             super.layoutSubviews()
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            playerLayer.frame = bounds
+            playerLayer.frame = pictureFrame
             CATransaction.commit()
+        }
+
+        /// Takes the picture away while Picture in Picture hands the video back inside the app.
+        ///
+        /// Picture in Picture flies its window into the picture it hands the video to, and inside the app iOS rounds
+        /// the window's corners to match the screen's as it lands there, as wide as the screen in portrait. With no
+        /// picture to fly into, the window shrinks away where it is instead. The picture comes back to full size once
+        /// iOS has looked for it (``layOutAfterHandBack()``), and fades in once the video is back
+        /// (``showAfterHandBack()``).
+        func hideForHandBack() {
+            playerLayer.removeAnimation(forKey: Self.fadeInKey)
+            handBack = .hidden
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.opacity = 0
+            playerLayer.frame = pictureFrame
+            CATransaction.commit()
+        }
+
+        /// Puts the picture back to full size, still clear, once Picture in Picture has looked for it.
+        func layOutAfterHandBack() {
+            guard handBack == .hidden else { return }
+            handBack = .waiting
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = pictureFrame
+            CATransaction.commit()
+        }
+
+        /// Fades the picture in at full size once Picture in Picture has handed the video back.
+        func showAfterHandBack() {
+            guard handBack != .none else { return }
+            handBack = .none
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = pictureFrame
+            playerLayer.opacity = 1
+            CATransaction.commit()
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.duration = 0.25
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            playerLayer.add(fade, forKey: Self.fadeInKey)
+        }
+
+        /// Shows the picture at full size at once, as when the hand-back doesn't finish or the screen goes.
+        func cancelHandBack() {
+            playerLayer.removeAnimation(forKey: Self.fadeInKey)
+            guard handBack != .none else { return }
+            handBack = .none
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = pictureFrame
+            playerLayer.opacity = 1
+            CATransaction.commit()
+        }
+
+        /// Where the video layer goes: the whole view, or nothing in its middle while it's hidden for a hand-back.
+        private var pictureFrame: CGRect {
+            handBack == .hidden ? CGRect(x: bounds.midX, y: bounds.midY, width: 0, height: 0) : bounds
         }
     }
 
