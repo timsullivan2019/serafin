@@ -49,6 +49,36 @@ private let longGrid: [String] = {
         #expect(model.generation > generation)
     }
 
+    @Test func aPlaceScrollingAwayDoesNotCancelThePageOthersWaitFor() async {
+        let slow = TestMediaSource(titles: longGrid, pageDelay: .milliseconds(200))
+        let model = LibraryModel(scope: scope)
+        await model.reload(from: slow)
+
+        let leaving = Task { await model.load(around: 70, from: slow) }
+        try? await Task.sleep(for: .milliseconds(50))
+        leaving.cancel()
+        // Another place on the same page, still on screen.
+        await model.load(around: 71, from: slow)
+        #expect(model.item(at: 70) != nil)
+        #expect(model.item(at: 71) != nil)
+    }
+
+    @Test func aPageThatFailsIsAskedForOnceMore() async {
+        var flaky = TestMediaSource(titles: longGrid)
+        let model = LibraryModel(scope: scope)
+        await model.reload(from: flaky)
+        flaky.flakyPages = FlakyPages(failing: 1)
+        await model.load(around: 70, from: flaky)
+        #expect(model.item(at: 70) != nil)
+
+        // Failing twice, the page waits for a place to ask again, or for pull to refresh.
+        flaky.flakyPages = FlakyPages(failing: 2)
+        await model.load(around: 130, from: flaky)
+        #expect(model.item(at: 130) == nil)
+        await model.load(around: 130, from: flaky)
+        #expect(model.item(at: 130) != nil)
+    }
+
     @Test func aGridsLengthStaysWithinBoundsWhateverTheServerClaims() async {
         var broken = TestMediaSource(titles: longGrid)
         broken.claimedTotal = -1

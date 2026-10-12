@@ -230,7 +230,8 @@ extension LibrariesModel.Row {
 ///
 /// The grid knows its full length from the first page, and holds a place for every item. Each place's page loads
 /// when the place comes on screen, so a jump from the letter index to the middle of a long grid loads only the
-/// pages around where it lands.
+/// pages around where it lands. The model fetches each page itself, once, so a place scrolling away doesn't cancel a
+/// page the places still on screen are waiting for, and a page that fails is asked for once more.
 @Observable @MainActor final class LibraryModel {
     enum Phase {
         case loading
@@ -244,6 +245,8 @@ extension LibrariesModel.Row {
     static let prefetchDistance = 12
     /// How long a grid sorted by name has to be to get the letter index.
     static let indexMinimum = 48
+    /// How long a page that failed to load waits before it's asked for again.
+    static let retryDelay = Duration.seconds(1)
     /// The most places a grid holds: far more titles than any real library has, and few enough that a broken server
     /// claiming billions can't use up the device's memory.
     static let largestTotal = 250_000
@@ -260,7 +263,8 @@ extension LibrariesModel.Row {
     private(set) var filters = LibraryFilters(genres: [], years: [])
     private var loadedOptions: GridOptions?
     private var loadedPages: Set<Int> = []
-    private var loadingPages: Set<Int> = []
+    /// The pages on their way, by number.
+    private var pageLoads: [Int: Task<Void, Never>] = [:]
     private var letterPositions: [String: Int] = [:]
 
     init(scope: GridScope) {
@@ -308,7 +312,11 @@ extension LibrariesModel.Row {
             }
             loadedOptions = options
             loadedPages = []
-            loadingPages = []
+            // The pages still on their way belong to the grid as it was.
+            for load in pageLoads.values {
+                load.cancel()
+            }
+            pageLoads = [:]
             place(page.items, at: 0)
             loadedPages.insert(0)
             generation += 1
@@ -353,19 +361,36 @@ extension LibrariesModel.Row {
         await reload(from: media)
     }
 
+    /// Loads page `page`, or waits for it when it's already on its way. The fetch belongs to the model rather than to
+    /// the place that asked, so it carries on when that place scrolls away.
     private func loadPage(_ page: Int, from media: any MediaSource) async {
         let start = page * Self.pageSize
-        guard start < slots.count, !loadedPages.contains(page), !loadingPages.contains(page) else { return }
+        guard start < slots.count, !loadedPages.contains(page) else { return }
+        if let loading = pageLoads[page] {
+            await loading.value
+            return
+        }
         let options = options
         let generation = generation
-        loadingPages.insert(page)
-        let result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
-        // A reload in the meantime started the pages over, and its own loads replace this one.
-        guard generation == self.generation else { return }
-        loadingPages.remove(page)
-        guard let result, options == self.options else { return }
-        place(result.items, at: start)
-        loadedPages.insert(page)
+        let loading = Task {
+            var result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
+            if result == nil, !Task.isCancelled {
+                // Once more after a moment, for a dropped connection or a busy server. Pull to refresh tries again
+                // after that.
+                try? await Task.sleep(for: Self.retryDelay)
+                if !Task.isCancelled {
+                    result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
+                }
+            }
+            // A reload in the meantime started the pages over, and its own loads replace this one.
+            guard generation == self.generation else { return }
+            pageLoads[page] = nil
+            guard let result, options == self.options else { return }
+            place(result.items, at: start)
+            loadedPages.insert(page)
+        }
+        pageLoads[page] = loading
+        await loading.value
     }
 
     private func place(_ items: [MediaItem?], at start: Int) {
