@@ -27,9 +27,15 @@ public struct Artwork: Sendable {
 
     /// The request for `item`'s image in `role`, drawn `width` points wide on a screen of `scale`, or nil when the
     /// item and its show have no such image.
-    public func request(_ role: ImageRole, of item: BaseItemDto, width: CGFloat, scale: CGFloat) -> ImageRequest? {
+    ///
+    /// - Parameter allowsConstrainedNetwork: Whether the image may download over a connection in Low Data Mode. A
+    ///   download made before anyone asks to see the image passes false.
+    public func request(
+        _ role: ImageRole, of item: BaseItemDto, width: CGFloat, scale: CGFloat, allowsConstrainedNetwork: Bool = true
+    ) -> ImageRequest? {
         let pixels = Self.pixelWidth(points: width, scale: scale)
-        return request(urls.url(role, of: item, maxWidth: pixels), pixels: pixels)
+        let url = urls.url(role, of: item, maxWidth: pixels)
+        return request(url, pixels: pixels, allowsConstrainedNetwork: allowsConstrainedNetwork)
     }
 
     /// The request for a cast or crew member's photo, drawn `width` points wide on a screen of `scale`, or nil when
@@ -61,10 +67,11 @@ public struct Artwork: Sendable {
         request(urls.userImageURL(userID: userID, tag: tag), pixels: Self.pixelWidth(points: width, scale: scale))
     }
 
-    private func request(_ url: URL?, pixels: Int) -> ImageRequest? {
+    private func request(_ url: URL?, pixels: Int, allowsConstrainedNetwork: Bool = true) -> ImageRequest? {
         guard let url else { return nil }
         var urlRequest = URLRequest(url: url)
         urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
+        urlRequest.allowsConstrainedNetworkAccess = allowsConstrainedNetwork
         var request = ImageRequest(urlRequest: urlRequest)
         // A box as wide as asked for and taller than any poster, so only the width limits the decoded size.
         request.thumbnail = ImageRequest.ThumbnailOptions(

@@ -144,6 +144,20 @@ import Testing
         #expect(kept.contains("AddVttTimeMap=true"))
     }
 
+    @Test(arguments: ["nan", "inf", "-30", "1e100", "thirty"])
+    func aSegmentWithoutARealLengthKeepsTheSegments(duration: String) throws {
+        let playlist = subtitles.replacing("#EXTINF:8.005,", with: "#EXTINF:\(duration),")
+        let kept = SubtitlePlaylists.subtitles(playlist, from: try #require(subtitlesURL))
+        #expect(kept.contains("AddVttTimeMap=true"))
+    }
+
+    @Test func segmentsLongerThanAnyVideoTogetherKeepTheSegments() throws {
+        // Each is under a week long, but together they run longer.
+        let playlist = subtitles.replacing("#EXTINF:30,", with: "#EXTINF:400000,")
+        let kept = SubtitlePlaylists.subtitles(playlist, from: try #require(subtitlesURL))
+        #expect(kept.contains("AddVttTimeMap=true"))
+    }
+
     @Test func theLoaderHandsAVFoundationTheRewrittenMaster() async throws {
         let host = "loader-master.example"
         StubURLProtocol.stub("\(host):443", path: "/videos/item-1/master.m3u8", .json(200, master))

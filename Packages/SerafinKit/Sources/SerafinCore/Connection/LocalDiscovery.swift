@@ -18,8 +18,8 @@ public struct DiscoveredServer: Hashable, Identifiable, Sendable {
 
 /// Finds Jellyfin servers on the local network with Jellyfin's UDP discovery on port 7359.
 ///
-/// On a device this needs Apple's multicast networking entitlement, which Apple grants on request; the simulator
-/// works without it.
+/// On a device the broadcast needs Apple's multicast networking entitlement, which the app carries, and the user's
+/// permission to use the local network, which iOS asks for the first time. The simulator needs neither.
 public enum LocalDiscovery {
     /// Servers that answer within `duration`, each reported once.
     ///

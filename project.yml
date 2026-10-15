@@ -33,6 +33,11 @@ targets:
         products:
           - SerafinFeatures
           - SerafinDesign
+    entitlements:
+      path: App/Serafin.entitlements
+      properties:
+        # Finding servers on the network broadcasts on UDP port 7359, which iOS allows only with this entitlement.
+        com.apple.developer.networking.multicast: true
     info:
       path: App/Info.plist
       properties:
@@ -53,8 +58,9 @@ targets:
               NSIncludesSubdomains: true
         NSFaceIDUsageDescription: Serafin uses Face ID to unlock when you turn on its lock in Settings.
         NSLocalNetworkUsageDescription: Serafin looks for Jellyfin servers on your network.
+        # One window: the player, Now Playing and Picture in Picture belong to a single scene.
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: true
+          UIApplicationSupportsMultipleScenes: false
         UIBackgroundModes:
           - audio
         UILaunchScreen: {}

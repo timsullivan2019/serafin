@@ -604,6 +604,9 @@
     "Privacy" : {
       "comment" : "Settings section header."
     },
+    "Privacy Policy" : {
+      "comment" : "Settings row that opens Serafin's privacy policy on its website."
+    },
     "Producer" : {
       "comment" : "A crew member's job on a detail screen."
     },
@@ -834,6 +837,9 @@
     },
     "Suggested" : {
       "comment" : "Heading over titles the user hasn't watched, on the search tab before anything is typed."
+    },
+    "Support" : {
+      "comment" : "Settings row that opens Serafin's support page on its website."
     },
     "That's Not a Jellyfin Server" : {
       "comment" : "Title when the address isn't Jellyfin."

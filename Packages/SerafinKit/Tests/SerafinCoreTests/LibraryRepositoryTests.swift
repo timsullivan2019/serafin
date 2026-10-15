@@ -422,4 +422,77 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         await #expect(throws: SerafinError.offline) { try await library.nextUp() }
         #expect(try await library.nextUp().count == 1)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func theSameReadMadeMeanwhileWaitsForTheOneOnItsWay() async throws {
+        let host = "shared-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let first = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        let second = Task { try await library.nextUp() }
+        // Time for the second read to be made while the first is on its way.
+        try await Task.sleep(for: .milliseconds(100))
+        StubURLProtocol.release(host)
+        #expect(try await first.value.count == 1)
+        #expect(try await second.value.count == 1)
+        #expect(nextUpRequests(on: host) == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aCancelledCallerStopsWaitingAndLeavesTheReadToTheOthers() async throws {
+        let host = "abandoned-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let staying = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        let leaving = Task { try await library.nextUp() }
+        try await Task.sleep(for: .milliseconds(100))
+        leaving.cancel()
+        await #expect(throws: CancellationError.self) { try await leaving.value }
+        StubURLProtocol.release(host)
+        #expect(try await staying.value.count == 1)
+        #expect(nextUpRequests(on: host) == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aReadOnItsWayWhenTheCacheIsEmptiedIsNotKept() async throws {
+        let host = "stale-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let reading = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        await library.clearCache()
+        StubURLProtocol.release(host)
+        #expect(try await reading.value.count == 1)
+        _ = try await library.nextUp()
+        #expect(nextUpRequests(on: host) == 2)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aReadMadeAfterTheCacheIsEmptiedDoesNotWaitForOneFromBefore() async throws {
+        let host = "fresh-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let before = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        await library.clearCache()
+        let after = Task { try await library.nextUp() }
+        while nextUpRequests(on: host) < 2 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        StubURLProtocol.release(host)
+        #expect(try await before.value.count == 1)
+        #expect(try await after.value.count == 1)
+    }
+
+    /// Has Next Up on `host` answer only once ``StubURLProtocol/release(_:)`` is called with `host`.
+    private func holdNextUp(on host: String) throws {
+        StubURLProtocol.stub("\(host):443", path: "/Shows/NextUp", .held(host, .json(200, try Fixture.json("NextUp"))))
+    }
+
+    /// How many times `host` was asked for Next Up.
+    private func nextUpRequests(on host: String) -> Int {
+        StubURLProtocol.requests(to: "\(host):443", path: "/Shows/NextUp").count
+    }
 }

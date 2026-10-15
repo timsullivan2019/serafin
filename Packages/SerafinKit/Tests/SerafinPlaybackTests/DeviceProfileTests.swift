@@ -158,6 +158,19 @@ import Testing
         let ticks = 57_600_123_400
         #expect(Ticks.from(Ticks.duration(ticks)) == ticks)
     }
+
+    @Test func anyCountAServerSendsBecomesADuration() {
+        #expect(Ticks.duration(.max) == .seconds(922_337_203_685) + .nanoseconds(477_580_700))
+        #expect(Ticks.from(Ticks.duration(.max)) == .max)
+        #expect(Ticks.duration(-10_000_000) == .zero)
+        #expect(Ticks.duration(.min) == .zero)
+    }
+
+    @Test func durationsTooLongForTicksHoldAtTheLimit() {
+        #expect(Ticks.from(.seconds(Int64.max)) == .max)
+        #expect(Ticks.from(.seconds(Int64.min)) == .min)
+        #expect(Ticks.from(.seconds(-2)) == -20_000_000)
+    }
 }
 
 /// Responses in the shape Jellyfin 10.10 returns, in `Fixtures/`.
