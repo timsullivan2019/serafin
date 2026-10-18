@@ -29,8 +29,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// The server's ID for the version saved.
     public let mediaSourceID: String
     /// The saved file's extension, such as `mp4`, so the player knows its container: `mov` for a copy Serafin
-    /// writes.
-    public let fileExtension: String
+    /// writes, or the original's own when it's kept as it arrived because its copy couldn't be written.
+    public var fileExtension: String
     /// When the download was asked for.
     public let created: Date
     /// Where the download is.
@@ -124,9 +124,10 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// How a download's saved file is written when it isn't saved as it arrives, as when the server converts the video
-/// for the player while it's sent: Serafin copies the file that arrives into a QuickTime movie the player opens,
-/// adding subtitles the server sent as WebVTT. Until the copy is written, the file that arrived and the subtitles are
-/// kept beside the index, named by the download's ID alone.
+/// for the player while it's sent, or when subtitles in files of their own go with an original: Serafin copies the
+/// file that arrives into a QuickTime movie the player opens, adding subtitles the server sent as WebVTT. Until the
+/// copy is written, the file that arrived and the subtitles are kept beside the index, named by the download's ID
+/// alone.
 public struct DownloadPreparation: Codable, Hashable, Sendable {
     /// The extension of the file the server sends, such as `mp4`.
     public var arrivingExtension: String
@@ -136,12 +137,21 @@ public struct DownloadPreparation: Codable, Hashable, Sendable {
     /// The Dolby Vision the copy signals, for Dolby Vision video the server copied into a file that doesn't say so,
     /// or nil.
     public var dolbyVision: DolbyVisionConfiguration?
+    /// Whether the file that arrives plays as it is, as an original does, so it's kept without the added subtitles
+    /// when its copy can't be written.
+    public var playsAsItArrives: Bool
 
     /// Creates a preparation.
-    public init(arrivingExtension: String, subtitles: [Int] = [], dolbyVision: DolbyVisionConfiguration? = nil) {
+    public init(
+        arrivingExtension: String,
+        subtitles: [Int] = [],
+        dolbyVision: DolbyVisionConfiguration? = nil,
+        playsAsItArrives: Bool = false
+    ) {
         self.arrivingExtension = arrivingExtension
         self.subtitles = subtitles
         self.dolbyVision = dolbyVision
+        self.playsAsItArrives = playsAsItArrives
     }
 }
 

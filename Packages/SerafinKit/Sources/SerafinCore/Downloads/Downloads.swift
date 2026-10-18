@@ -74,11 +74,19 @@ public actor Downloads {
         /// The Dolby Vision the copy signals, for Dolby Vision video the server copies into a file that doesn't say
         /// so, or nil.
         public var dolbyVision: DolbyVisionConfiguration?
+        /// Whether the file plays as it arrives, as an original does, so it's kept without the added subtitles when
+        /// its copy can't be written, and a transfer that stopped can carry on.
+        public var playsAsItArrives: Bool
 
         /// Creates a preparation.
-        public init(subtitles: [Subtitles] = [], dolbyVision: DolbyVisionConfiguration? = nil) {
+        public init(
+            subtitles: [Subtitles] = [],
+            dolbyVision: DolbyVisionConfiguration? = nil,
+            playsAsItArrives: Bool = false
+        ) {
             self.subtitles = subtitles
             self.dolbyVision = dolbyVision
+            self.playsAsItArrives = playsAsItArrives
         }
     }
 
@@ -246,8 +254,8 @@ public actor Downloads {
     // MARK: - Changing
 
     /// Downloads `request` for the account `key`. An item already downloaded or downloading for the account is left
-    /// as it is; one that failed is tried again, afresh when its copy is written on the device, since the server
-    /// converts its file anew.
+    /// as it is; one that failed is tried again, afresh when the server converts its file, since it converts it anew,
+    /// or when its copy couldn't be written.
     ///
     /// - Throws: ``DownloadError/notEnoughSpace`` when the file wouldn't fit, ``DownloadError/storeUnavailable`` when
     ///   the list of downloads can't be saved, and ``SerafinError/notSignedIn`` when the account has no token.
@@ -256,7 +264,10 @@ public actor Downloads {
         await activate()
         if let existing = try await record(forItem: request.itemID, key: key) {
             guard existing.state == .failed else { return existing }
-            guard existing.preparation != nil || request.preparation != nil else {
+            let startsAfresh =
+                existing.failure == .preparationFailed || existing.preparation?.playsAsItArrives == false
+                || request.preparation?.playsAsItArrives == false
+            guard startsAfresh else {
                 try await retry(existing.id, from: request.url, allowsCellularAccess: request.allowsCellularAccess)
                 return try await store.record(id: existing.id) ?? existing
             }
@@ -271,7 +282,8 @@ public actor Downloads {
             DownloadPreparation(
                 arrivingExtension: request.fileExtension,
                 subtitles: preparation.subtitles.map(\.index),
-                dolbyVision: preparation.dolbyVision
+                dolbyVision: preparation.dolbyVision,
+                playsAsItArrives: preparation.playsAsItArrives
             )
         }
         let record = DownloadRecord(
@@ -513,6 +525,13 @@ public actor Downloads {
             store.deleteFile(at: saving)
             return
         } catch {
+            if preparation.playsAsItArrives {
+                Self.logger.error(
+                    "Could not write a download's copy, so it keeps the file as it arrived: \(error.localizedDescription, privacy: .private)"
+                )
+                await keepArrived(record)
+                return
+            }
             let failure: DownloadFailure =
                 error as? DownloadPreparationError == .storageFull ? .storageFull : .preparationFailed
             await failPreparing(record, failure)
@@ -544,6 +563,46 @@ public actor Downloads {
             }
         } catch {
             Self.logger.error("Could not save a download's copy: \(error.localizedDescription, privacy: .private)")
+            await failPreparing(record, .preparationFailed)
+            return
+        }
+        notify()
+    }
+
+    /// Saves the file `record`'s transfer brought, which plays as it is, as its file, without the subtitles that were
+    /// to be added, and finishes the download.
+    private func keepArrived(_ record: DownloadRecord) async {
+        guard let preparation = record.preparation else { return }
+        store.deleteFile(at: store.savingURL(for: record))
+        var kept = record
+        kept.fileExtension = preparation.arrivingExtension
+        kept.preparation = nil
+        let added = Set(preparation.subtitles)
+        do {
+            let saved = store.fileURL(for: kept)
+            store.deleteFile(at: saved)
+            try FileManager.default.moveItem(at: store.arrivedURL(for: record), to: saved)
+            let size = try? saved.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            let finished = try await store.update(id: record.id) { record in
+                guard record.state == .preparing else { return }
+                record.state = .finished
+                record.failure = nil
+                record.fileExtension = preparation.arrivingExtension
+                record.preparation = nil
+                record.tracks?.subtitles.removeAll { added.contains($0.index) }
+                if let chosen = record.tracks?.defaultSubtitles, added.contains(chosen) {
+                    record.tracks?.defaultSubtitles = nil
+                }
+                record.bytes = size.map(Int64.init) ?? record.bytes
+            }
+            if finished?.state == .finished {
+                store.removePreparationFiles(of: record)
+            } else {
+                // Deleted while its copy was written.
+                try await store.removeOrphanedFiles()
+            }
+        } catch {
+            Self.logger.error("Could not keep a download's file: \(error.localizedDescription, privacy: .private)")
             await failPreparing(record, .preparationFailed)
             return
         }
