@@ -73,6 +73,7 @@ public actor Downloads {
     /// How far each running download has got, by download ID.
     private var progressByID: [String: Progress] = [:]
     private var watchers: [UUID: AsyncStream<Void>.Continuation] = [:]
+    private var activation: Task<Void, Never>?
     private var listening: Task<Void, Never>?
 
     /// Creates the downloads.
@@ -89,13 +90,19 @@ public actor Downloads {
         self.sessions = sessions
     }
 
-    /// Starts reading what the transfers report, once. Downloads that were running when Serafin last stopped and have
-    /// no transfer any more, as when it was closed from the app switcher, are marked interrupted.
-    func activate() {
-        guard listening == nil else { return }
+    /// Checks the downloads left from the last launch, then starts reading what the transfers report, once.
+    /// Downloads that were running when Serafin last stopped and have no transfer any more, as when it was closed from
+    /// the app switcher, are marked interrupted. Starting a download waits for this, so a new download is never taken
+    /// for one left over.
+    func activate() async {
+        if let activation {
+            return await activation.value
+        }
+        let activation = Task { await self.markInterrupted() }
+        self.activation = activation
+        await activation.value
         let events = transfers.events
         listening = Task { [weak self] in
-            await self?.markInterrupted()
             for await event in events {
                 await self?.handle(event)
             }
@@ -161,6 +168,7 @@ public actor Downloads {
     ///   the list of downloads can't be saved, and ``SerafinError/notSignedIn`` when the account has no token.
     @discardableResult
     public func start(_ request: Request, for key: SessionKey) async throws -> DownloadRecord {
+        await activate()
         if let existing = try await record(forItem: request.itemID, key: key) {
             if existing.state == .failed {
                 try await retry(existing.id, from: request.url, allowsCellularAccess: request.allowsCellularAccess)
@@ -197,6 +205,7 @@ public actor Downloads {
     ///   - url: The file's address, as the server offers it now, used when the transfer starts again.
     ///   - allowsCellularAccess: Whether the transfer may use cellular data.
     public func retry(_ id: String, from url: URL, allowsCellularAccess: Bool) async throws {
+        await activate()
         guard var record = try await store.record(id: id), record.state == .failed else { return }
         if let data = resumeData.removeValue(forKey: record.fileName) {
             transfers.resume(data, fileName: record.fileName)
