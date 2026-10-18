@@ -38,6 +38,8 @@ import os
 
     /// The `UserDefaults` key of whether downloads may use cellular data. Off unless the user turns it on.
     nonisolated static let cellularKey = "downloads.cellular"
+    /// The `UserDefaults` key of the download quality, the most bits per second a download's video may take.
+    nonisolated static let qualityKey = "downloads.quality"
 
     /// The account's downloads, newest first.
     private(set) var records: [DownloadRecord] = []
@@ -108,29 +110,41 @@ import os
     }
 
     /// Downloads `item`, or tries a download that failed again, and saves its poster and backdrop with it.
+    ///
+    /// It downloads at the download quality, as the original file when the player opens it, and otherwise as the copy
+    /// the server makes, when the server's policy lets the account have it converted.
     func download(_ item: MediaItem) async {
         do {
-            switch try await planner.plan(for: item.id) {
-            case .original(let original):
+            let permissions = try await library.conversionPermissions()
+            let maxBitrate = Self.quality(in: defaults).bitsPerSecond
+            switch try await planner.plan(for: item.id, maxBitrate: maxBitrate, permissions: permissions) {
+            case .original(let planned), .converted(let planned):
                 let request = Downloads.Request(
                     itemID: item.id,
-                    mediaSourceID: original.mediaSourceID,
-                    url: original.url,
-                    fileExtension: original.fileExtension,
-                    bytes: original.bytes,
+                    mediaSourceID: planned.mediaSourceID,
+                    url: planned.url,
+                    fileExtension: planned.fileExtension,
+                    bytes: planned.bytes,
                     metadata: DownloadMetadata(item.card),
-                    tracks: original.tracks,
+                    tracks: planned.tracks,
                     playback: Self.serverPlayback(of: item),
+                    preparation: planned.preparation,
                     allowsCellularAccess: defaults.bool(forKey: Self.cellularKey)
                 )
                 let record = try await downloads.start(request, for: key)
                 await saveArtwork(of: item, for: record)
-            case .needsConversion:
-                failure = .needsConversion
+            case .refused(let refusal):
+                failure = .refused(refusal)
             }
         } catch {
             failure = UserMessage(error)
         }
+    }
+
+    /// The download quality picked in Settings, Maximum until the user picks another.
+    nonisolated static func quality(in defaults: UserDefaults) -> PlaybackQuality {
+        guard defaults.object(forKey: qualityKey) != nil else { return .maximum }
+        return PlaybackQuality(rawValue: defaults.integer(forKey: qualityKey)) ?? .maximum
     }
 
     /// What the page of the downloaded item `itemID` shows with no server, from what was saved with it, or nil when

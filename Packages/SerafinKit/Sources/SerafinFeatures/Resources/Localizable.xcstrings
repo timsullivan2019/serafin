@@ -212,11 +212,14 @@
     "Automatic" : {
       "comment" : "Subtitle mode: as the video marks them."
     },
+    "Below Maximum, your server converts videos above the download quality, so they take less space. Downloads are kept on this device only, not in your backups, and are removed when you sign out." : {
+      "comment" : "Settings footer under the download quality and the downloads row."
+    },
     "Buttons, links, selections and the tab bar take this color. Colors taken from artwork stay as they are." : {
       "comment" : "Settings footer under the accent color choices."
     },
-    "Can't Download This Yet" : {
-      "comment" : "Title when a video's file can't be downloaded as it is."
+    "Can't Download This" : {
+      "comment" : "Title when a video can't be downloaded."
     },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
@@ -341,6 +344,9 @@
     "Download" : {
       "comment" : "Menu item that downloads a video."
     },
+    "Download Quality" : {
+      "comment" : "Settings row: the most bandwidth a downloaded video may take."
+    },
     "Download over Cellular" : {
       "comment" : "Settings switch that lets downloads use cellular data."
     },
@@ -355,9 +361,6 @@
     },
     "Downloads Are Off" : {
       "comment" : "Title when the server doesn't let the user download."
-    },
-    "Downloads are kept on this device only, not in your backups, and are removed when you sign out." : {
-      "comment" : "Settings footer under the downloads row."
     },
     "Downloads use %@ on this device." : {
       "comment" : "Footer on the downloads screen. The value is a size, such as 4.2 GB."
@@ -975,8 +978,11 @@
     "This server has Quick Connect turned off, so sign in with your password." : {
       "comment" : "Explanation when Quick Connect is disabled."
     },
-    "This video's file needs your server to convert it before it plays on this device. Serafin can download it once that's supported. You can still stream it." : {
-      "comment" : "Explanation when a video's file can't be downloaded as it is."
+    "This video has to be converted to play on this device, and your server doesn't let your account have videos converted. Your server's administrator can allow it." : {
+      "comment" : "Explanation when a video needs converting for a download and the server's policy doesn't allow it."
+    },
+    "This video is above your download quality, and your server doesn't let your account have it converted to fit. Set Download Quality to Maximum in Settings to download it as it is." : {
+      "comment" : "Explanation when a video is above the download quality and the server's policy doesn't allow converting it."
     },
     "Title" : {
       "comment" : "The movie, show or episode a shortcut plays or opens."
@@ -1076,6 +1082,9 @@
     },
     "Your downloads still play." : {
       "comment" : "Under the banner on Home when the server can't be reached, such as under You're Offline."
+    },
+    "Your server can't make a copy of this video that plays on this device. You can still stream it." : {
+      "comment" : "Explanation when the server offers nothing a download can save."
     },
     "Your server doesn't allow downloads" : {
       "comment" : "A failed download's status."

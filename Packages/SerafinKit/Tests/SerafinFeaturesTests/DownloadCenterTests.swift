@@ -1,6 +1,7 @@
 import Foundation
 import SerafinCore
 import SerafinDesign
+import SerafinPlayback
 import Testing
 
 @testable import SerafinFeatures
@@ -46,5 +47,23 @@ import Testing
     @Test func failuresReadAsAFewWords() {
         #expect(DownloadRow.reason(.interrupted) != DownloadRow.reason(.network))
         #expect(DownloadRow.reason(nil) == DownloadRow.reason(.serverError))
+        #expect(DownloadRow.reason(.preparationFailed) != DownloadRow.reason(nil))
+    }
+
+    @Test func downloadsAreMadeAtMaximumUntilAnotherQualityIsPicked() throws {
+        let defaults = try #require(UserDefaults(suiteName: "app.getserafin.serafin.tests.\(UUID().uuidString)"))
+        #expect(DownloadCenter.quality(in: defaults) == .maximum)
+        #expect(DownloadCenter.quality(in: defaults).bitsPerSecond == nil)
+        defaults.set(PlaybackQuality.mbps8.rawValue, forKey: DownloadCenter.qualityKey)
+        #expect(DownloadCenter.quality(in: defaults).bitsPerSecond == 8_000_000)
+        // A value no quality has reads as Maximum.
+        defaults.set(12_345, forKey: DownloadCenter.qualityKey)
+        #expect(DownloadCenter.quality(in: defaults) == .maximum)
+    }
+
+    @Test func eachRefusalSaysWhatToDo() {
+        let messages = [DownloadRefusal.notAllowed, .overQuality, .unavailable].map { UserMessage.refused($0) }
+        #expect(Set(messages.map(\.message)).count == 3)
+        #expect(Set(messages.map(\.title)).count == 1)
     }
 }

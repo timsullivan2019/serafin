@@ -285,20 +285,48 @@ struct UserMessage: Equatable, Identifiable, Sendable {
         }
     }
 
-    /// The message for a video Serafin can't download yet, because the player can't open the original file and
-    /// downloading a copy the server converts is still to come.
-    static let needsConversion = UserMessage(
-        title: String(
-            localized: "Can't Download This Yet", bundle: .module,
-            comment: "Title when a video's file can't be downloaded as it is."),
-        message: String(
-            localized:
-                "This video's file needs your server to convert it before it plays on this device. Serafin can download it once that's supported. You can still stream it.",
-            bundle: .module,
-            comment: "Explanation when a video's file can't be downloaded as it is."
-        ),
-        systemImage: "arrow.down.circle"
-    )
+    /// The message for a video that can't be downloaded, and why.
+    static func refused(_ refusal: DownloadRefusal) -> UserMessage {
+        let title = String(
+            localized: "Can't Download This", bundle: .module, comment: "Title when a video can't be downloaded.")
+        return switch refusal {
+        case .notAllowed:
+            UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "This video has to be converted to play on this device, and your server doesn't let your account have videos converted. Your server's administrator can allow it.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when a video needs converting for a download and the server's policy doesn't allow it."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .overQuality:
+            UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "This video is above your download quality, and your server doesn't let your account have it converted to fit. Set Download Quality to Maximum in Settings to download it as it is.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when a video is above the download quality and the server's policy doesn't allow converting it."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .unavailable:
+            UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Your server can't make a copy of this video that plays on this device. You can still stream it.",
+                    bundle: .module,
+                    comment: "Explanation when the server offers nothing a download can save."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        }
+    }
 
     private static func download(_ error: DownloadError) -> UserMessage {
         switch error {
