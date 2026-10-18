@@ -5,11 +5,12 @@ import SerafinDesign
 import SerafinPlayback
 import os
 
-/// The signed-in account's downloads, for the detail screen's download item, the Downloads screen in Settings and the
-/// player, which plays a downloaded copy rather than streaming.
+/// The signed-in account's downloads, for the detail screen's download item, the Downloads screen in Settings, the
+/// player, which plays a downloaded copy rather than streaming, and the screens that show downloads with no server.
 ///
-/// It reads the account's downloads again each time one starts, moves on, finishes, fails, is deleted or keeps where
-/// playback stopped, and whether the server lets the account download at all.
+/// It reads the account's downloads again each time one starts, moves on, finishes, fails, is deleted, saves a picture
+/// or keeps where playback stopped, and whether the server lets the account download at all. Each download keeps what
+/// its card and page show, with its poster and backdrop, so they show with no server.
 @Observable @MainActor final class DownloadCenter {
     /// Where one movie's or episode's download is.
     enum ItemState: Equatable {
@@ -42,6 +43,9 @@ import os
     private(set) var usedBytes: Int64 = 0
     /// Whether the server's policy lets the account download.
     private(set) var isAllowed = false
+    /// The finished downloads whose files are on the device, newest first, as screens show them with no server, from
+    /// what was saved with them.
+    private(set) var offlineItems: [MediaItem] = []
     /// The last download that couldn't start, shown as an alert.
     var failure: UserMessage?
 
@@ -50,30 +54,38 @@ import os
     @ObservationIgnored private let key: SessionKey
     @ObservationIgnored private let planner: DownloadPlanner
     @ObservationIgnored private let library: LibraryRepository
+    @ObservationIgnored private let artwork: Artwork?
     @ObservationIgnored private let defaults: UserDefaults
+    /// Whether the server has said if the account may download, which it can't while it's out of reach.
+    @ObservationIgnored private var knowsPermission = false
 
     /// Creates the downloads of the account `key`, and starts following them.
+    ///
+    /// - Parameter artwork: Loads the pictures each download saves, or nil to save none.
     init(
         downloads: Downloads,
         key: SessionKey,
         planner: DownloadPlanner,
         library: LibraryRepository,
+        artwork: Artwork? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.downloads = downloads
         self.key = key
         self.planner = planner
         self.library = library
+        self.artwork = artwork
         self.defaults = defaults
         Task { [weak self, downloads] in
             let changes = await downloads.changes()
-            await self?.checkPermission()
             await self?.reload()
             for await _ in changes {
                 guard let self else { return }
                 await self.reload()
             }
         }
+        // Apart from reading the downloads, which show at once even when the server takes long to answer.
+        Task { [weak self] in await self?.checkPermission() }
     }
 
     /// Where the download of `itemID` is.
@@ -83,10 +95,10 @@ import os
 
     /// Whether `item` can be downloaded: a movie or an episode from the server, for an account allowed to download.
     func canDownload(_ item: MediaItem) -> Bool {
-        isAllowed && item.source != nil && (item.card.kind == .movie || item.card.kind == .episode)
+        isAllowed && item.source != nil && !item.isSaved && (item.card.kind == .movie || item.card.kind == .episode)
     }
 
-    /// Downloads `item`, or tries a download that failed again.
+    /// Downloads `item`, or tries a download that failed again, and saves its poster and backdrop with it.
     func download(_ item: MediaItem) async {
         do {
             switch try await planner.plan(for: item.id) {
@@ -99,15 +111,45 @@ import os
                     bytes: original.bytes,
                     metadata: DownloadMetadata(item.card),
                     tracks: original.tracks,
+                    playback: Self.serverPlayback(of: item),
                     allowsCellularAccess: defaults.bool(forKey: Self.cellularKey)
                 )
-                try await downloads.start(request, for: key)
+                let record = try await downloads.start(request, for: key)
+                await saveArtwork(of: item, for: record)
             case .needsConversion:
                 failure = .needsConversion
             }
         } catch {
             failure = UserMessage(error)
         }
+    }
+
+    /// What the page of the downloaded item `itemID` shows with no server, from what was saved with it, or nil when
+    /// it isn't downloaded or its file has gone. The downloads are read afresh, so it has where playback last stopped.
+    func savedDetails(of itemID: String) async -> ItemDetails? {
+        do {
+            let records = try await downloads.records(for: key)
+            return ItemDetails.saved(itemID, among: records.compactMap { offlineItem(of: $0) })
+        } catch {
+            Self.logger.error("Could not read the downloads: \(error.localizedDescription, privacy: .private)")
+            return nil
+        }
+    }
+
+    /// Saves the pictures missing from `item`'s download, as when they couldn't load when it started. Does nothing
+    /// for an item that isn't downloaded, or one shown from what was saved with it, which has no server to ask.
+    func saveMissingArtwork(of item: MediaItem) async {
+        guard !item.isSaved, let record = records.first(where: { $0.itemID == item.id }),
+            DownloadArtwork.allCases.contains(where: { downloads.artworkURL($0, for: record) == nil })
+        else { return }
+        await saveArtwork(of: item, for: record)
+    }
+
+    /// Asks the server whether the account may download, when it hasn't said yet, as when Serafin started with no
+    /// connection.
+    func checkPermissionIfUnknown() async {
+        guard !knowsPermission else { return }
+        await checkPermission()
     }
 
     /// The finished download of `itemID` with its file on the device, ready to play, or nil when there's none. Its
@@ -144,8 +186,15 @@ import os
         }
     }
 
+    /// Asks the server whether the account may download. When it can't answer, what was known stays.
     private func checkPermission() async {
-        isAllowed = (try? await library.canDownload()) ?? false
+        do {
+            isAllowed = try await library.canDownload()
+            knowsPermission = true
+        } catch {
+            Self.logger.error(
+                "Could not ask whether the account may download: \(error.localizedDescription, privacy: .private)")
+        }
     }
 
     private func reload() async {
@@ -158,9 +207,51 @@ import os
             usedBytes = try await downloads.usedBytes(for: key)
             self.records = records
             self.progress = progress
+            offlineItems = records.compactMap { offlineItem(of: $0) }
         } catch {
             Self.logger.error("Could not read the downloads: \(error.localizedDescription, privacy: .private)")
         }
+    }
+
+    /// `record` as screens show it with no server, with the pictures saved with it, or nil when it isn't finished or
+    /// its file has gone.
+    private func offlineItem(of record: DownloadRecord) -> MediaItem? {
+        guard downloads.fileURL(for: record) != nil else { return nil }
+        let artwork = SavedArtwork(
+            poster: downloads.artworkURL(.poster, for: record),
+            backdrop: downloads.artworkURL(.backdrop, for: record)
+        )
+        return MediaItem(download: record, artwork: artwork)
+    }
+
+    /// Saves `item`'s poster and backdrop with its download `record`, as wide as this device's screen draws them,
+    /// leaving any saved already. A picture that doesn't load is tried again when the item's page next opens.
+    private func saveArtwork(of item: MediaItem, for record: DownloadRecord) async {
+        guard let artwork, let source = item.source else { return }
+        let sizes = DownloadArtworkSizes.current
+        for kind in DownloadArtwork.allCases where downloads.artworkURL(kind, for: record) == nil {
+            do {
+                let data = try await artwork.data(
+                    kind.role, of: source, width: sizes.width(of: kind), scale: sizes.scale)
+                if let data {
+                    try await downloads.saveArtwork(data, kind, of: record.id)
+                }
+            } catch {
+                // Left before it loaded, as when the page asking for it closed.
+                guard !Task.isCancelled else { return }
+                Self.logger.error(
+                    "Could not save a download's picture: \(error.localizedDescription, privacy: .private)")
+            }
+        }
+    }
+
+    /// Where the server says playback of `item` last stopped, for resuming its download there with no server, or nil
+    /// when it hasn't been started. It's dated when the server heard of it, so a later stop on this device wins.
+    nonisolated static func serverPlayback(of item: MediaItem) -> DownloadPlayback? {
+        guard let userData = item.source?.userData, let ticks = userData.playbackPositionTicks, ticks > 0 else {
+            return nil
+        }
+        return DownloadPlayback(position: Ticks.duration(ticks), changed: userData.lastPlayedDate ?? .distantPast)
     }
 
     /// Where `record` is, given the progress of the running downloads.
@@ -180,11 +271,14 @@ extension DownloadMetadata {
         self.init(
             title: card.title,
             kind: card.kind == .episode ? .episode : .movie,
+            seriesID: card.episode?.seriesID,
             seriesName: card.episode?.seriesTitle,
             seasonNumber: card.episode?.seasonNumber,
             episodeNumber: card.episode?.episodeNumber,
             runtime: card.runtime,
-            year: card.year
+            year: card.year,
+            rating: card.rating,
+            overview: card.overview
         )
     }
 }

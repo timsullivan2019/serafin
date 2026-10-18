@@ -13,6 +13,7 @@ struct ItemDetailView: View {
     @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
     @Environment(AppSession.self) private var session: AppSession?
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
     private let zoomSource: String?
     private let arrivesFromHomeHero: Bool
 
@@ -66,7 +67,22 @@ struct ItemDetailView: View {
         }
         .background(Color.background)
         .zoomTransition(from: zoomSource, in: zoom)
-        .task(id: actions.revision) { await model.load(from: media) }
+        .task(id: actions.revision) {
+            await model.load(from: media)
+            // Once the server answers, what it couldn't say before: whether the account may download, and any picture
+            // the item's download is missing.
+            if let downloads, let item = model.details?.item, !model.showsSavedDetails {
+                await downloads.checkPermissionIfUnknown()
+                await downloads.saveMissingArtwork(of: item)
+            }
+        }
+        .onChange(of: downloads?.state(of: model.id) == .notDownloaded) { _, isGone in
+            // A page showing what was saved with a download that's just been deleted loads again, from the server or
+            // to say it can't be reached, rather than offering a Play that has nothing to play.
+            if isGone, model.showsSavedDetails {
+                Task { await model.load(from: media) }
+            }
+        }
         .toolbar {
             // From the first frame when a card opened the screen, so the buttons come in with it, as from Home's hero.
             if let item = model.details?.item ?? model.preview {
@@ -538,8 +554,9 @@ private struct ChapterLink: View {
     }
 }
 
-/// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched,
-/// Refresh Metadata for administrators, and Share.
+/// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched, the
+/// download item, Refresh Metadata for administrators, and Share. An item shown from what was saved with its download
+/// has only the download item, since the rest needs the server.
 private struct DetailToolbar: ToolbarContent {
     let item: MediaItem
     let canRefreshMetadata: Bool
@@ -549,6 +566,16 @@ private struct DetailToolbar: ToolbarContent {
     @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some ToolbarContent {
+        if !item.isSaved {
+            markButtons
+        }
+        if offersUnwatched || offersDownload || offersRefresh || shareURL != nil {
+            moreMenu
+        }
+    }
+
+    /// Mark as Watched and Favourite.
+    private var markButtons: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 Task { await actions.setPlayed(!item.card.isWatched, for: item, in: media) }
@@ -574,20 +601,23 @@ private struct DetailToolbar: ToolbarContent {
                 )
             }
         }
+    }
+
+    /// The More menu.
+    private var moreMenu: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                // Played, or part watched: either way, back to unwatched.
-                if item.card.isPlayed || item.card.isInProgress {
+                if offersUnwatched {
                     Button {
                         Task { await actions.setPlayed(false, for: item, in: media) }
                     } label: {
                         Label(Self.markUnwatched, systemImage: "circle")
                     }
                 }
-                if let downloads, downloads.canDownload(item) {
+                if let downloads, offersDownload {
                     DownloadMenuItem(item: item, downloads: downloads)
                 }
-                if canRefreshMetadata {
+                if offersRefresh {
                     Button {
                         Task { await actions.refreshMetadata(of: item, in: media) }
                     } label: {
@@ -613,6 +643,24 @@ private struct DetailToolbar: ToolbarContent {
                     systemImage: "ellipsis")
             }
         }
+    }
+
+    /// Whether the menu offers Mark as Unwatched: for an item played, or part watched, which either way goes back to
+    /// unwatched.
+    private var offersUnwatched: Bool {
+        !item.isSaved && (item.card.isPlayed || item.card.isInProgress)
+    }
+
+    /// Whether the menu offers the download item: for an item the account may download, and for one downloaded or on
+    /// its way, which can be deleted even while the server, which says whether the account may download, is out of
+    /// reach.
+    private var offersDownload: Bool {
+        guard let downloads else { return false }
+        return downloads.canDownload(item) || downloads.state(of: item.id) != .notDownloaded
+    }
+
+    private var offersRefresh: Bool {
+        canRefreshMetadata && !item.isSaved
     }
 
     static var markWatched: String {

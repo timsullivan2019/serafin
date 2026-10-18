@@ -25,7 +25,7 @@ public struct RootView: View {
                 ConnectFlow()
             case .signedIn(let account):
                 if let library = session.library {
-                    let media = LiveMediaSource(library: library)
+                    let media = LiveMediaSource(library: library, downloads: session.downloads)
                     MainTabs(
                         engine: session.player, media: media, artwork: session.artwork, downloads: session.downloads,
                         serverID: account.server.id
@@ -363,7 +363,8 @@ private struct OutsideRequests: ViewModifier {
         }
     }
 
-    /// Plays a movie or episode where the user left off, or a show's next episode. Anything else opens its page.
+    /// Plays a movie or episode where the user left off, or a show's next episode. Anything else opens its page. A
+    /// downloaded movie or episode plays from its download when the server can't be reached.
     private func play(_ id: String) async {
         do {
             let details = try await media.details(of: id)
@@ -373,7 +374,11 @@ private struct OutsideRequests: ViewModifier {
             }
             playback.play(playable)
         } catch {
-            actions.failure = UserMessage(error)
+            if let playable = await media.savedDetails(of: id)?.playable {
+                playback.play(playable)
+            } else {
+                actions.failure = UserMessage(error)
+            }
         }
     }
 }

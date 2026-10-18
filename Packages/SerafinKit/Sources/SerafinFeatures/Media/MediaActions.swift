@@ -88,7 +88,8 @@ import SwiftUI
 /// The items in a card's context menu: Play, Go to Show for an episode, Mark as Watched and Favourite.
 ///
 /// A card that plays when tapped, as an episode does on its show's page and in Continue Watching and Next Up, offers
-/// Episode Details in place of Play.
+/// Episode Details in place of Play. An item shown from what was saved with its download offers Play alone, since
+/// the rest needs the server.
 struct CardMenuItems: View {
     let item: MediaItem
     /// Whether tapping the card plays the item, so the menu opens its page instead.
@@ -123,6 +124,13 @@ struct CardMenuItems: View {
                 )
             }
         }
+        if !item.isSaved {
+            serverItems
+        }
+    }
+
+    /// Go to Show, Mark as Watched and Favourite, which need the server.
+    @ViewBuilder private var serverItems: some View {
         if offersShow, let show = item.showRoute {
             Button {
                 navigate(show)

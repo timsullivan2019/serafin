@@ -1,5 +1,6 @@
 import Foundation
 import JellyfinAPI
+import Nuke
 import Observation
 import SerafinCore
 import SerafinDesign
@@ -167,7 +168,7 @@ import SerafinPlayback
         // Started at once, so the engine's change to the new item lands in the same update as its title here. The
         // Lock Screen's artwork loads alongside the video.
         loading = Task.immediate { [artwork] in
-            async let lockScreenJPEG = Self.lockScreenArtwork(for: source, from: artwork)
+            async let lockScreenJPEG = Self.lockScreenArtwork(for: item, from: artwork)
             await engine.load(source, options: options, from: copy, keepsSubtitleChoice: continuing)
             guard !Task.isCancelled, let jpeg = await lockScreenJPEG else { return }
             engine.describe(title: card.title, subtitle: subtitle, artwork: jpeg)
@@ -379,14 +380,20 @@ import SerafinPlayback
         }
     }
 
-    /// A JPEG of the item's thumbnail for the Lock Screen, or nil when it can't be had.
-    private static func lockScreenArtwork(for item: BaseItemDto, from artwork: Artwork?) async -> Data? {
+    /// A JPEG of the item's thumbnail for the Lock Screen, or nil when it can't be had: the server's, or for an item
+    /// shown from what was saved with its download, the picture saved with it.
+    private static func lockScreenArtwork(for item: MediaItem, from artwork: Artwork?) async -> Data? {
         #if canImport(UIKit)
-            guard
-                let artwork,
-                let request = artwork.request(.landscape, of: item, width: 600, scale: 1),
-                let image = try? await artwork.pipeline.image(for: request)
-            else { return nil }
+            let width: CGFloat = 600
+            let request: ImageRequest? =
+                if let saved = item.savedArtwork {
+                    saved.url(for: .landscape).map { Artwork.request(file: $0, width: width, scale: 1) }
+                } else {
+                    item.source.flatMap { artwork?.request(.landscape, of: $0, width: width, scale: 1) }
+                }
+            guard let artwork, let request, let image = try? await artwork.pipeline.image(for: request) else {
+                return nil
+            }
             return image.jpegData(compressionQuality: 0.85)
         #else
             return nil

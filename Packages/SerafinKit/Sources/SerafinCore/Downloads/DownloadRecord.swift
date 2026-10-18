@@ -40,7 +40,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// The audio and subtitle tracks inside the saved file, for the player with no server to ask, or nil when they
     /// weren't saved with it.
     public var tracks: DownloadTracks?
-    /// Where playback of the download last stopped on this device, or nil when it hasn't played here.
+    /// Where playback of the download last stopped: on this device, or else where the server said it had when the
+    /// download started. Nil when it hasn't been started.
     public var playback: DownloadPlayback?
 
     /// Creates a record.
@@ -100,7 +101,8 @@ public enum DownloadFailure: String, Codable, Sendable {
     case interrupted
 }
 
-/// What the Downloads screen and the player show for a download while there may be no server to ask.
+/// What the Downloads screen, the player, and a download's card and detail screen show for it while there may be no
+/// server to ask.
 public struct DownloadMetadata: Codable, Hashable, Sendable {
     /// The item's kind.
     public enum Kind: String, Codable, Sendable {
@@ -114,6 +116,8 @@ public struct DownloadMetadata: Codable, Hashable, Sendable {
     public var title: String
     /// Movie or episode.
     public var kind: Kind
+    /// The server's ID for the series an episode belongs to.
+    public var seriesID: String?
     /// The series an episode belongs to.
     public var seriesName: String?
     /// The season number of an episode.
@@ -124,25 +128,43 @@ public struct DownloadMetadata: Codable, Hashable, Sendable {
     public var runtime: Duration?
     /// The year the movie came out or the episode aired.
     public var year: Int?
+    /// The age rating, such as "PG-13".
+    public var rating: String?
+    /// What the movie or episode is about, as plain text.
+    public var overview: String?
 
     /// Creates metadata.
     public init(
         title: String,
         kind: Kind,
+        seriesID: String? = nil,
         seriesName: String? = nil,
         seasonNumber: Int? = nil,
         episodeNumber: Int? = nil,
         runtime: Duration? = nil,
-        year: Int? = nil
+        year: Int? = nil,
+        rating: String? = nil,
+        overview: String? = nil
     ) {
         self.title = title
         self.kind = kind
+        self.seriesID = seriesID
         self.seriesName = seriesName
         self.seasonNumber = seasonNumber
         self.episodeNumber = episodeNumber
         self.runtime = runtime
         self.year = year
+        self.rating = rating
+        self.overview = overview
     }
+}
+
+/// A picture saved with a download, so its card and detail screen show it with no server.
+public enum DownloadArtwork: String, CaseIterable, Sendable {
+    /// The 2:3 poster cards show: a movie's own, or an episode's show's.
+    case poster
+    /// The full-bleed picture behind the detail screen: the item's own, or an episode's show's.
+    case backdrop
 }
 
 /// The audio and subtitle tracks inside a downloaded file, as the server described them when it was downloaded, so the
@@ -243,6 +265,15 @@ public struct DownloadPlayback: Codable, Hashable, Sendable {
         guard let runtime, runtime > .zero else { return position }
         let share = position / runtime
         return share < 0.05 || share > 0.9 || runtime < .seconds(300) ? .zero : position
+    }
+
+    /// Whether stopping at ``position`` in a video `runtime` long counts as watching it, as Jellyfin records a stop
+    /// with its standard settings: a stop in the last 10%, or past the first 5% of a video under five minutes. With
+    /// the runtime unknown, it doesn't.
+    public func isPlayed(runtime: Duration?) -> Bool {
+        guard position > .zero, let runtime, runtime > .zero else { return false }
+        let share = position / runtime
+        return share > 0.9 || (share >= 0.05 && runtime < .seconds(300))
     }
 }
 

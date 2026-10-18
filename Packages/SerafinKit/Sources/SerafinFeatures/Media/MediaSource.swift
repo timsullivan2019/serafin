@@ -274,6 +274,9 @@ protocol MediaSource: Sendable {
     func genres() async throws -> [Genre]
     /// Everything a detail screen shows about an item.
     func details(of id: String) async throws -> ItemDetails
+    /// What a downloaded movie's or episode's page shows with no server, from what was saved with the download, or nil
+    /// when it isn't downloaded.
+    func savedDetails(of id: String) async -> ItemDetails?
     /// The episodes of one of a show's seasons, in order.
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem]
     /// Movies, shows, episodes, people and collections matching `term`.

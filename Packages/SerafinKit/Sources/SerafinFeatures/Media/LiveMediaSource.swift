@@ -8,6 +8,9 @@ struct LiveMediaSource: MediaSource {
     static let castLimit = 24
 
     let library: LibraryRepository
+    /// The account's downloads, whose pages show from what was saved with them when the server can't be reached. Nil
+    /// for none.
+    var downloads: DownloadCenter?
 
     func home() async throws -> HomeContent {
         HomeContent(try await library.home())
@@ -145,6 +148,10 @@ struct LiveMediaSource: MediaSource {
             break
         }
         return details
+    }
+
+    func savedDetails(of id: String) async -> ItemDetails? {
+        await downloads?.savedDetails(of: id)
     }
 
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {

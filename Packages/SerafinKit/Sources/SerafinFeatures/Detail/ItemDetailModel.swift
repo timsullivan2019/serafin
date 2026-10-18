@@ -11,6 +11,10 @@ import SwiftUI
 /// and Play starting the season's first episode not yet watched. Picking the season the page opened on puts the hero
 /// back as it opened, so a season looks the same every time it's picked. The episodes show as soon as they load; the
 /// hero waits until the season's episodes and picture are both ready, then changes in one movement.
+///
+/// A downloaded movie or episode shows what was saved with its download while the server can't be reached: straight
+/// away when a download's card opened the page, otherwise once the server fails or hasn't answered for a moment. The
+/// server's details replace it as soon as they arrive.
 @Observable @MainActor final class ItemDetailModel {
     enum Phase {
         case loading
@@ -39,8 +43,12 @@ import SwiftUI
     /// The item as the card that opened the screen showed it, for the navigation bar until the details load.
     let preview: MediaItem?
     private(set) var phase = Phase.loading
+    /// Whether the page shows what was saved with the item's download, since the server hasn't answered.
+    private(set) var showsSavedDetails = false
     /// Whether the user can ask the server to refresh the item's metadata, which administrators can.
     private(set) var canRefreshMetadata = false
+    /// How long the page waits for the server before showing what was saved with the item's download.
+    @ObservationIgnored var savedDetailsWait = Duration.seconds(2)
     /// The tint taken from the item's own backdrop, or nil until it loads. An item whose backdrop was measured
     /// moments ago, as in Home's hero, starts with its tint.
     private var ownTint: Color?
@@ -116,13 +124,24 @@ import SwiftUI
         return Self.badges(of: playable)
     }
 
-    /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the details
-    /// already showing.
+    /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the server's details
+    /// already showing. For a downloaded item, what was saved with the download shows while the server doesn't
+    /// answer, and when it fails.
     ///
     /// A show's page keeps the season it lists across reloads, as after marking an episode watched, and loads that
     /// season's episodes again with the details, so the page changes all at once.
     func load(from media: any MediaSource) async {
         async let canRefresh = media.canRefreshMetadata()
+        if preview?.isSaved == true {
+            await showSavedDetailsWhileLoading(from: media)
+        }
+        // A server that's slow to answer, as one out of reach, doesn't keep a download's page waiting.
+        let fallback = Task { [weak self, savedDetailsWait] in
+            try? await Task.sleep(for: savedDetailsWait)
+            guard !Task.isCancelled else { return }
+            await self?.showSavedDetailsWhileLoading(from: media)
+        }
+        defer { fallback.cancel() }
         do {
             var details = try await media.details(of: id)
             if details.item.source == nil {
@@ -165,12 +184,37 @@ import SwiftUI
                 self.heroSeasonID = nil
                 seasonArtwork = nil
             }
+            showsSavedDetails = false
             phase = .loaded(details)
         } catch is CancellationError {
         } catch {
-            if case .loaded = phase {} else { phase = .failed(UserMessage(error)) }
+            fallback.cancel()
+            await failed(error, from: media)
         }
         canRefreshMetadata = await canRefresh
+    }
+
+    /// Shows what was saved with the item's download while nothing else shows yet, or does nothing for an item that
+    /// isn't downloaded.
+    private func showSavedDetailsWhileLoading(from media: any MediaSource) async {
+        guard case .loading = phase, let saved = await media.savedDetails(of: id), case .loading = phase else {
+            return
+        }
+        showsSavedDetails = true
+        phase = .loaded(saved)
+    }
+
+    /// The server's details didn't load. The server's details already showing stay; otherwise what was saved with the
+    /// item's download shows, read again for where playback last stopped, or the failure when it isn't downloaded.
+    private func failed(_ error: any Error, from media: any MediaSource) async {
+        if case .loaded = phase, !showsSavedDetails { return }
+        if let saved = await media.savedDetails(of: id) {
+            showsSavedDetails = true
+            phase = .loaded(saved)
+        } else {
+            showsSavedDetails = false
+            phase = .failed(UserMessage(error))
+        }
     }
 
     /// Takes the tint from the loaded backdrop, fading to it from the neutral tint the screen starts with when it

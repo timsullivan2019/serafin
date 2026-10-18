@@ -3,6 +3,16 @@ import Testing
 
 @testable import SerafinCore
 
+/// A one-pixel PNG, as a server sends a picture.
+private let png = Data(base64Encoded: onePixel) ?? Data()
+private let onePixel =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+
+/// Whether a file is saved at `url`.
+private func isSaved(_ url: URL) -> Bool {
+    FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
+}
+
 @Suite struct DownloadStoreTests {
     private let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
     private let key = SessionKey(serverID: "server-1", userID: "user-1")
@@ -59,17 +69,53 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: saved).path(percentEncoded: false)))
     }
 
-    @Test func filesNoDownloadNamesAreDeleted() async throws {
+    @Test func filesAndPicturesNoDownloadNamesAreDeleted() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DownloadStore(directory: directory)
         let kept = record("item-1")
         try await store.save(kept)
         try Data("movie".utf8).write(to: store.fileURL(for: kept))
-        let orphan = store.fileURL(named: "orphan.mp4")
-        try Data("left over".utf8).write(to: orphan)
+        try await store.saveArtwork(png, .backdrop, of: kept.id)
+        let orphans = [store.fileURL(named: "orphan.mp4"), store.artworkURL(.poster, of: "orphan")]
+        for orphan in orphans {
+            try Data("left over".utf8).write(to: orphan)
+        }
         try await store.removeOrphanedFiles()
-        #expect(FileManager.default.fileExists(atPath: store.fileURL(for: kept).path(percentEncoded: false)))
-        #expect(!FileManager.default.fileExists(atPath: orphan.path(percentEncoded: false)))
+        #expect(isSaved(store.fileURL(for: kept)))
+        #expect(isSaved(store.artworkURL(.backdrop, of: kept.id)))
+        #expect(!orphans.contains(where: isSaved))
+    }
+
+    @Test func aPictureIsSavedBesideItsDownloadAndDeletedWithIt() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        let saved = record("item-1")
+        try await store.save(saved)
+
+        #expect(try await store.saveArtwork(png, .poster, of: saved.id))
+
+        let poster = store.artworkURL(.poster, of: saved.id)
+        #expect(poster.lastPathComponent == "\(saved.id)-poster")
+        #expect(try Data(contentsOf: poster) == png)
+        try await store.remove(ids: [saved.id])
+        #expect(!isSaved(poster))
+    }
+
+    @Test func onlyAPictureOfASensibleSizeForASavedDownloadIsSaved() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        let saved = record("item-1")
+        try await store.save(saved)
+
+        let errorPage = Data(#"{"Message":"Not found"}"#.utf8)
+        #expect(try await store.saveArtwork(errorPage, .poster, of: saved.id) == false)
+        let huge = png + Data(count: DownloadStore.maximumArtworkSize)
+        #expect(try await store.saveArtwork(huge, .backdrop, of: saved.id) == false)
+        #expect(try await store.saveArtwork(png, .poster, of: "deleted") == false)
+
+        #expect(!isSaved(store.artworkURL(.poster, of: saved.id)))
+        #expect(!isSaved(store.artworkURL(.backdrop, of: saved.id)))
+        #expect(!isSaved(store.artworkURL(.poster, of: "deleted")))
     }
 
     @Test func tracksAndPositionsAreSavedWithTheDownload() async throws {
@@ -106,6 +152,22 @@ import Testing
         let changed = try await store.update(id: saved.id) { $0.state = .finished }
         #expect(changed == nil)
         #expect(try await store.records().isEmpty)
+    }
+
+    @Test func anIndexSavedBeforeOverviewsAndPicturesStillReads() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let index = """
+            {"version": 1, "downloads": [{"id": "A", "serverID": "server-1", "userID": "user-1", "itemID": "item-1",
+            "mediaSourceID": "item-1", "fileExtension": "mp4", "created": 0, "state": "finished",
+            "metadata": {"title": "Sintel", "kind": "movie", "year": 2010}}]}
+            """
+        try Data(index.utf8).write(to: directory.appending(path: "downloads.json"))
+
+        let saved = try #require(try await DownloadStore(directory: directory).records().first)
+
+        #expect(saved.metadata == DownloadMetadata(title: "Sintel", kind: .movie, year: 2010))
+        #expect(saved.playback == nil)
     }
 
     @Test func anUnreadableIndexIsAnError() async throws {
@@ -148,6 +210,18 @@ import Testing
     @Test func withNoRuntimeItResumesWhereItStopped() {
         #expect(resume(at: .seconds(300), runtime: nil) == .seconds(300))
         #expect(resume(at: .seconds(-1), runtime: nil) == .zero)
+    }
+
+    @Test func aStopNearTheEndOrPastTheStartOfAShortVideoIsWatched() {
+        #expect(DownloadPlayback(position: .seconds(4900)).isPlayed(runtime: movie))
+        #expect(DownloadPlayback(position: .seconds(120)).isPlayed(runtime: .seconds(240)))
+        #expect(!DownloadPlayback(position: .seconds(2700)).isPlayed(runtime: movie))
+        #expect(!DownloadPlayback(position: .seconds(5)).isPlayed(runtime: .seconds(240)))
+    }
+
+    @Test func withNoRuntimeOrNoPositionNothingIsWatched() {
+        #expect(!DownloadPlayback(position: .seconds(4900)).isPlayed(runtime: nil))
+        #expect(!DownloadPlayback(position: .zero).isPlayed(runtime: movie))
     }
 }
 
@@ -390,6 +464,36 @@ private struct DownloadsHarness {
         try await harness.downloads.savePosition(.seconds(95), of: record.id)
 
         #expect(try await harness.downloads.records(for: harness.key).isEmpty)
+    }
+
+    @Test func whereTheServerSaysPlaybackStoppedIsSavedWithTheDownload() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let host = "downloads-server-position.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+        var request = try harness.request(host: host)
+        request.playback = DownloadPlayback(position: .seconds(95), changed: Date(timeIntervalSince1970: 1_790_000_000))
+
+        try await harness.downloads.start(request, for: harness.key)
+
+        #expect(try await harness.settled().playback == request.playback)
+    }
+
+    @Test func aPictureSavedWithADownloadIsFoundAndDeletedWithIt() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let host = "downloads-picture.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+        try await harness.downloads.start(try harness.request(host: host), for: harness.key)
+        let record = try await harness.settled()
+        #expect(harness.downloads.artworkURL(.poster, for: record) == nil)
+
+        try await harness.downloads.saveArtwork(png, .poster, of: record.id)
+
+        let poster = try #require(harness.downloads.artworkURL(.poster, for: record))
+        #expect(harness.downloads.artworkURL(.backdrop, for: record) == nil)
+        try await harness.downloads.delete(record.id)
+        #expect(!isSaved(poster))
     }
 
     @Test func aFileThatWouldNotFitIsRefused() async throws {

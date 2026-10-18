@@ -23,10 +23,14 @@ struct DownloadsView: View {
         .navigationTitle(Self.title)
     }
 
-    /// The screen's title, and its row in Settings.
+    /// The screen's title, its row in Settings, and the heading over the downloads on Home when the server can't be
+    /// reached.
     static var title: String {
         String(
-            localized: "Downloads", bundle: .module, comment: "Title of the downloads screen, and its row in Settings.")
+            localized: "Downloads", bundle: .module,
+            comment:
+                "Title of the downloads screen, its row in Settings, and the heading over the downloads on Home when the server can't be reached."
+        )
     }
 }
 

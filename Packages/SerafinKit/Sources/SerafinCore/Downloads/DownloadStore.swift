@@ -1,12 +1,13 @@
 import Foundation
+import ImageIO
 import os
 
 /// The downloads on this device: an index saved as JSON and the files beside it, under Application Support.
 ///
 /// Everything is excluded from backup, since a restored phone can download again, and protected until the device is
 /// first unlocked after a restart, so a transfer that finishes while the phone is locked can still be saved. The
-/// index holds no address, token or pin, and files are named by each download's ID. Its format is versioned so later
-/// releases can migrate it:
+/// index holds no address, token or pin, and files are named by each download's ID: the video in `Media`, and its
+/// poster and backdrop in `Artwork`. Its format is versioned so later releases can migrate it:
 ///
 /// ```json
 /// {
@@ -14,7 +15,7 @@ import os
 ///   "downloads": [
 ///     { "id": "…", "serverID": "…", "userID": "…", "itemID": "…", "mediaSourceID": "…",
 ///       "fileExtension": "mp4", "state": "finished", "bytes": 1234, "created": …,
-///       "metadata": { "title": "…", "kind": "movie" },
+///       "metadata": { "title": "…", "kind": "movie", "year": 2010, "overview": "…" },
 ///       "tracks": { "audio": [{ "index": 1, "codec": "aac", "language": "eng", "isDefault": true, … }],
 ///                   "subtitles": [], "defaultAudio": 1 },
 ///       "playback": { "position": […], "changed": … } }
@@ -53,6 +54,14 @@ public actor DownloadStore {
         directory.appending(path: "Media", directoryHint: .isDirectory)
     }
 
+    /// The folder the downloads' posters and backdrops are saved in.
+    public nonisolated var artworkDirectory: URL {
+        directory.appending(path: "Artwork", directoryHint: .isDirectory)
+    }
+
+    /// The largest picture saved with a download: the most the image pipeline takes from the server for any picture.
+    static let maximumArtworkSize = 20 * 1024 * 1024
+
     private var indexURL: URL {
         directory.appending(path: "downloads.json", directoryHint: .notDirectory)
     }
@@ -65,6 +74,12 @@ public actor DownloadStore {
     /// Where `record`'s file is saved, whether or not it's there yet.
     public nonisolated func fileURL(for record: DownloadRecord) -> URL {
         fileURL(named: record.fileName)
+    }
+
+    /// Where the download `id`'s picture of `kind` is saved, whether or not it's there yet. Like the file, it's named
+    /// by the download's ID alone.
+    public nonisolated func artworkURL(_ kind: DownloadArtwork, of id: String) -> URL {
+        artworkDirectory.appending(path: "\(id)-\(kind.rawValue)", directoryHint: .notDirectory)
     }
 
     /// Every download, oldest first.
@@ -105,7 +120,28 @@ public actor DownloadStore {
         return list[index]
     }
 
-    /// Removes the downloads with `ids` and deletes their files. IDs that aren't saved are ignored.
+    /// Saves `data` as the download `id`'s picture of `kind`, in place of one saved before, and returns whether it did.
+    /// Nothing is saved when there's no such download, as when it was deleted meanwhile, or when `data` isn't an image
+    /// or is larger than ``maximumArtworkSize``.
+    @discardableResult
+    public func saveArtwork(_ data: Data, _ kind: DownloadArtwork, of id: String) throws -> Bool {
+        guard try records().contains(where: { $0.id == id }) else { return false }
+        guard data.count <= Self.maximumArtworkSize, Self.isImage(data) else {
+            Self.logger.error("Did not save a download's picture the server sent, since it isn't one")
+            return false
+        }
+        try prepareDirectories()
+        do {
+            try data.write(
+                to: artworkURL(kind, of: id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            Self.logger.error("Could not save a download's picture: \(error.localizedDescription, privacy: .private)")
+            throw DownloadError.storeUnavailable
+        }
+        return true
+    }
+
+    /// Removes the downloads with `ids` and deletes their files and pictures. IDs that aren't saved are ignored.
     public func remove(ids: Set<String>) throws {
         let list = try records()
         let removed = list.filter { ids.contains($0.id) }
@@ -113,24 +149,31 @@ public actor DownloadStore {
         try write(list.filter { !ids.contains($0.id) })
         for record in removed {
             deleteFile(at: fileURL(for: record))
+            for kind in DownloadArtwork.allCases {
+                deleteFile(at: artworkURL(kind, of: record.id))
+            }
         }
     }
 
-    /// Deletes files in the media folder that no download names, such as one that finished after its download was
-    /// removed.
+    /// Deletes files and pictures that no download names, such as a file that finished after its download was removed.
     public func removeOrphanedFiles() throws {
-        let names = Set(try records().map(\.fileName))
-        let files =
-            (try? FileManager.default.contentsOfDirectory(at: mediaDirectory, includingPropertiesForKeys: nil)) ?? []
-        for file in files where !names.contains(file.lastPathComponent) {
-            deleteFile(at: file)
+        let list = try records()
+        let names = Set(list.map(\.fileName))
+        let pictures = Set(
+            list.flatMap { record in DownloadArtwork.allCases.map { artworkURL($0, of: record.id).lastPathComponent } })
+        for (folder, kept) in [(mediaDirectory, names), (artworkDirectory, pictures)] {
+            let files =
+                (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+            for file in files where !kept.contains(file.lastPathComponent) {
+                deleteFile(at: file)
+            }
         }
     }
 
     /// Makes the folders, excluded from backup and protected, if they aren't there yet.
     public nonisolated func prepareDirectories() throws {
         do {
-            for folder in [directory, mediaDirectory] {
+            for folder in [directory, mediaDirectory, artworkDirectory] {
                 try FileManager.default.createDirectory(
                     at: folder,
                     withIntermediateDirectories: true,
@@ -169,6 +212,12 @@ public actor DownloadStore {
             Self.logger.error("Could not save the downloads: \(error.localizedDescription, privacy: .private)")
             throw DownloadError.storeUnavailable
         }
+    }
+
+    /// Whether `data` is a picture ImageIO can read, rather than something else a server sent, such as an error page.
+    static func isImage(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
+        return CGImageSourceGetType(source) != nil && CGImageSourceGetCount(source) > 0
     }
 
     private func deleteFile(at url: URL) {

@@ -6,8 +6,9 @@ import SwiftUI
 ///
 /// The hero is the top of the screen, under the status bar, with no navigation bar over it; its text and buttons fade
 /// out before they reach the status bar, and the top edge blurs once Home is scrolled at all. When the server can't
-/// be reached, Home shows the rows it last had, under a banner saying so. After a failure it asks again when the
-/// device joins a network or Serafin comes back to the foreground.
+/// be reached, Home shows the downloads, which play without it, under a banner saying so, or with nothing downloaded,
+/// the rows it last had. After a failure it asks again when the device joins a network or Serafin comes back to the
+/// foreground.
 struct HomeView: View {
     @State private var model = HomeModel()
     /// Whether Home has been scrolled at all, which brings the top edge's blur over whatever passes under the status
@@ -26,6 +27,7 @@ struct HomeView: View {
     @Environment(\.media) private var media
     @Environment(\.artwork) private var artwork
     @Environment(MediaActions.self) private var actions
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.displayScale) private var displayScale
     private let network = NetworkWatcher.shared
@@ -40,7 +42,7 @@ struct HomeView: View {
             .toolbar(removing: showsTitle ? nil : .title)
             .profileToolbar()
             .overlay(alignment: .top) {
-                if isRefreshing, !hero.entries.isEmpty {
+                if isRefreshing, showsHero {
                     ProgressView()
                         .padding(Spacing.xSmall)
                         .glassEffect(.regular, in: .circle)
@@ -65,21 +67,27 @@ struct HomeView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { tryAgainAfterAFailure() }
             }
-            .onChange(of: model.notice) { old, new in
-                // The banner appears above where VoiceOver may be, so it's read out.
-                if old == nil, let new {
-                    let announcement = String(
-                        localized: "\(new.message.title). \(HomeNoticeBanner.lastUpdated(new.date))",
-                        bundle: .module,
-                        comment:
-                            "Two sentences in a row: a title, then what follows it, such as Can't Reach the Server. Check that the server is running. Siri says this when something fails, and VoiceOver reads it when Home's out-of-date banner appears."
-                    )
-                    AccessibilityNotification.Announcement(announcement).post()
+            .onChange(of: bannerAnnouncement) { old, new in
+                // A banner appears above where VoiceOver may be, so it's read out.
+                if let new, new != old {
+                    AccessibilityNotification.Announcement(new).post()
                 }
             }
     }
 
     @ViewBuilder private var content: some View {
+        if let offlineReason, let downloads {
+            HomeDownloads(reason: offlineReason, items: downloads.offlineItems, isRetrying: model.isLoading) {
+                attempt += 1
+            }
+            .refreshable { await model.refresh(from: media) }
+            .onAppear { LaunchSignpost.end(showing: "Downloads") }
+        } else {
+            rowsOrState
+        }
+    }
+
+    @ViewBuilder private var rowsOrState: some View {
         switch model.phase {
         case .loading:
             Skeleton(.rows)
@@ -174,13 +182,36 @@ struct HomeView: View {
 
     private var hero: HomeHeroModel { model.hero }
 
+    /// Why Home shows the downloads instead of the server's rows, or nil when it shows the rows: the server can't be
+    /// reached, and something is downloaded.
+    private var offlineReason: UserMessage? {
+        guard let downloads, !downloads.offlineItems.isEmpty else { return nil }
+        return model.offlineReason(isOnline: network.connection.isOnline)
+    }
+
+    /// Whether the hero shows at the top.
+    private var showsHero: Bool {
+        guard offlineReason == nil, case .loaded = model.phase else { return false }
+        return !hero.entries.isEmpty
+    }
+
     /// Whether the bar shows the title: not over the hero or its skeleton.
     private var showsTitle: Bool {
+        if offlineReason != nil { return true }
         switch model.phase {
-        case .loading: false
-        case .loaded: hero.entries.isEmpty
-        case .failed: true
+        case .loading: return false
+        case .loaded: return hero.entries.isEmpty
+        case .failed: return true
         }
+    }
+
+    /// What VoiceOver reads when a banner shows above the downloads or the rows, or nil when there's none.
+    private var bannerAnnouncement: String? {
+        if let offlineReason {
+            return HomeNoticeBanner.announcement(offlineReason, detail: HomeDownloads.detail)
+        }
+        guard let notice = model.notice else { return nil }
+        return HomeNoticeBanner.announcement(notice.message, detail: HomeNoticeBanner.lastUpdated(notice.date))
     }
 
     /// The title of Home's row of started movies and episodes. The row is the whole list: it has no screen of its own.
@@ -212,26 +243,42 @@ struct HomeView: View {
     }
 }
 
-/// The banner above Home's rows when they're out of date: what went wrong, when the rows are from, and Try Again, or
-/// Sign In Again when the server has ended the sign-in.
+/// The banner above Home's rows when they're out of date, or above the downloads Home shows when the server can't be
+/// reached: what went wrong, a line on what's showing, and Try Again, or Sign In Again when the server has ended the
+/// sign-in.
 struct HomeNoticeBanner: View {
-    let notice: HomeModel.Notice
+    let message: UserMessage
+    /// The line under what went wrong, such as when the rows are from.
+    let detail: String
     let isRetrying: Bool
     let retry: () -> Void
     @Environment(\.signInEnded) private var signInEnded
 
+    /// The banner over out-of-date rows, saying when they're from.
+    init(notice: HomeModel.Notice, isRetrying: Bool, retry: @escaping () -> Void) {
+        self.init(message: notice.message, detail: Self.lastUpdated(notice.date), isRetrying: isRetrying, retry: retry)
+    }
+
+    /// A banner saying what went wrong, with `detail` under it.
+    init(message: UserMessage, detail: String, isRetrying: Bool, retry: @escaping () -> Void) {
+        self.message = message
+        self.detail = detail
+        self.isRetrying = isRetrying
+        self.retry = retry
+    }
+
     var body: some View {
         NoticeBanner(
-            notice.message.title,
-            message: Self.lastUpdated(notice.date),
-            systemImage: notice.message.systemImage,
+            message.title,
+            message: detail,
+            systemImage: message.systemImage,
             action: action,
             isBusy: isRetrying
         )
     }
 
     private var action: StateAction {
-        if notice.message.needsSignIn {
+        if message.needsSignIn {
             StateAction(
                 String(localized: "Sign In Again", bundle: .module, comment: "Button after a sign-in has ended.")
             ) { signInEnded() }
@@ -240,6 +287,16 @@ struct HomeNoticeBanner: View {
                 String(localized: "Try Again", bundle: .module, comment: "Button that retries a request."),
                 perform: retry)
         }
+    }
+
+    /// What VoiceOver reads when a banner appears: what went wrong, then `detail`, the line under it.
+    nonisolated static func announcement(_ message: UserMessage, detail: String) -> String {
+        String(
+            localized: "\(message.title). \(detail)",
+            bundle: .module,
+            comment:
+                "Two sentences in a row: a title, then what follows it, such as Can't Reach the Server. Check that the server is running. Siri says this when something fails, and VoiceOver reads it when a banner appears on Home."
+        )
     }
 
     /// When the rows are from, as the banner says it, such as "Last updated 9:41 AM".

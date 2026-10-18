@@ -211,7 +211,8 @@ import os
             if current != account || library == nil || artwork == nil || player == nil {
                 let library = try await accounts.library(for: current)
                 self.library = library
-                artwork = try await accounts.artwork(for: current)
+                let artwork = try await accounts.artwork(for: current)
+                self.artwork = artwork
                 let previous = player
                 let client = try await accounts.client(for: current)
                 downloads = accounts.downloads.map {
@@ -219,7 +220,8 @@ import os
                         downloads: $0,
                         key: current.key,
                         planner: DownloadPlanner(client: client, userID: current.user.id),
-                        library: library
+                        library: library,
+                        artwork: artwork
                     )
                 }
                 player = PlayerEngine(

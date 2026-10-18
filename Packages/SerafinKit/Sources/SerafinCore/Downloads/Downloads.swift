@@ -2,7 +2,7 @@ import Foundation
 import os
 
 /// SerafinCore's front door for downloads: starts, tracks, retries and deletes them for each account, keeping
-/// ``DownloadStore`` and ``DownloadTransfers`` in step, and keeps where each one's playback stopped.
+/// ``DownloadStore`` and ``DownloadTransfers`` in step, and keeps each one's pictures and where its playback stopped.
 ///
 /// ``Accounts`` owns the one instance. It hands each transfer the account's `Authorization` header, so the token
 /// never appears in a URL. Resume data is kept in memory only, because it carries that header: a transfer that stops
@@ -24,6 +24,9 @@ public actor Downloads {
         public var metadata: DownloadMetadata
         /// The audio and subtitle tracks inside the file, for the player with no server to ask.
         public var tracks: DownloadTracks
+        /// Where the server says playback last stopped, for resuming there with no server to ask, or nil when it
+        /// hasn't been started.
+        public var playback: DownloadPlayback?
         /// Whether the transfer may use cellular data.
         public var allowsCellularAccess: Bool
 
@@ -36,6 +39,7 @@ public actor Downloads {
             bytes: Int64?,
             metadata: DownloadMetadata,
             tracks: DownloadTracks = DownloadTracks(),
+            playback: DownloadPlayback? = nil,
             allowsCellularAccess: Bool
         ) {
             self.itemID = itemID
@@ -45,6 +49,7 @@ public actor Downloads {
             self.bytes = bytes
             self.metadata = metadata
             self.tracks = tracks
+            self.playback = playback
             self.allowsCellularAccess = allowsCellularAccess
         }
     }
@@ -143,6 +148,12 @@ public actor Downloads {
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
     }
 
+    /// The picture of `kind` saved with `record`, or nil when none was.
+    public nonisolated func artworkURL(_ kind: DownloadArtwork, for record: DownloadRecord) -> URL? {
+        let url = store.artworkURL(kind, of: record.id)
+        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
+    }
+
     /// The bytes the account's finished downloads take up.
     public func usedBytes(for key: SessionKey) async throws -> Int64 {
         try await records(for: key).filter { $0.state == .finished }.reduce(0) { $0 + ($1.bytes ?? 0) }
@@ -195,7 +206,8 @@ public actor Downloads {
             fileExtension: request.fileExtension,
             bytes: request.bytes,
             metadata: request.metadata,
-            tracks: request.tracks
+            tracks: request.tracks,
+            playback: request.playback
         )
         try await store.save(record)
         do {
@@ -242,7 +254,15 @@ public actor Downloads {
         }
     }
 
-    /// Deletes a download and its file, stopping its transfer if it's running.
+    /// Saves `data`, as the server sent it, as the picture of `kind` of the download `id`, so its card and detail
+    /// screen show it with no server. Does nothing when the download has been deleted, or when `data` isn't a picture.
+    public func saveArtwork(_ data: Data, _ kind: DownloadArtwork, of id: String) async throws {
+        if try await store.saveArtwork(data, kind, of: id) {
+            notify()
+        }
+    }
+
+    /// Deletes a download, its file and its pictures, stopping its transfer if it's running.
     public func delete(_ id: String) async throws {
         guard let record = try await store.record(id: id) else { return }
         try await store.remove(ids: [id])
