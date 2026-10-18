@@ -446,7 +446,11 @@ import Testing
         #expect(conversion(of: smaller)?.copiesVideo == false)
         let noVideo = ConversionPermissions(videoTranscoding: false)
         #expect(DownloadPlanner.conversion(of: smaller, capped: false, permissions: noVideo) == .refused(.notAllowed))
-        let rotated = matroska(query: query(repackaged, "TranscodeReasons=VideoRotationNotSupported"))
+        // Jellyfin lists every reason in one parameter.
+        let rotated = matroska(
+            query: query(
+                "VideoCodec=hevc,h264", "AudioCodec=aac,eac3,ac3", "AudioStreamIndex=1", "VideoBitrate=999360000",
+                "AudioBitrate=640000", "TranscodeReasons=ContainerNotSupported,%20VideoRotationNotSupported"))
         #expect(conversion(of: rotated)?.copiesVideo == false)
     }
 
