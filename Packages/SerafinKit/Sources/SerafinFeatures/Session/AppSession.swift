@@ -55,12 +55,12 @@ import os
     }
 
     /// The session the app runs with: tokens, certificate pins and the device ID in the Keychain, the server list
-    /// in Application Support, and the current account's movies and shows in Spotlight.
+    /// and downloads in Application Support, and the current account's movies and shows in Spotlight.
     ///
     /// - Parameter deviceName: The device name servers show, such as "iPhone".
     public static func live(deviceName: String) -> AppSession {
         AppSession(
-            accounts: Accounts(secrets: KeychainSecretStore(), deviceName: deviceName),
+            accounts: Accounts(secrets: KeychainSecretStore(), deviceName: deviceName, downloads: .live),
             spotlight: .shared
         )
     }

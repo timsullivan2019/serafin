@@ -348,14 +348,21 @@ public actor LibraryRepository {
         try await currentUser().isAdministrator
     }
 
-    /// The two things Serafin reads about the signed-in user.
+    /// Whether the server's policy for the signed-in user allows downloading. A server that doesn't say allows it,
+    /// as Jellyfin does by default; its download endpoint has the last word either way.
+    public func canDownload() async throws -> Bool {
+        try await currentUser().canDownload
+    }
+
+    /// The things Serafin reads about the signed-in user.
     private struct CurrentUser: Sendable {
         let imageTag: String?
         let isAdministrator: Bool
+        let canDownload: Bool
     }
 
-    /// Reads the user's picture tag and role from the server's answer directly, so a server that leaves out a field
-    /// the SDK's user model requires, such as one of the policy's switches, doesn't hide either.
+    /// Reads the user's picture tag, role and download permission from the server's answer directly, so a server that
+    /// leaves out a field the SDK's user model requires, such as one of the policy's switches, doesn't hide any.
     private func currentUser() async throws -> CurrentUser {
         let request = Paths.getCurrentUser
         return try await cached(request.url, request.query) {
@@ -366,10 +373,12 @@ public actor LibraryRepository {
             var imageTag: String?
             if case .string(let tag)? = user["PrimaryImageTag"] { imageTag = tag }
             var isAdministrator = false
-            if case .object(let policy)? = user["Policy"], case .bool(let admin)? = policy["IsAdministrator"] {
-                isAdministrator = admin
+            var canDownload = true
+            if case .object(let policy)? = user["Policy"] {
+                if case .bool(let admin)? = policy["IsAdministrator"] { isAdministrator = admin }
+                if case .bool(let allowed)? = policy["EnableContentDownloading"] { canDownload = allowed }
             }
-            return CurrentUser(imageTag: imageTag, isAdministrator: isAdministrator)
+            return CurrentUser(imageTag: imageTag, isAdministrator: isAdministrator, canDownload: canDownload)
         }
     }
 
