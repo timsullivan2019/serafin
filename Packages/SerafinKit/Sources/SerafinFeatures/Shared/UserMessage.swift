@@ -25,6 +25,10 @@ struct UserMessage: Equatable, Identifiable, Sendable {
             self = Self.playback(error)
             return
         }
+        if let error = error as? DownloadError {
+            self = Self.download(error)
+            return
+        }
         guard let error = error as? SerafinError else {
             self = Self.unexpected
             return
@@ -276,6 +280,63 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                         "Something went wrong playing this. Try again, or lower the streaming quality in Settings.",
                     bundle: .module,
                     comment: "Explanation when the player can't play a stream."
+                )
+            )
+        }
+    }
+
+    /// The message for a video Serafin can't download yet, because the player can't open the original file and
+    /// downloading a copy the server converts is still to come.
+    static let needsConversion = UserMessage(
+        title: String(
+            localized: "Can't Download This Yet", bundle: .module,
+            comment: "Title when a video's file can't be downloaded as it is."),
+        message: String(
+            localized:
+                "This video's file needs your server to convert it before it plays on this device. Serafin can download it once that's supported. You can still stream it.",
+            bundle: .module,
+            comment: "Explanation when a video's file can't be downloaded as it is."
+        ),
+        systemImage: "arrow.down.circle"
+    )
+
+    private static func download(_ error: DownloadError) -> UserMessage {
+        switch error {
+        case .notAllowed:
+            UserMessage(
+                title: String(
+                    localized: "Downloads Are Off", bundle: .module,
+                    comment: "Title when the server doesn't let the user download."),
+                message: String(
+                    localized:
+                        "Your server doesn't allow downloads for your account. Its administrator can turn them on.",
+                    bundle: .module,
+                    comment: "Explanation when the server doesn't let the user download."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .notEnoughSpace:
+            UserMessage(
+                title: String(
+                    localized: "Not Enough Space", bundle: .module,
+                    comment: "Title when a download wouldn't fit on the device."),
+                message: String(
+                    localized:
+                        "There isn't enough space on this device for this video. Free up some space and try again.",
+                    bundle: .module,
+                    comment: "Explanation when a download wouldn't fit on the device."
+                ),
+                systemImage: "externaldrive.badge.exclamationmark"
+            )
+        case .storeUnavailable:
+            UserMessage(
+                title: String(
+                    localized: "Can't Save Downloads", bundle: .module,
+                    comment: "Title when the list of downloads can't be read or saved."),
+                message: String(
+                    localized: "Serafin couldn't update its downloads on this device. Try again in a moment.",
+                    bundle: .module,
+                    comment: "Explanation when the list of downloads can't be read or saved."
                 )
             )
         }

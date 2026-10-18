@@ -52,6 +52,12 @@ public actor Downloads {
         /// Bytes in all, when known.
         public var expected: Int64?
 
+        /// Creates progress.
+        public init(received: Int64, expected: Int64?) {
+            self.received = received
+            self.expected = expected
+        }
+
         /// The share that has arrived, from 0 to 1, or nil when the size isn't known.
         public var fraction: Double? {
             guard let expected, expected > 0 else { return nil }

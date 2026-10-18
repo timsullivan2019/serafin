@@ -18,6 +18,9 @@
         }
       }
     },
+    "%@ downloaded" : {
+      "comment" : "Under Cancel Download: how much has arrived, such as 42% downloaded."
+    },
     "%@ per episode" : {
       "comment" : "A show's run time: how long its episodes run on average, such as 45 min per episode."
     },
@@ -31,6 +34,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · S%lld E%lld" : {
+      "comment" : "A downloaded episode's series, season and episode, such as Sherlock Holmes · S1 E3.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · S%2$lld E%3$lld"
           }
         }
       }
@@ -201,6 +215,9 @@
     "Buttons, links, selections and the tab bar take this color. Colors taken from artwork stay as they are." : {
       "comment" : "Settings footer under the accent color choices."
     },
+    "Can't Download This Yet" : {
+      "comment" : "Title when a video's file can't be downloaded as it is."
+    },
     "Can't Find This Item" : {
       "comment" : "Title when an item is missing."
     },
@@ -213,11 +230,17 @@
     "Can't Read Your Servers" : {
       "comment" : "Title when the server list fails."
     },
+    "Can't Save Downloads" : {
+      "comment" : "Title when the list of downloads can't be read or saved."
+    },
     "Can't Use Your Saved Sign-In" : {
       "comment" : "Title when the Keychain fails."
     },
     "Cancel" : {
       "comment" : "Button that backs out of a warning."
+    },
+    "Cancel Download" : {
+      "comment" : "Menu item that stops a download on its way."
     },
     "Cast & Crew" : {
       "comment" : "Row of an item's cast and crew."
@@ -288,6 +311,9 @@
     "Continue as %@" : {
       "comment" : "Button that signs back in as a saved user, such as Continue as Alice."
     },
+    "Couldn't finish downloading" : {
+      "comment" : "A failed download's status."
+    },
     "Created from the audio" : {
       "comment" : "Detail of subtitles the device generates from a video's audio."
     },
@@ -297,11 +323,41 @@
     "Date Added" : {
       "comment" : "Library sort option: newest additions first."
     },
+    "Delete" : {
+      "comment" : "Swipe action that deletes a download."
+    },
+    "Delete Download" : {
+      "comment" : "Menu item that deletes a downloaded video from the device."
+    },
     "Device Language" : {
       "comment" : "Subtitle language: none chosen, so the languages the device is set to."
     },
     "Director" : {
       "comment" : "A crew member's job on a detail screen."
+    },
+    "Download" : {
+      "comment" : "Menu item that downloads a video."
+    },
+    "Download over Cellular" : {
+      "comment" : "Settings switch that lets downloads use cellular data."
+    },
+    "Downloading, %@" : {
+      "comment" : "A download's status while it's on its way. The value is a percentage, such as 42%."
+    },
+    "Downloading…" : {
+      "comment" : "A download's status when its size isn't known."
+    },
+    "Downloads" : {
+      "comment" : "Title of the downloads screen, and its row in Settings."
+    },
+    "Downloads Are Off" : {
+      "comment" : "Title when the server doesn't let the user download."
+    },
+    "Downloads are kept on this device only, not in your backups, and are removed when you sign out." : {
+      "comment" : "Settings footer under the downloads row."
+    },
+    "Downloads use %@ on this device." : {
+      "comment" : "Footer on the downloads screen. The value is a size, such as 4.2 GB."
     },
     "Encrypted" : {
       "comment" : "Spoken for the lock beside an HTTPS server's address in Settings."
@@ -474,6 +530,9 @@
     "Movies" : {
       "comment" : "Search results section."
     },
+    "Movies and episodes you download appear here. Download one from its page with the More menu." : {
+      "comment" : "Explanation on the downloads screen when nothing is downloaded."
+    },
     "Movies and shows with %@ appear here once they're on your server." : {
       "comment" : "Explanation on a person's page when nothing on the server features them."
     },
@@ -504,6 +563,9 @@
     "No Collections" : {
       "comment" : "Title when there are no collections."
     },
+    "No Downloads" : {
+      "comment" : "Title on the downloads screen when nothing is downloaded."
+    },
     "No Favorites" : {
       "comment" : "Title when there are no favorites."
     },
@@ -518,6 +580,15 @@
     },
     "No episodes in this season yet." : {
       "comment" : "Shown under the season menu for a season with no episodes."
+    },
+    "No longer on your server" : {
+      "comment" : "A failed download's status."
+    },
+    "Not Enough Space" : {
+      "comment" : "Title when a download wouldn't fit on the device."
+    },
+    "Not enough space" : {
+      "comment" : "A failed download's status."
     },
     "Nothing Here Yet" : {
       "comment" : "Title when Home or the Library tab is empty."
@@ -709,6 +780,9 @@
     "Serafin couldn't open its list of servers. Unlock your device and try again." : {
       "comment" : "Explanation when the saved server list can't be read."
     },
+    "Serafin couldn't update its downloads on this device. Try again in a moment." : {
+      "comment" : "Explanation when the list of downloads can't be read or saved."
+    },
     "Serafin is open source under the MIT license. The Jellyfin SDK's files stay under the Mozilla Public License 2.0." : {
       "comment" : "Footer under the list of open-source licenses."
     },
@@ -805,6 +879,9 @@
     "Stereo" : {
       "comment" : "Two audio channels."
     },
+    "Stopped when Serafin was closed" : {
+      "comment" : "A failed download's status."
+    },
     "Storage" : {
       "comment" : "Settings section header."
     },
@@ -865,6 +942,9 @@
     "The server's certificate has changed or isn't trusted. Check it before connecting." : {
       "comment" : "Explanation when a certificate isn't trusted."
     },
+    "There isn't enough space on this device for this video. Free up some space and try again." : {
+      "comment" : "Explanation when a download wouldn't fit on the device."
+    },
     "There's nothing to continue. Start a movie or show in Serafin first." : {
       "comment" : "What Siri says when Continue Watching and Next Up are empty."
     },
@@ -889,6 +969,9 @@
     "This server has Quick Connect turned off, so sign in with your password." : {
       "comment" : "Explanation when Quick Connect is disabled."
     },
+    "This video's file needs your server to convert it before it plays on this device. Serafin can download it once that's supported. You can still stream it." : {
+      "comment" : "Explanation when a video's file can't be downloaded as it is."
+    },
     "Title" : {
       "comment" : "The movie, show or episode a shortcut plays or opens."
     },
@@ -906,6 +989,9 @@
     },
     "Try Again" : {
       "comment" : "Button that retries a request."
+    },
+    "Try Downloading Again" : {
+      "comment" : "Menu item that tries a failed download again."
     },
     "Turn off the lock" : {
       "comment" : "Reason the lock asks when turned off."
@@ -981,6 +1067,12 @@
     },
     "Your account isn't allowed to play this. Ask the person who runs your server." : {
       "comment" : "Explanation when the account may not play an item."
+    },
+    "Your server doesn't allow downloads" : {
+      "comment" : "A failed download's status."
+    },
+    "Your server doesn't allow downloads for your account. Its administrator can turn them on." : {
+      "comment" : "Explanation when the server doesn't let the user download."
     },
     "Your server has no version of this that Serafin can play, even by converting it. Check the file on the server." : {
       "comment" : "Explanation when the server has no version of an item that can play."

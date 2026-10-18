@@ -16,6 +16,9 @@ struct SettingsView: View {
                 .id(session.account?.server.id)
             DeliverySection()
             LockSection()
+            if let downloads = session.downloads {
+                DownloadsSection(downloads: downloads)
+            }
             StorageSection()
             AboutSection()
             #if DEBUG
@@ -446,6 +449,32 @@ private struct DeliverySection: View {
 }
 
 /// Clearing the cached artwork, saved Home and library answers.
+/// The downloads, as a row that opens them with the space they take, and whether they may use cellular data.
+private struct DownloadsSection: View {
+    let downloads: DownloadCenter
+    @AppStorage(DownloadCenter.cellularKey) private var usesCellular = false
+
+    var body: some View {
+        Section {
+            NavigationLink(value: Route.downloads) {
+                LabeledContent(DownloadsView.title, value: DownloadRow.size(downloads.usedBytes))
+            }
+            Toggle(
+                String(
+                    localized: "Download over Cellular", bundle: .module,
+                    comment: "Settings switch that lets downloads use cellular data."),
+                isOn: $usesCellular)
+        } footer: {
+            Text(
+                String(
+                    localized:
+                        "Downloads are kept on this device only, not in your backups, and are removed when you sign out.",
+                    bundle: .module,
+                    comment: "Settings footer under the downloads row."))
+        }
+    }
+}
+
 private struct StorageSection: View {
     @Environment(AppSession.self) private var session
     @State private var clearCount = 0

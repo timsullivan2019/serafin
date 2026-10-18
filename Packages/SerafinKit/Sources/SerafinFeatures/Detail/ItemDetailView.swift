@@ -546,6 +546,7 @@ private struct DetailToolbar: ToolbarContent {
     let shareURL: URL?
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
@@ -582,6 +583,9 @@ private struct DetailToolbar: ToolbarContent {
                     } label: {
                         Label(Self.markUnwatched, systemImage: "circle")
                     }
+                }
+                if let downloads, downloads.canDownload(item) {
+                    DownloadMenuItem(item: item, downloads: downloads)
                 }
                 if canRefreshMetadata {
                     Button {

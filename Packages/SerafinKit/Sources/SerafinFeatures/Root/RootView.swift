@@ -31,6 +31,7 @@ public struct RootView: View {
                     )
                     .environment(\.media, media)
                     .environment(\.artwork, session.artwork)
+                    .environment(session.downloads)
                     .environment(
                         \.signInEnded,
                         SignInEndedAction(account: account.key) { [session] in
@@ -104,6 +105,7 @@ struct MainTabs: View {
     @State private var settingsPath: [Route] = []
     @State private var searchRequest = SearchRequest()
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
     @Namespace private var playerZoom
@@ -191,6 +193,23 @@ struct MainTabs: View {
             Button(String(localized: "OK", bundle: .module, comment: "Button that closes an alert.")) {}
         } message: {
             Text(actions.failure?.message ?? "")
+        }
+        .modifier(DownloadFailureAlert(downloads: downloads))
+    }
+}
+
+/// The alert for a download that couldn't start or be deleted.
+private struct DownloadFailureAlert: ViewModifier {
+    let downloads: DownloadCenter?
+
+    func body(content: Content) -> some View {
+        content.alert(
+            downloads?.failure?.title ?? "",
+            isPresented: Binding(get: { downloads?.failure != nil }, set: { if !$0 { downloads?.failure = nil } })
+        ) {
+            Button(String(localized: "OK", bundle: .module, comment: "Button that closes an alert.")) {}
+        } message: {
+            Text(downloads?.failure?.message ?? "")
         }
     }
 }
