@@ -38,17 +38,6 @@
         }
       }
     },
-    "%@ · S%lld E%lld" : {
-      "comment" : "A downloaded episode's series, season and episode, such as Sherlock Holmes · S1 E3.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · S%2$lld E%3$lld"
-          }
-        }
-      }
-    },
     "%@, %@" : {
       "comment" : "Spoken value of a library's sort button: what it sorts by, then which way, such as Name, A to Z.",
       "localizations" : {
@@ -361,6 +350,15 @@
     "Delete Download" : {
       "comment" : "Menu item that deletes a downloaded video from the device."
     },
+    "Delete Episodes" : {
+      "comment" : "Button that deletes the downloads of the episodes that have been watched."
+    },
+    "Delete Watched" : {
+      "comment" : "Button on the downloads screen that deletes the downloads of watched episodes, after asking."
+    },
+    "Delete Watched Episodes?" : {
+      "comment" : "Title of the question before deleting the downloads of the episodes that have been watched."
+    },
     "Device Language" : {
       "comment" : "Subtitle language: none chosen, so the languages the device is set to."
     },
@@ -407,7 +405,7 @@
       "comment" : "Menu item on an episode card that plays when tapped, which opens the episode's page."
     },
     "Episodes" : {
-      "comment" : "Search results section."
+      "comment" : "Heading over a list of episodes."
     },
     "Every movie and show here has been watched." : {
       "comment" : "Explanation when every movie and show has been watched."
@@ -566,7 +564,7 @@
       "comment" : "What Siri and Shortcuts call a movie, show or episode in the library."
     },
     "Movies" : {
-      "comment" : "Search results section."
+      "comment" : "Heading over a list of movies."
     },
     "Movies and episodes you download appear here. Download one from its page with the More menu." : {
       "comment" : "Explanation on the downloads screen when nothing is downloaded."
@@ -977,6 +975,9 @@
     "The Server Only Allows Its Own Network" : {
       "comment" : "Title when Jellyfin's network settings turn the device away."
     },
+    "The episodes you've watched take up %@ on this device. They stay on your server, so you can download them again." : {
+      "comment" : "Message before deleting the downloads of the episodes that have been watched. The value is a size, such as 2.4 GB."
+    },
     "The play button, the selected tab and a Settings value in %@" : {
       "comment" : "Spoken for the accent colour preview, such as The play button, the selected tab and a Settings value in Red."
     },
@@ -1093,6 +1094,9 @@
     },
     "Waiting…" : {
       "comment" : "A download's status while it waits for the server to finish converting another download first."
+    },
+    "Watched · %@" : {
+      "comment" : "A saved download's status once it's been watched. The value is its size, such as 640 MB."
     },
     "Welcome to Serafin" : {
       "comment" : "Greeting on the first screen."

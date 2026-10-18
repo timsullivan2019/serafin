@@ -373,6 +373,13 @@ import os
         }
     }
 
+    /// Deletes each of `records` and its file, as Delete Watched does.
+    func delete(_ records: [DownloadRecord]) async {
+        for record in records {
+            await delete(record)
+        }
+    }
+
     /// Asks the server whether the account may download. When it can't answer, what was known stays.
     private func checkPermission() async {
         do {

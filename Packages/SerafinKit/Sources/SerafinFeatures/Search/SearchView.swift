@@ -196,12 +196,12 @@ private struct SearchResultsView: View {
                     width: posterWidth
                 ) { PosterLink(item: $0) }
                 SearchSection(
-                    String(localized: "Movies", bundle: .module, comment: "Search results section."),
+                    String(localized: "Movies", bundle: .module, comment: "Heading over a list of movies."),
                     results.movies,
                     width: posterWidth
                 ) { PosterLink(item: $0) }
                 SearchSection(
-                    String(localized: "Episodes", bundle: .module, comment: "Search results section."),
+                    String(localized: "Episodes", bundle: .module, comment: "Heading over a list of episodes."),
                     results.episodes,
                     width: thumbnailWidth
                 ) { LandscapeLink(item: $0) }

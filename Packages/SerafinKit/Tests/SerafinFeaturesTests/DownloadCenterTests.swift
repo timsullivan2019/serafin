@@ -115,3 +115,74 @@ import Testing
         #expect(ShowDownloadMenuItems.episodes(5).contains("5"))
     }
 }
+
+@MainActor @Suite struct DownloadGroupTests {
+    private let key = SessionKey(serverID: "server", userID: "user")
+
+    /// A download of an episode of `seriesID`'s show, as the device saved it.
+    private func episode(
+        _ id: String,
+        season: Int? = 1,
+        _ number: Int?,
+        seriesID: String? = "series-sherlock",
+        seriesName: String = "Sherlock Holmes",
+        state: DownloadRecord.State = .finished,
+        isWatched: Bool = false
+    ) -> DownloadRecord {
+        DownloadRecord(
+            id: id, key: key, itemID: id, mediaSourceID: id, fileExtension: "mp4", state: state, bytes: 640_000_000,
+            metadata: DownloadMetadata(
+                title: id, kind: .episode, seriesID: seriesID, seriesName: seriesName, seasonNumber: season,
+                episodeNumber: number, runtime: .seconds(3000)),
+            playback: isWatched ? DownloadPlayback(position: .zero, isPlayed: true) : nil)
+    }
+
+    /// A download of a movie, as the device saved it.
+    private func movie(_ id: String, isWatched: Bool = false) -> DownloadRecord {
+        DownloadRecord(
+            id: id, key: key, itemID: id, mediaSourceID: id, fileExtension: "mp4", state: .finished,
+            metadata: DownloadMetadata(title: id, kind: .movie, runtime: .seconds(888)),
+            playback: isWatched ? DownloadPlayback(position: .seconds(880)) : nil)
+    }
+
+    @Test func eachShowsEpisodesAreListedTogetherInOrderWithTheNewestGroupFirst() {
+        // Newest first, as the downloads are kept.
+        let records = [
+            episode("s2e1", season: 2, 1), movie("sintel"), episode("s1e3", 3),
+            episode("alice", 1, seriesID: "alice", seriesName: "Alice"), episode("s1e1", 1),
+            episode("special", season: 0, 1), movie("spring"), episode("unnumbered", nil),
+        ]
+        let groups = DownloadGroup.groups(of: records)
+        #expect(groups.map(\.title) == ["Sherlock Holmes", "Movies", "Alice"])
+        #expect(groups.map(\.isShow) == [true, false, true])
+        // Specials come before the first season, and an episode missing its number after the rest.
+        #expect(groups[0].records.map(\.id) == ["special", "s1e1", "s1e3", "s2e1", "unnumbered"])
+        #expect(groups[1].records.map(\.id) == ["sintel", "spring"])
+        #expect(groups[2].records.map(\.id) == ["alice"])
+    }
+
+    @Test func episodesSavedWithoutTheirShowsIDAreListedByItsName() {
+        let records = [
+            episode("a", 2, seriesID: nil), episode("b", 1, seriesID: nil),
+            episode("c", 1, seriesID: nil, seriesName: "Alice"),
+        ]
+        #expect(DownloadGroup.groups(of: records).map { $0.records.map(\.id) } == [["b", "a"], ["c"]])
+    }
+
+    @Test func deleteWatchedTakesOnlyTheSavedEpisodesThatHaveBeenWatched() {
+        let records = [
+            episode("watched", 1, isWatched: true), episode("unwatched", 2), movie("sintel", isWatched: true),
+            episode("downloading", 3, state: .downloading, isWatched: true),
+        ]
+        #expect(records.map(\.isWatched) == [true, false, true, true])
+        #expect(DownloadGroup.watchedEpisodes(in: records).map(\.id) == ["watched"])
+    }
+
+    @Test func aWatchedDownloadSaysSoWithItsSize() {
+        let watched = DownloadRow.status(of: episode("watched", 1, isWatched: true), state: .finished)
+        let unwatched = DownloadRow.status(of: episode("unwatched", 2), state: .finished)
+        #expect(unwatched == DownloadRow.size(640_000_000))
+        #expect(watched != unwatched)
+        #expect(watched.contains(unwatched))
+    }
+}
