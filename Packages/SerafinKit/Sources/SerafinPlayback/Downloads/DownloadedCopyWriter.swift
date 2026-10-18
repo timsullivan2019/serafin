@@ -9,14 +9,14 @@ import os
 /// file becomes a text track.
 ///
 /// Jellyfin sends a video it converts for a download as fragmented MP4, made while it's sent. An HEVC video it copies
-/// there carries the `hev1` tag, under which AVFoundation doesn't see the video at all, so the file that arrived is
-/// retagged `hvc1` first, as the server tags the same video in its own HLS streams; see ``SampleEntryTags``. Nor does
-/// that MP4 say when the video it copied is Dolby Vision, so the copy says so, from the configuration the server
-/// reported, as its HLS streams do. Text subtitles can't go into the server's MP4 at all, so they come from its
-/// subtitle endpoint as WebVTT, timed on the video's own timeline, and become 3GPP text tracks, the subtitles AVPlayer
-/// shows from MP4 and QuickTime files. They follow the file's own subtitle tracks, in one alternate group that shows
-/// none until the player picks one. A QuickTime movie, because it's the container AVAssetWriter copies every kind of
-/// track into.
+/// there carries the `hev1` tag, under which AVFoundation doesn't play it, and older ffmpeg releases leave an empty box
+/// beside its samples' descriptions that hides the video from AVFoundation altogether, so both are renamed in the file
+/// that arrived first; see ``MovieBoxRenames``. Nor does that MP4 say when the video it copied is Dolby Vision, so the
+/// copy says so, from the configuration the server reported, as its HLS streams do. Text subtitles can't go into the
+/// server's MP4 at all, so they come from its subtitle endpoint as WebVTT, timed on the video's own timeline, and
+/// become 3GPP text tracks, the subtitles AVPlayer shows from MP4 and QuickTime files. They follow the file's own
+/// subtitle tracks, in one alternate group that shows none until the player picks one. A QuickTime movie, because it's
+/// the container AVAssetWriter copies every kind of track into.
 public struct DownloadedCopyWriter: DownloadPreparing {
     private static let logger = Logger(serafinCategory: "downloads")
 
@@ -25,9 +25,9 @@ public struct DownloadedCopyWriter: DownloadPreparing {
 
     public func prepare(_ job: DownloadPreparationJob) async throws {
         do {
-            try SampleEntryTags.rewrite(fileAt: job.arrived)
+            try MovieBoxRenames.rewrite(fileAt: job.arrived)
         } catch {
-            Self.logger.error("Could not retag a download: \(error.localizedDescription, privacy: .private)")
+            Self.logger.error("Could not rename a download's boxes: \(error.localizedDescription, privacy: .private)")
             throw DownloadPreparationError.unreadable
         }
         let asset = AVURLAsset(url: job.arrived)

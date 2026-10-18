@@ -9,14 +9,15 @@ import Testing
 /// at 160 × 90 and ten frames a second:
 ///
 /// - `HEVCFragmented.mp4`: HEVC tagged `hev1`, with B-frames, and AAC, as fragmented MP4, the way Jellyfin sends a
-///   video it converts for a download (`-movflags frag_keyframe+empty_moov+delay_moov`).
+///   video it converts for a download (`-movflags frag_keyframe+empty_moov+delay_moov`), with the empty `sdtp` box
+///   ffmpeg releases before July 2025 leave in the movie box.
 /// - `H264AC3Fragmented.mp4`: H.264 and AC-3, the same way.
 /// - `OriginalWithSubtitles.mp4`: H.264, English and French AAC, English 3GPP text subtitles and two chapters, as an
 ///   MP4 a library might hold.
 @Suite struct DownloadedCopyWriterTests {
     private let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
 
-    /// Where a copy works from: a fixture copied as the file that arrived, which the writer retags in place.
+    /// Where a copy works from: a fixture copied as the file that arrived, whose boxes the writer renames in place.
     private var arrived: URL {
         directory.appending(path: "arrived.mp4")
     }
@@ -138,7 +139,7 @@ import Testing
         let duration = try await copy.load(.duration)
         #expect(abs(duration.seconds - 2) < 0.1)
 
-        // The file that arrived, retagged in place, which AVFoundation now reads.
+        // The file that arrived, its boxes renamed in place, which AVFoundation now reads.
         let original = AVURLAsset(url: arrived)
         let originalVideos = try await original.loadTracks(withMediaType: .video)
         let originalVideo = try #require(originalVideos.first)
@@ -252,35 +253,37 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: output.path(percentEncoded: false)))
     }
 
-    @Test func theFileThatArrivedIsRetaggedInPlace() async throws {
+    @Test func theFileThatArrivedIsRenamedInPlace() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
-        // As it arrives, tagged hev1, the video isn't among the tracks AVFoundation lists.
+        // As it arrives, the empty sdtp box hides the video from AVFoundation, and the hev1 tag keeps it from playing.
         try arrive("HEVCFragmented")
         let before = try Data(contentsOf: arrived)
 
-        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 1)
+        #expect(try MovieBoxRenames.rewrite(fileAt: arrived) == 2)
         let after = try Data(contentsOf: arrived)
         #expect(after.count == before.count)
-        // Only the four bytes of the video's tag change, in the sample description ffmpeg wrote.
+        // Only the four bytes of the video's tag and of the empty box's type change.
         let changed = zip(before, after).enumerated().filter { $0.element.0 != $0.element.1 }.map(\.offset)
-        #expect(changed.allSatisfy { (461..<465).contains($0) })
+        #expect(changed.allSatisfy { (461..<465).contains($0) || (3010..<3014).contains($0) })
         #expect(String(decoding: after[461..<465], as: UTF8.self) == "hvc1")
+        #expect(String(decoding: after[3010..<3014], as: UTF8.self) == "free")
         let videos = try await AVURLAsset(url: arrived).loadTracks(withMediaType: .video)
         let video = try #require(videos.first)
         #expect(try await subtype(of: video) == DownloadedCopyWriter.fourCharCode("hvc1"))
+        #expect(try await video.load(.isPlayable))
         // Once is enough.
-        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 0)
+        #expect(try MovieBoxRenames.rewrite(fileAt: arrived) == 0)
     }
 
-    @Test func filesWithoutHEVCTaggedHev1AreLeftAsTheyAre() throws {
+    @Test func filesAVFoundationReadsAreLeftAsTheyAre() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         try arrive("H264AC3Fragmented")
         let before = try Data(contentsOf: arrived)
-        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 0)
+        #expect(try MovieBoxRenames.rewrite(fileAt: arrived) == 0)
         #expect(try Data(contentsOf: arrived) == before)
 
         try Data("not a video".utf8).write(to: arrived)
-        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 0)
+        #expect(try MovieBoxRenames.rewrite(fileAt: arrived) == 0)
     }
 
     @Test func boxesThatDontFitWhatHoldsThemAreLeftAlone() {
@@ -294,12 +297,28 @@ import Testing
         let entry = box("hev1", [UInt8](repeating: 0, count: 8))
         let header: [UInt8] = [0, 0, 0, 0, 0, 0, 0, 1]
         // Four boxes' headers down to the descriptions, then theirs, its own header, and the entry's size.
-        #expect(SampleEntryTags.tagOffsets(inMovie: track(box("stsd", header + entry))).map(\.offset) == [52])
+        #expect(MovieBoxRenames.renames(inMovie: track(box("stsd", header + entry))).map(\.offset) == [52])
         // An entry claiming more than the box holding it, and a box claiming less than its own header.
         let overlong = box("stsd", header + box("hev1", [], size: 64))
-        #expect(SampleEntryTags.tagOffsets(inMovie: track(overlong)).isEmpty)
-        #expect(SampleEntryTags.tagOffsets(inMovie: box("trak", box("mdia", [], size: 4))).isEmpty)
-        #expect(SampleEntryTags.boxes(in: [0, 0, 0], 0..<3).isEmpty)
+        #expect(MovieBoxRenames.renames(inMovie: track(overlong)).isEmpty)
+        #expect(MovieBoxRenames.renames(inMovie: box("trak", box("mdia", [], size: 4))).isEmpty)
+        #expect(MovieBoxRenames.boxes(in: [0, 0, 0], 0..<3).isEmpty)
+    }
+
+    @Test func onlyAnEmptyTableOfDependenciesBecomesFreeSpace() {
+        func box(_ type: String, _ contents: [UInt8]) -> [UInt8] {
+            withUnsafeBytes(of: UInt32(8 + contents.count).bigEndian) { Array($0) } + Array(type.utf8) + contents
+        }
+        func track(_ table: [UInt8]) -> [UInt8] {
+            box("trak", box("mdia", box("minf", box("stbl", table))))
+        }
+        // Four boxes' headers down to the table, then its own size.
+        let empty = MovieBoxRenames.renames(inMovie: track(box("sdtp", [0, 0, 0, 0])))
+        #expect(empty.map(\.offset) == [36])
+        #expect(empty.map(\.type) == [DownloadedCopyWriter.fourCharCode("free")])
+        // A table with a sample stays, as does one outside a track's sample tables.
+        #expect(MovieBoxRenames.renames(inMovie: track(box("sdtp", [0, 0, 0, 0, 0x08]))).isEmpty)
+        #expect(MovieBoxRenames.renames(inMovie: box("trak", box("sdtp", [0, 0, 0, 0]))).isEmpty)
     }
 
     @Test func dolbyVisionIsSignalledAsApplesOwnVideosSignalIt() throws {

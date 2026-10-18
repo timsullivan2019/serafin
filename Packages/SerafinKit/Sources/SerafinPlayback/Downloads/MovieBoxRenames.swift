@@ -1,15 +1,19 @@
 import Foundation
 
-/// Rewrites the codec tags of an MP4 file's sample descriptions in place, where AVFoundation reads the same samples
-/// only under another tag.
+/// Renames boxes in an MP4 file's movie box in place, where AVFoundation reads the same samples only under another
+/// name. Only the four bytes of each box's type change, so every offset in the file stays as it is.
 ///
-/// Jellyfin's ffmpeg tags HEVC it copies into an MP4 `hev1`, which lets parameter sets sit inside the samples as well
-/// as in the sample description, and AVFoundation doesn't list a track tagged that way at all. Tagged `hvc1`, as the
-/// server tags the same samples in its own HLS streams, the track reads and plays. Dolby Vision's `dvhe` becomes
-/// `dvh1` the same way. Only the four bytes of each tag change, so every offset in the file stays as it is.
+/// - Jellyfin's ffmpeg tags HEVC it copies into an MP4 `hev1`, which lets parameter sets sit inside the samples as
+///   well as in the sample description. AVFoundation lists a track tagged that way but doesn't play it. Tagged `hvc1`,
+///   as the server tags the same samples in its own HLS streams, it plays. Dolby Vision's `dvhe` becomes `dvh1` the
+///   same way.
+/// - ffmpeg releases before its fix of July 2025 write an empty `sdtp`, the table of the samples no other sample
+///   depends on, into the movie box of a fragmented MP4 whose video has such samples, as libx265's B-frames, though
+///   every sample is in the fragments after it. AVFoundation then doesn't list the track at all. The table holds
+///   nothing, so it becomes `free`, space a reader skips.
 ///
 /// The file is untrusted input: every box is checked against what holds it, and only the movie box is read.
-enum SampleEntryTags {
+enum MovieBoxRenames {
     /// A box in the file: its type, where it starts, and where its contents are.
     struct Box {
         let type: FourCharCode
@@ -17,8 +21,8 @@ enum SampleEntryTags {
         let contents: Range<Int>
     }
 
-    /// The tags rewritten, and what each becomes.
-    static let replacements: [FourCharCode: FourCharCode] = [
+    /// The sample description tags rewritten, and what each becomes.
+    static let tags: [FourCharCode: FourCharCode] = [
         DownloadedCopyWriter.fourCharCode("hev1"): DownloadedCopyWriter.fourCharCode("hvc1"),
         DownloadedCopyWriter.fourCharCode("dvhe"): DownloadedCopyWriter.fourCharCode("dvh1"),
     ]
@@ -30,13 +34,17 @@ enum SampleEntryTags {
     /// The most boxes looked through at the top of the file before the movie box.
     private static let maximumTopLevelBoxes = 1_000
 
-    /// The boxes from the movie box down to a track's sample descriptions.
-    private static let pathToSampleDescriptions = ["trak", "mdia", "minf", "stbl", "stsd"].map {
+    /// The boxes from the movie box down to a track's sample tables.
+    private static let pathToSampleTables = ["trak", "mdia", "minf", "stbl"].map {
         DownloadedCopyWriter.fourCharCode($0)
     }
 
-    /// Rewrites the tags in the MP4 file at `url`, returning how many it rewrote. A file with no movie box within
-    /// reach has none rewritten.
+    private static let sampleDescriptions = DownloadedCopyWriter.fourCharCode("stsd")
+    private static let sampleDependencies = DownloadedCopyWriter.fourCharCode("sdtp")
+    private static let free = DownloadedCopyWriter.fourCharCode("free")
+
+    /// Renames the boxes in the MP4 file at `url`, returning how many it renamed. A file with no movie box within
+    /// reach has none renamed.
     ///
     /// - Throws: When the file can't be read or written.
     @discardableResult
@@ -44,33 +52,43 @@ enum SampleEntryTags {
         let handle = try FileHandle(forUpdating: url)
         defer { try? handle.close() }
         guard let movie = try movieBox(in: handle) else { return 0 }
-        let tags = tagOffsets(inMovie: movie.contents)
-        for (offset, replacement) in tags {
+        let renamed = renames(inMovie: movie.contents)
+        for (offset, type) in renamed {
             try handle.seek(toOffset: movie.offset + UInt64(offset))
-            try handle.write(contentsOf: bigEndianBytes(replacement))
+            try handle.write(contentsOf: bigEndianBytes(type))
         }
-        return tags.count
+        return renamed.count
     }
 
-    /// Where each tag to rewrite is in `movie`, the movie box's contents, and what it becomes.
-    static func tagOffsets(inMovie movie: [UInt8]) -> [(offset: Int, replacement: FourCharCode)] {
+    /// Where the type of each box to rename is in `movie`, the movie box's contents, and what it becomes.
+    static func renames(inMovie movie: [UInt8]) -> [(offset: Int, type: FourCharCode)] {
         var ranges = [0..<movie.count]
-        for type in pathToSampleDescriptions {
+        for type in pathToSampleTables {
             ranges = ranges.flatMap { range in
                 boxes(in: movie, range).filter { $0.type == type }.map(\.contents)
             }
         }
-        var tags: [(offset: Int, replacement: FourCharCode)] = []
-        for descriptions in ranges {
-            // A full box, then the number of entries, then the entries, each a box whose type is its tag.
-            guard descriptions.count >= 8 else { continue }
-            let entries = (descriptions.lowerBound + 8)..<descriptions.upperBound
-            for entry in boxes(in: movie, entries) {
-                guard let replacement = replacements[entry.type] else { continue }
-                tags.append((entry.start + 4, replacement))
+        var renames: [(offset: Int, type: FourCharCode)] = []
+        for table in ranges {
+            for box in boxes(in: movie, table) {
+                switch box.type {
+                case sampleDescriptions:
+                    // A full box, then the number of entries, then the entries, each a box whose type is its tag.
+                    guard box.contents.count >= 8 else { continue }
+                    let entries = (box.contents.lowerBound + 8)..<box.contents.upperBound
+                    for entry in boxes(in: movie, entries) {
+                        guard let tag = tags[entry.type] else { continue }
+                        renames.append((entry.start + 4, tag))
+                    }
+                case sampleDependencies where box.contents.count <= 4:
+                    // A full box's version and flags, and no samples.
+                    renames.append((box.start + 4, free))
+                default:
+                    continue
+                }
             }
         }
-        return tags
+        return renames
     }
 
     /// The boxes in `range` of `bytes`, in order, until one doesn't fit what holds it.
