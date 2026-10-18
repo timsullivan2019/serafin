@@ -360,6 +360,62 @@ private func isSaved(_ url: URL) -> Bool {
     }
 }
 
+/// English subtitles inside a file, and Spanish ones the server sends as WebVTT to add to its copy.
+private let english = DownloadTrack(index: 2, codec: "mov_text", language: "eng", isText: true)
+private let spanish = DownloadTrack(index: 3, codec: "subrip", language: "spa", isText: true)
+private let webVTT = "WEBVTT\n\n00:00.000 --> 00:01.000\nHola\n"
+
+/// Writes each download's copy as the file that arrived followed by the subtitles added to it, after failing as it's
+/// told to first.
+private actor FakePreparer: DownloadPreparing {
+    private var failures: [DownloadPreparationError]
+    /// The copies asked for, in order.
+    private(set) var jobs: [DownloadPreparationJob] = []
+
+    init(failing failures: [DownloadPreparationError] = []) {
+        self.failures = failures
+    }
+
+    func prepare(_ job: DownloadPreparationJob) async throws {
+        jobs.append(job)
+        if !failures.isEmpty {
+            throw failures.removeFirst()
+        }
+        var copy = try Data(contentsOf: job.arrived)
+        for subtitles in job.subtitles {
+            copy.append(try Data(contentsOf: subtitles.file))
+        }
+        try copy.write(to: job.output)
+    }
+}
+
+/// Writes nothing, as a long copy does, until it's cancelled.
+private actor StalledPreparer: DownloadPreparing {
+    private(set) var isStarted = false
+    private(set) var isCancelled = false
+
+    func prepare(_ job: DownloadPreparationJob) async throws {
+        isStarted = true
+        do {
+            try await Task.sleep(for: .seconds(60))
+        } catch {
+            isCancelled = true
+            throw error
+        }
+    }
+}
+
+/// Waits until `condition` holds.
+private func eventually(_ condition: () async throws -> Bool) async throws {
+    for _ in 0..<1000 {
+        if try await condition() {
+            return
+        }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    throw CancellationError()
+}
+
 /// Downloads on a throwaway folder, moving files from a stubbed server. Every test uses its own host.
 private struct DownloadsHarness {
     let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
@@ -367,7 +423,8 @@ private struct DownloadsHarness {
     let store: DownloadStore
     let downloads: Downloads
 
-    init() async throws {
+    /// Creates downloads whose copies `preparer` writes, while the test runs.
+    init(preparer: (any DownloadPreparing)? = nil) async throws {
         let secrets = InMemorySecretStore()
         let sessions = SessionStore(
             secrets: secrets,
@@ -384,7 +441,9 @@ private struct DownloadsHarness {
             store: store,
             transfers: transfers,
             identity: DeviceIdentity(secrets: secrets, deviceName: "iPhone", version: "1.1.0"),
-            sessions: sessions
+            sessions: sessions,
+            preparer: preparer,
+            asksForBackgroundTime: false
         )
         await downloads.activate()
     }
@@ -401,6 +460,18 @@ private struct DownloadsHarness {
         )
     }
 
+    /// A request for a file whose copy is written once it arrives, with Spanish subtitles added to its English ones:
+    /// one the server converts, or an original, which plays as it arrives.
+    func withSubtitles(host: String, playsAsItArrives: Bool = false) throws -> Downloads.Request {
+        var made = try request(host: host)
+        made.tracks = DownloadTracks(subtitles: [english, spanish], defaultSubtitles: spanish.index)
+        made.preparation = Downloads.Preparation(
+            subtitles: [Downloads.Subtitles(index: spanish.index, webVTT: Data(webVTT.utf8))],
+            playsAsItArrives: playsAsItArrives
+        )
+        return made
+    }
+
     /// Waits until the download of `itemID` is no longer on its way.
     func settled(_ itemID: String = "item-1") async throws -> DownloadRecord {
         for _ in 0..<1000 {
@@ -410,6 +481,23 @@ private struct DownloadsHarness {
             try await Task.sleep(for: .milliseconds(5))
         }
         throw CancellationError()
+    }
+
+    /// Waits until the download of `itemID` is neither on its way nor waiting for its copy.
+    func prepared(_ itemID: String = "item-1") async throws -> DownloadRecord {
+        for _ in 0..<1000 {
+            let record = try await settled(itemID)
+            if record.state != .preparing {
+                return record
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw CancellationError()
+    }
+
+    /// The names of the files kept for downloads, in order.
+    func savedFiles() throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: store.mediaDirectory.path(percentEncoded: false)).sorted()
     }
 
     func cleanUp() {
@@ -682,6 +770,149 @@ private struct DownloadsHarness {
         #expect(!isSaved(poster))
     }
 
+    @Test func aCopyIsWrittenWithTheSubtitlesAddedThenTheDownloadFinishes() async throws {
+        let preparer = FakePreparer()
+        let harness = try await DownloadsHarness(preparer: preparer)
+        defer { harness.cleanUp() }
+        let host = "downloads-prepare.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+
+        let started = try await harness.downloads.start(try harness.withSubtitles(host: host), for: harness.key)
+        #expect(started.state == .downloading)
+        #expect(started.fileExtension == "mov")
+        let record = try await harness.prepared()
+
+        #expect(record.state == .finished)
+        #expect(record.preparation == nil)
+        #expect(record.tracks?.subtitles == [english, spanish])
+        let copy = Data("movie\(webVTT)".utf8)
+        #expect(record.bytes == Int64(copy.count))
+        let file = try #require(harness.downloads.fileURL(for: record))
+        #expect(try Data(contentsOf: file) == copy)
+        // What arrived and the subtitles are in the copy, so only the copy is kept.
+        #expect(try harness.savedFiles() == ["\(record.id).mov"])
+        let added = await preparer.jobs.map { job in job.subtitles.map(\.track) }
+        #expect(added == [[spanish]])
+    }
+
+    @Test func aCopyThatCantBeWrittenFailsTheDownloadAndKeepsNothing() async throws {
+        let cases: [(DownloadPreparationError, DownloadFailure, String)] = [
+            (.unreadable, .preparationFailed, "unreadable"),
+            (.storageFull, .storageFull, "full"),
+        ]
+        for (error, failure, name) in cases {
+            let harness = try await DownloadsHarness(preparer: FakePreparer(failing: [error]))
+            defer { harness.cleanUp() }
+            let host = "downloads-prepare-\(name).example.com"
+            StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+
+            try await harness.downloads.start(try harness.withSubtitles(host: host), for: harness.key)
+            let record = try await harness.prepared()
+
+            #expect(record.state == .failed)
+            #expect(record.failure == failure)
+            #expect(harness.downloads.fileURL(for: record) == nil)
+            #expect(try harness.savedFiles().isEmpty)
+        }
+    }
+
+    @Test func anOriginalWhoseCopyCantBeWrittenIsKeptAsItArrived() async throws {
+        let harness = try await DownloadsHarness(preparer: FakePreparer(failing: [.unreadable]))
+        defer { harness.cleanUp() }
+        let host = "downloads-prepare-original.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+
+        let request = try harness.withSubtitles(host: host, playsAsItArrives: true)
+        try await harness.downloads.start(request, for: harness.key)
+        let record = try await harness.prepared()
+
+        #expect(record.state == .finished)
+        #expect(record.preparation == nil)
+        #expect(record.fileExtension == "mp4")
+        // Without the subtitles that were to be added, which aren't in the file.
+        #expect(record.tracks?.subtitles == [english])
+        #expect(record.tracks?.defaultSubtitles == nil)
+        let file = try #require(harness.downloads.fileURL(for: record))
+        #expect(try Data(contentsOf: file) == Data("movie".utf8))
+        #expect(try harness.savedFiles() == ["\(record.id).mp4"])
+    }
+
+    @Test func aDownloadTheServerConvertsStartsAfreshWhenTriedAgain() async throws {
+        let harness = try await DownloadsHarness(preparer: FakePreparer())
+        defer { harness.cleanUp() }
+        let host = "downloads-prepare-afresh.example.com"
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items/item-1/Download", .failure(.networkConnectionLost), .json(200, "movie"))
+
+        let request = try harness.withSubtitles(host: host)
+        let failed = try await harness.downloads.start(request, for: harness.key)
+        #expect(try await harness.settled().failure == .network)
+
+        try await harness.downloads.start(request, for: harness.key)
+        let record = try await harness.prepared()
+        #expect(record.state == .finished)
+        // The server converts the file anew, so the transfer doesn't carry on from the last.
+        #expect(record.id != failed.id)
+        #expect(try await harness.downloads.records(for: harness.key).count == 1)
+        let file = try #require(harness.downloads.fileURL(for: record))
+        #expect(try Data(contentsOf: file) == Data("movie\(webVTT)".utf8))
+    }
+
+    @Test func anOriginalWithSubtitlesToAddCarriesOnWhenTriedAgain() async throws {
+        let harness = try await DownloadsHarness(preparer: FakePreparer())
+        defer { harness.cleanUp() }
+        let host = "downloads-prepare-retry.example.com"
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items/item-1/Download", .failure(.networkConnectionLost), .json(200, "movie"))
+
+        let request = try harness.withSubtitles(host: host, playsAsItArrives: true)
+        let failed = try await harness.downloads.start(request, for: harness.key)
+        #expect(try await harness.settled().failure == .network)
+
+        try await harness.downloads.start(request, for: harness.key)
+        let record = try await harness.prepared()
+        #expect(record.state == .finished)
+        #expect(record.id == failed.id)
+        // The subtitles saved when it started are added.
+        let file = try #require(harness.downloads.fileURL(for: record))
+        #expect(try Data(contentsOf: file) == Data("movie\(webVTT)".utf8))
+    }
+
+    @Test func aDownloadWhoseCopyCouldntBeWrittenStartsAfreshWhenTriedAgain() async throws {
+        let harness = try await DownloadsHarness(preparer: FakePreparer(failing: [.unreadable]))
+        defer { harness.cleanUp() }
+        let host = "downloads-prepare-again.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"), .json(200, "movie"))
+
+        let request = try harness.withSubtitles(host: host)
+        let failed = try await harness.downloads.start(request, for: harness.key)
+        #expect(try await harness.prepared().failure == .preparationFailed)
+
+        try await harness.downloads.start(request, for: harness.key)
+        let record = try await harness.prepared()
+        #expect(record.state == .finished)
+        #expect(record.id != failed.id)
+        let file = try #require(harness.downloads.fileURL(for: record))
+        #expect(try Data(contentsOf: file) == Data("movie\(webVTT)".utf8))
+    }
+
+    @Test func deletingADownloadWhileItsCopyIsWrittenStopsTheCopy() async throws {
+        let preparer = StalledPreparer()
+        let harness = try await DownloadsHarness(preparer: preparer)
+        defer { harness.cleanUp() }
+        let host = "downloads-prepare-delete.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+
+        let record = try await harness.downloads.start(try harness.withSubtitles(host: host), for: harness.key)
+        #expect(try await harness.settled().state == .preparing)
+        try await eventually { await preparer.isStarted }
+        try await harness.downloads.delete(record.id)
+
+        try await eventually { await preparer.isCancelled }
+        #expect(try await harness.downloads.records(for: harness.key).isEmpty)
+        #expect(try harness.savedFiles().isEmpty)
+    }
+
     @Test func aFileThatWouldNotFitIsRefused() async throws {
         let harness = try await DownloadsHarness()
         defer { harness.cleanUp() }
@@ -707,5 +938,23 @@ private struct DownloadsHarness {
         let host = "download-policy-missing.example.com"
         StubURLProtocol.stub("\(host):443", path: "/Users/Me", .json(200, #"{"Id":"user-1","Policy":{}}"#))
         #expect(try await library(on: host).canDownload() == true)
+    }
+
+    @Test func theUsersPolicyDecidesWhatTheServerMayConvertForThem() async throws {
+        let host = "download-policy-conversion.example.com"
+        let user =
+            #"{"Id":"user-1","Policy":{"EnablePlaybackRemuxing":false,"EnableVideoPlaybackTranscoding":false,"EnableAudioPlaybackTranscoding":true}}"#
+        StubURLProtocol.stub("\(host):443", path: "/Users/Me", .json(200, user))
+        let permissions = try await library(on: host).conversionPermissions()
+        #expect(permissions == ConversionPermissions(remuxing: false, videoTranscoding: false, audioTranscoding: true))
+        #expect(permissions.allowsAny)
+    }
+
+    @Test func aServerThatDoesntSayAllowsEveryConversion() async throws {
+        let host = "download-policy-conversion-missing.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Users/Me", .json(200, #"{"Id":"user-1","Policy":{}}"#))
+        #expect(try await library(on: host).conversionPermissions() == .all)
+        let nothing = ConversionPermissions(remuxing: false, videoTranscoding: false, audioTranscoding: false)
+        #expect(!nothing.allowsAny)
     }
 }

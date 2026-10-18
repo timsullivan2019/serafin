@@ -139,6 +139,7 @@ public actor Downloads {
     private let identity: DeviceIdentity
     private let sessions: SessionStore
     private let preparer: (any DownloadPreparing)?
+    private let asksForBackgroundTime: Bool
     /// How the transfers that stopped this launch carry on, by file name.
     private var resumeData: [String: Data] = [:]
     /// How far each running download has got, by download ID.
@@ -161,18 +162,22 @@ public actor Downloads {
     ///   - identity: Who this install is to the server, for the `Authorization` header.
     ///   - sessions: Where each account's token is kept.
     ///   - preparer: Writes the copies of downloads that aren't saved as they arrive, or nil to take none.
+    ///   - asksForBackgroundTime: Whether writing copies asks iOS to let Serafin finish them in the background, as the
+    ///     app does. Tests, which run outside an app, write them only while they run.
     init(
         store: DownloadStore,
         transfers: DownloadTransfers,
         identity: DeviceIdentity,
         sessions: SessionStore,
-        preparer: (any DownloadPreparing)? = nil
+        preparer: (any DownloadPreparing)? = nil,
+        asksForBackgroundTime: Bool = true
     ) {
         self.store = store
         self.transfers = transfers
         self.identity = identity
         self.sessions = sessions
         self.preparer = preparer
+        self.asksForBackgroundTime = asksForBackgroundTime
     }
 
     /// Checks the downloads left from the last launch, then starts reading what the transfers report, once.
@@ -470,6 +475,10 @@ public actor Downloads {
         guard let preparer else { return }
         needsPreparing = true
         guard preparing == nil else { return }
+        guard asksForBackgroundTime else {
+            preparing = Task { await prepareWhileNeeded(with: preparer) }
+            return
+        }
         preparing = Task {
             await Self.keepingAwake {
                 await self.prepareWhileNeeded(with: preparer)
