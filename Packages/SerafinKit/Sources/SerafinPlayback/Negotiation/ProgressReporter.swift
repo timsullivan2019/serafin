@@ -3,6 +3,23 @@ import JellyfinAPI
 import SerafinCore
 import os
 
+/// Hears where playback is, so the viewer's place is kept: by the server for a stream, through ``ProgressReporter``,
+/// and on the device for a downloaded copy, through ``LocalProgressReporter``.
+protocol PlaybackReporter: Actor {
+    /// Playback started at `position`.
+    func start(at position: Duration, isPaused: Bool) async
+    /// Playback is at `position`, as every few seconds and after a pause, resume or seek.
+    func progress(at position: Duration, isPaused: Bool) async
+    /// Playback stopped at `position`, for any reason.
+    func stop(at position: Duration) async
+    /// The player made a change without a new stream, such as other subtitles.
+    func update(_ plan: PlaybackPlan) async
+    /// The player renegotiated, and plays `plan` from `position`.
+    func replace(with plan: PlaybackPlan, at position: Duration, isPaused: Bool) async
+}
+
+extension ProgressReporter: PlaybackReporter {}
+
 /// Tells the server where playback is, so Continue Watching, played marks and the server's dashboard stay current.
 ///
 /// The player calls ``start(at:isPaused:)`` once, ``progress(at:isPaused:)`` every ``interval`` and whenever it

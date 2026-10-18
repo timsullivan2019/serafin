@@ -14,7 +14,10 @@ import os
 ///   "downloads": [
 ///     { "id": "…", "serverID": "…", "userID": "…", "itemID": "…", "mediaSourceID": "…",
 ///       "fileExtension": "mp4", "state": "finished", "bytes": 1234, "created": …,
-///       "metadata": { "title": "…", "kind": "movie" } }
+///       "metadata": { "title": "…", "kind": "movie" },
+///       "tracks": { "audio": [{ "index": 1, "codec": "aac", "language": "eng", "isDefault": true, … }],
+///                   "subtitles": [], "defaultAudio": 1 },
+///       "playback": { "position": […], "changed": … } }
 ///   ]
 /// }
 /// ```
@@ -86,6 +89,20 @@ public actor DownloadStore {
             list.append(record)
         }
         try write(list)
+    }
+
+    /// Changes the download with `id` and saves it, or does nothing when there's no such download, as when it was
+    /// deleted meanwhile, so a change never brings a deleted download back. Returns the download as it now is.
+    @discardableResult
+    public func update(id: String, _ change: @Sendable (inout DownloadRecord) -> Void) throws -> DownloadRecord? {
+        var list = try records()
+        guard let index = list.firstIndex(where: { $0.id == id }) else { return nil }
+        let unchanged = list[index]
+        change(&list[index])
+        if list[index] != unchanged {
+            try write(list)
+        }
+        return list[index]
     }
 
     /// Removes the downloads with `ids` and deletes their files. IDs that aren't saved are ignored.

@@ -12,9 +12,9 @@ import SerafinPlayback
 /// What is playing, shared by the full-screen player and Picture in Picture.
 ///
 /// It starts items on the account's ``PlayerEngine`` at their resume point, under the streaming cap Settings gives
-/// for the network the device is on. Putting the player away hands a playing video to Picture in Picture, or stops
-/// it. When playback stops it has every screen reload, so progress and played marks show. Without an engine, as in
-/// previews, it only pretends to play.
+/// for the network the device is on, or from their downloaded copy when they're downloaded. Putting the player away
+/// hands a playing video to Picture in Picture, or stops it. When playback stops it has every screen reload, so
+/// progress and played marks show. Without an engine, as in previews, it only pretends to play.
 @Observable @MainActor final class PlaybackCoordinator {
     /// Where to start an item.
     enum Start: Equatable {
@@ -60,6 +60,7 @@ import SerafinPlayback
     @ObservationIgnored private let media: any MediaSource
     @ObservationIgnored private let actions: MediaActions
     @ObservationIgnored private let artwork: Artwork?
+    @ObservationIgnored private let downloads: DownloadCenter?
     @ObservationIgnored private let serverID: String?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isOnExpensiveNetwork: @MainActor () -> Bool
@@ -71,6 +72,7 @@ import SerafinPlayback
     ///   - media: The library, refreshed when playback stops.
     ///   - actions: Has the screens reload when playback stops.
     ///   - artwork: Loads the artwork the Lock Screen shows.
+    ///   - downloads: The account's downloads, whose copies play instead of streams. Nil in previews.
     ///   - serverID: The account's server, whose streaming caps apply. Nil in previews.
     ///   - defaults: Where Settings keeps the streaming caps and the subtitle style.
     ///   - isOnExpensiveNetwork: Whether the device is on cellular or a personal hotspot right now. Nil asks the app's
@@ -80,6 +82,7 @@ import SerafinPlayback
         media: any MediaSource = SampleMediaSource(),
         actions: MediaActions = MediaActions(),
         artwork: Artwork? = nil,
+        downloads: DownloadCenter? = nil,
         serverID: String? = nil,
         defaults: UserDefaults = .standard,
         isOnExpensiveNetwork: (@MainActor () -> Bool)? = nil
@@ -88,6 +91,7 @@ import SerafinPlayback
         self.media = media
         self.actions = actions
         self.artwork = artwork
+        self.downloads = downloads
         self.serverID = serverID
         self.defaults = defaults
         if let isOnExpensiveNetwork {
@@ -113,7 +117,7 @@ import SerafinPlayback
     }
 
     /// Starts `item` and shows the full-screen player. Only movies and episodes play; a show or season plays from
-    /// its page, which knows the episode to start.
+    /// its page, which knows the episode to start. A downloaded movie or episode plays from its file, with no server.
     ///
     /// - Parameters:
     ///   - zoomSource: The control the player grows out of, or nil to slide up as usual.
@@ -139,7 +143,10 @@ import SerafinPlayback
             isPretending = true
             return
         }
-        let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: Self.startPosition(of: item, from: start))
+        let download = downloads?.playableDownload(of: item.id)
+        let copy = download?.copy
+        let startPosition = Self.startPosition(of: item, from: start, download: download?.record)
+        let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: startPosition)
         #if canImport(UIKit)
             engine.pictureInPictureDidStart = { [weak self] in self?.pictureInPictureStarted() }
             engine.restoreFromPictureInPicture = { [weak self] in
@@ -161,7 +168,7 @@ import SerafinPlayback
         // Lock Screen's artwork loads alongside the video.
         loading = Task.immediate { [artwork] in
             async let lockScreenJPEG = Self.lockScreenArtwork(for: source, from: artwork)
-            await engine.load(source, options: options, keepsSubtitleChoice: continuing)
+            await engine.load(source, options: options, from: copy, keepsSubtitleChoice: continuing)
             guard !Task.isCancelled, let jpeg = await lockScreenJPEG else { return }
             engine.describe(title: card.title, subtitle: subtitle, artwork: jpeg)
         }
@@ -354,15 +361,20 @@ import SerafinPlayback
         }
     }
 
-    /// Where `item` starts.
-    static func startPosition(of item: MediaItem, from start: Start) -> Duration {
+    /// Where `item` starts. Resuming its `download`, when it last stopped on this device after the server last heard
+    /// of it being played, starts where it stopped here.
+    static func startPosition(of item: MediaItem, from start: Start, download: DownloadRecord? = nil) -> Duration {
         switch start {
         case .beginning:
             return .zero
         case .position(let position):
             return max(position, .zero)
         case .resume:
-            guard let ticks = item.source?.userData?.playbackPositionTicks, ticks > 0 else { return .zero }
+            let userData = item.source?.userData
+            if let playback = download?.playback, userData?.lastPlayedDate.map({ playback.changed > $0 }) ?? true {
+                return playback.resumePosition(runtime: download?.metadata.runtime ?? item.card.runtime)
+            }
+            guard let ticks = userData?.playbackPositionTicks, ticks > 0 else { return .zero }
             return Ticks.duration(ticks)
         }
     }

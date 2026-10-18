@@ -26,6 +26,27 @@ import Testing
         load.cancel()
     }
 
+    @Test func aDownloadedCopyPlaysItsFileWithoutAskingTheServer() async throws {
+        let host = "load-copy.example.com"
+        let engine = PlayerEngine(client: try stubClient(on: host), userID: "user-1", pinning: nil)
+        let itemID = try #require(episode.id)
+        let file = URL.temporaryDirectory.appending(path: "\(UUID().uuidString).mp4")
+        let tracks = DownloadTracks(audio: [DownloadTrack(index: 1, codec: "aac", language: "eng")], defaultAudio: 1)
+        let copy = DownloadedCopy(file: file, mediaSourceID: itemID, tracks: tracks) { _ in }
+
+        let load = Task.immediate { await engine.load(episode, options: PlaybackOptions(), from: copy) }
+        for _ in 0..<1000 where engine.plan == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(engine.plan?.url == file)
+        #expect(engine.plan?.isDownloaded == true)
+        #expect(engine.plan?.audioStreamIndex == 1)
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Items/\(itemID)/PlaybackInfo").isEmpty)
+        load.cancel()
+        await engine.stop()
+    }
+
     @Test func bitratesAreLoggedInMegabits() {
         #expect(PlayerEngine.megabits(18_200_000) == "18.2")
         #expect(PlayerEngine.megabits(0) == "0.0")

@@ -5,10 +5,11 @@ import SerafinDesign
 import SerafinPlayback
 import os
 
-/// The signed-in account's downloads, for the detail screen's download item and the Downloads screen in Settings.
+/// The signed-in account's downloads, for the detail screen's download item, the Downloads screen in Settings and the
+/// player, which plays a downloaded copy rather than streaming.
 ///
-/// It reads the account's downloads again each time one starts, moves on, finishes, fails or is deleted, and whether
-/// the server lets the account download at all.
+/// It reads the account's downloads again each time one starts, moves on, finishes, fails, is deleted or keeps where
+/// playback stopped, and whether the server lets the account download at all.
 @Observable @MainActor final class DownloadCenter {
     /// Where one movie's or episode's download is.
     enum ItemState: Equatable {
@@ -20,6 +21,14 @@ import os
         case finished
         /// Stopped before the end, and why.
         case failed(DownloadFailure?)
+    }
+
+    /// A finished download whose file is on the device, ready to play.
+    struct PlayableDownload: Sendable {
+        /// The download, with where its playback last stopped on this device.
+        let record: DownloadRecord
+        /// The copy the player plays.
+        let copy: DownloadedCopy
     }
 
     /// The `UserDefaults` key of whether downloads may use cellular data. Off unless the user turns it on.
@@ -89,6 +98,7 @@ import os
                     fileExtension: original.fileExtension,
                     bytes: original.bytes,
                     metadata: DownloadMetadata(item.card),
+                    tracks: original.tracks,
                     allowsCellularAccess: defaults.bool(forKey: Self.cellularKey)
                 )
                 try await downloads.start(request, for: key)
@@ -98,6 +108,25 @@ import os
         } catch {
             failure = UserMessage(error)
         }
+    }
+
+    /// The finished download of `itemID` with its file on the device, ready to play, or nil when there's none. Its
+    /// copy keeps where playback stops in the download.
+    func playableDownload(of itemID: String) -> PlayableDownload? {
+        guard let record = records.first(where: { $0.itemID == itemID && $0.state == .finished }),
+            let file = downloads.fileURL(for: record)
+        else { return nil }
+        let logger = Self.logger
+        let keep: @Sendable (Duration) async -> Void = { [downloads, id = record.id] position in
+            do {
+                try await downloads.savePosition(position, of: id)
+            } catch {
+                logger.error("Could not keep a download's position: \(error.localizedDescription, privacy: .private)")
+            }
+        }
+        let copy = DownloadedCopy(
+            file: file, mediaSourceID: record.mediaSourceID, tracks: record.tracks, keepPosition: keep)
+        return PlayableDownload(record: record, copy: copy)
     }
 
     /// Deletes the download of `itemID`, stopping it if it's on its way.

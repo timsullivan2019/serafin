@@ -2,7 +2,7 @@ import Foundation
 import os
 
 /// SerafinCore's front door for downloads: starts, tracks, retries and deletes them for each account, keeping
-/// ``DownloadStore`` and ``DownloadTransfers`` in step.
+/// ``DownloadStore`` and ``DownloadTransfers`` in step, and keeps where each one's playback stopped.
 ///
 /// ``Accounts`` owns the one instance. It hands each transfer the account's `Authorization` header, so the token
 /// never appears in a URL. Resume data is kept in memory only, because it carries that header: a transfer that stops
@@ -22,6 +22,8 @@ public actor Downloads {
         public var bytes: Int64?
         /// What the Downloads screen shows for it.
         public var metadata: DownloadMetadata
+        /// The audio and subtitle tracks inside the file, for the player with no server to ask.
+        public var tracks: DownloadTracks
         /// Whether the transfer may use cellular data.
         public var allowsCellularAccess: Bool
 
@@ -33,6 +35,7 @@ public actor Downloads {
             fileExtension: String,
             bytes: Int64?,
             metadata: DownloadMetadata,
+            tracks: DownloadTracks = DownloadTracks(),
             allowsCellularAccess: Bool
         ) {
             self.itemID = itemID
@@ -41,6 +44,7 @@ public actor Downloads {
             self.fileExtension = fileExtension
             self.bytes = bytes
             self.metadata = metadata
+            self.tracks = tracks
             self.allowsCellularAccess = allowsCellularAccess
         }
     }
@@ -133,7 +137,7 @@ public actor Downloads {
     }
 
     /// The saved file of a finished download, or nil when it isn't finished or the file has gone.
-    public func fileURL(for record: DownloadRecord) -> URL? {
+    public nonisolated func fileURL(for record: DownloadRecord) -> URL? {
         guard record.state == .finished else { return nil }
         let url = store.fileURL(for: record)
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
@@ -190,7 +194,8 @@ public actor Downloads {
             mediaSourceID: request.mediaSourceID,
             fileExtension: request.fileExtension,
             bytes: request.bytes,
-            metadata: request.metadata
+            metadata: request.metadata,
+            tracks: request.tracks
         )
         try await store.save(record)
         do {
@@ -212,17 +217,29 @@ public actor Downloads {
     ///   - allowsCellularAccess: Whether the transfer may use cellular data.
     public func retry(_ id: String, from url: URL, allowsCellularAccess: Bool) async throws {
         await activate()
-        guard var record = try await store.record(id: id), record.state == .failed else { return }
+        guard let record = try await store.record(id: id), record.state == .failed else { return }
         if let data = resumeData.removeValue(forKey: record.fileName) {
             transfers.resume(data, fileName: record.fileName)
         } else {
             try await transfer(record, from: url, allowsCellularAccess: allowsCellularAccess)
         }
-        record.state = .downloading
-        record.failure = nil
-        try await store.save(record)
+        try await store.update(id: id) { record in
+            record.state = .downloading
+            record.failure = nil
+        }
         progressByID[id] = Progress(received: 0, expected: record.bytes)
         notify()
+    }
+
+    /// Keeps where playback of the download `id` stopped, so it resumes there with no server to ask. Does nothing
+    /// when the download has been deleted.
+    public func savePosition(_ position: Duration, of id: String) async throws {
+        let saved = try await store.update(id: id) { record in
+            record.playback = DownloadPlayback(position: position)
+        }
+        if saved != nil {
+            notify()
+        }
     }
 
     /// Deletes a download and its file, stopping its transfer if it's running.
@@ -283,11 +300,13 @@ public actor Downloads {
     private func markInterrupted() async {
         let running = await transfers.runningFileNames()
         do {
-            for var record in try await store.records() where record.state == .downloading {
+            for record in try await store.records() where record.state == .downloading {
                 guard !running.contains(record.fileName) else { continue }
-                record.state = .failed
-                record.failure = .interrupted
-                try await store.save(record)
+                try await store.update(id: record.id) { record in
+                    guard record.state == .downloading else { return }
+                    record.state = .failed
+                    record.failure = .interrupted
+                }
             }
             try await store.removeOrphanedFiles()
         } catch {
@@ -303,23 +322,26 @@ public actor Downloads {
                 guard let record = try await self.record(named: fileName) else { return }
                 progressByID[record.id] = Progress(received: received, expected: expected ?? record.bytes)
             case .finished(let fileName, let bytes):
-                guard var record = try await self.record(named: fileName) else {
+                let finished = try await update(named: fileName) { record in
+                    record.state = .finished
+                    record.failure = nil
+                    record.bytes = bytes
+                }
+                guard let finished else {
                     // Deleted while it was on its way.
                     try await store.removeOrphanedFiles()
                     return
                 }
-                record.state = .finished
-                record.failure = nil
-                record.bytes = bytes
-                try await store.save(record)
-                progressByID[record.id] = nil
+                progressByID[finished.id] = nil
             case .failed(let fileName, let failure, let data):
-                guard var record = try await self.record(named: fileName), record.state != .finished else { return }
-                record.state = .failed
-                record.failure = failure
-                try await store.save(record)
+                let failed = try await update(named: fileName) { record in
+                    guard record.state != .finished else { return }
+                    record.state = .failed
+                    record.failure = failure
+                }
+                guard let failed, failed.state == .failed else { return }
                 resumeData[fileName] = data
-                progressByID[record.id] = nil
+                progressByID[failed.id] = nil
             }
         } catch {
             Self.logger.error("Could not update a download: \(error.localizedDescription, privacy: .private)")
@@ -329,6 +351,15 @@ public actor Downloads {
 
     private func record(named fileName: String) async throws -> DownloadRecord? {
         try await store.records().first { $0.fileName == fileName }
+    }
+
+    /// Changes the download whose file is `fileName`, or does nothing when there's none, as when it was deleted.
+    private func update(
+        named fileName: String,
+        _ change: @Sendable (inout DownloadRecord) -> Void
+    ) async throws -> DownloadRecord? {
+        guard let record = try await self.record(named: fileName) else { return nil }
+        return try await store.update(id: record.id, change)
     }
 }
 

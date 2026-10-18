@@ -20,6 +20,8 @@ public struct OriginalDownload: Sendable, Equatable {
     public let fileExtension: String
     /// The file's size in bytes, when the server said.
     public let bytes: Int64?
+    /// The audio and subtitle tracks inside the file, for playing it with no server to ask.
+    public let tracks: DownloadTracks
 }
 
 /// Asks the server whether an item's original file plays on this device, and where to download it.
@@ -53,10 +55,30 @@ public struct DownloadPlanner: Sendable {
 
     /// How `itemID` can be downloaded.
     ///
+    /// The server judges a version with the subtitles it would show the account, and turns direct play down when they
+    /// can't show from the file, as when they're in a file of their own. A download is the file alone, so a version
+    /// turned down with subtitles chosen is asked about again with subtitles off. The server takes a subtitle choice
+    /// only for a version the request names.
+    ///
     /// - Parameter mediaSourceID: The version to download, or nil for the server's first.
     /// - Throws: A ``PlaybackError`` when the server refuses, or SerafinCore's `SerafinError` when it can't be reached
     ///   or no longer accepts the sign-in.
     public func plan(for itemID: String, mediaSourceID: String? = nil) async throws -> DownloadPlan {
+        let response = try await playbackInfo(for: itemID, mediaSourceID: mediaSourceID)
+        if let version = Self.versionToAskAgain(in: response, mediaSourceID: mediaSourceID) {
+            let again = try await playbackInfo(for: itemID, mediaSourceID: version, subtitleStreamIndex: -1)
+            return try Self.plan(from: again, itemID: itemID, mediaSourceID: version, client: client)
+        }
+        return try Self.plan(from: response, itemID: itemID, mediaSourceID: mediaSourceID, client: client)
+    }
+
+    /// Asks the server how `itemID` plays with direct play alone, showing the subtitles `subtitleStreamIndex`, -1 for
+    /// none, or nil for the account's.
+    private func playbackInfo(
+        for itemID: String,
+        mediaSourceID: String?,
+        subtitleStreamIndex: Int? = nil
+    ) async throws -> PlaybackInfoResponse {
         let body = PlaybackInfoDto(
             deviceProfile: .serafin(maxBitrate: Self.bitrate, video: video ?? .current),
             enableDirectPlay: true,
@@ -65,15 +87,35 @@ public struct DownloadPlanner: Sendable {
             isAutoOpenLiveStream: false,
             maxStreamingBitrate: Self.bitrate,
             mediaSourceID: mediaSourceID,
+            subtitleStreamIndex: subtitleStreamIndex,
             userID: userID
         )
-        let response: PlaybackInfoResponse
         do {
-            response = try await client.send(Paths.getPostedPlaybackInfo(itemID: itemID, body)).value
+            return try await client.send(Paths.getPostedPlaybackInfo(itemID: itemID, body)).value
         } catch {
             throw SerafinError.translating(error, statuses: [401: .notSignedIn, 404: .notFound])
         }
-        return try Self.plan(from: response, itemID: itemID, mediaSourceID: mediaSourceID, client: client)
+    }
+
+    /// The version to ask about again with subtitles off: the chosen one, when it's a file the player could open but
+    /// the server turned its direct play down with subtitles chosen. Nil otherwise.
+    static func versionToAskAgain(in response: PlaybackInfoResponse, mediaSourceID: String?) -> String? {
+        guard
+            response.errorCode == nil,
+            let source = Self.source(in: response, mediaSourceID: mediaSourceID),
+            source.isSupportsDirectPlay != true,
+            (source.defaultSubtitleStreamIndex ?? -1) >= 0,
+            source.`protocol` == .file,
+            source.isRemote != true,
+            fileExtension(for: source) != nil
+        else { return nil }
+        return source.id
+    }
+
+    /// The version the server's answer is about: the one asked for, or else the first.
+    private static func source(in response: PlaybackInfoResponse, mediaSourceID: String?) -> MediaSourceInfo? {
+        let sources = response.mediaSources ?? []
+        return sources.first { $0.id == mediaSourceID } ?? sources.first
     }
 
     /// Reads the server's answer: the original when the chosen version is a file on the server that direct plays.
@@ -83,8 +125,7 @@ public struct DownloadPlanner: Sendable {
         mediaSourceID: String?,
         client: JellyfinClient
     ) throws -> DownloadPlan {
-        let sources = response.mediaSources ?? []
-        let source = sources.first { $0.id == mediaSourceID } ?? sources.first
+        let source = Self.source(in: response, mediaSourceID: mediaSourceID)
         switch response.errorCode {
         case nil, .noCompatibleStream:
             break
@@ -113,7 +154,8 @@ public struct DownloadPlanner: Sendable {
                 mediaSourceID: id,
                 url: url,
                 fileExtension: fileExtension,
-                bytes: source.size.map(Int64.init)
+                bytes: source.size.map(Int64.init),
+                tracks: DownloadTracks(source)
             )
         )
     }
