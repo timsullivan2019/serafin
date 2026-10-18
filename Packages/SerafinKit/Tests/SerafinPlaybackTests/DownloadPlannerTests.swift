@@ -225,7 +225,8 @@ import Testing
         #expect(original.tracks.defaultSubtitles == 3)
         let preparation = try #require(original.preparation)
         #expect(preparation.subtitles.map(\.index) == [3])
-        #expect(String(decoding: preparation.subtitles.first?.webVTT ?? Data(), as: UTF8.self).contains("Hola"))
+        let added = String(decoding: preparation.subtitles.first?.webVTT ?? Data(), as: UTF8.self)
+        #expect(added.contains("Hola"))
         // The file plays as it arrives, so it's kept without them if they can't be added.
         #expect(preparation.playsAsItArrives)
         #expect(preparation.dolbyVision == nil)
