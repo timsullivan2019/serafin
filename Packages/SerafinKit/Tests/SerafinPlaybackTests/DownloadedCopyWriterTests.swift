@@ -87,9 +87,20 @@ import Testing
         return stretches
     }
 
-    /// The language of each option in `group`, as the player reads them.
-    private func languages(of group: AVMediaSelectionGroup?) -> [String?] {
-        group?.options.map { SubtitleRules.language($0.extendedLanguageTag ?? $0.locale?.identifier) } ?? []
+    /// The languages of the options in `group`, as the player reads them. AVFoundation offers a subtitle track that
+    /// isn't all forced twice: in full, and showing only its forced subtitles.
+    private func languages(of group: AVMediaSelectionGroup?) -> Set<String> {
+        Set(group?.options.compactMap { SubtitleRules.language($0.extendedLanguageTag ?? $0.locale?.identifier) } ?? [])
+    }
+
+    /// The language of each of `tracks`, as the player reads them.
+    private func languages(of tracks: [AVAssetTrack]) async throws -> [String?] {
+        var languages: [String?] = []
+        for track in tracks {
+            let (tag, code) = try await track.load(.extendedLanguageTag, .languageCode)
+            languages.append(SubtitleRules.language(tag ?? code))
+        }
+        return languages
     }
 
     @Test func hevcTaggedHev1IsCopiedAsHvc1WithItsKeyFrames() async throws {
@@ -140,7 +151,7 @@ import Testing
         #expect(group?.options.last?.hasMediaCharacteristic(.containsOnlyForcedSubtitles) == true)
 
         let subtitles = try await copy.loadTracks(withMediaType: .subtitle)
-        #expect(subtitles.count == 2)
+        #expect(try await languages(of: subtitles) == ["en", "fr"])
         for track in subtitles {
             #expect(try await track.load(.isEnabled) == false)
         }
@@ -174,6 +185,7 @@ import Testing
         #expect(languages(of: legible) == ["en", "de"])
         #expect(legible?.defaultOption == nil)
         let subtitles = try await copy.loadTracks(withMediaType: .subtitle)
+        #expect(try await languages(of: subtitles) == ["en", "de"])
         let original = try #require(subtitles.first)
         let shown = try stretches(of: original, in: copy)
         #expect(shown.map(\.text).filter { !$0.isEmpty } == ["Hello", "Goodbye"])
@@ -187,6 +199,7 @@ import Testing
         let group = try await copy.loadMediaSelectionGroup(for: .legible)
         #expect(languages(of: group) == ["en"])
         #expect(group?.defaultOption == nil)
+        #expect(try await languages(of: copy.loadTracks(withMediaType: .subtitle)) == ["en"])
     }
 
     @Test func subtitlesWithNothingToShowStillMakeATrack() async throws {
@@ -197,8 +210,7 @@ import Testing
                 ("WEBVTT\n", DownloadTrack(index: 2, codec: "subrip", language: "eng")),
                 ("not subtitles", DownloadTrack(index: 3, codec: "subrip", language: "spa")),
             ])
-        let group = try await copy.loadMediaSelectionGroup(for: .legible)
-        #expect(languages(of: group) == ["en", "es"])
+        #expect(try await languages(of: copy.loadTracks(withMediaType: .subtitle)) == ["en", "es"])
     }
 
     @Test func aFileThatIsntAVideoCantBeCopied() async throws {
@@ -212,6 +224,74 @@ import Testing
                 DownloadPreparationJob(arrived: arrived, subtitles: [], output: output))
         }
         #expect(!FileManager.default.fileExists(atPath: output.path(percentEncoded: false)))
+    }
+
+    @Test func everyHEVCFrameTakesTheRetaggedFormatAndKeepsItsTiming() async throws {
+        let asset = AVURLAsset(url: try fixture("HEVCFragmented"))
+        let videos = try await asset.loadTracks(withMediaType: .video)
+        let video = try #require(videos.first)
+        let formats = try await video.load(.formatDescriptions)
+        let arrived = try #require(formats.first)
+        let retagged = try #require(DownloadedCopyWriter.retagged(arrived))
+        let extensions = Set((CMFormatDescriptionGetExtensions(retagged) as? [CFString: Any] ?? [:]).keys)
+        #expect(!extensions.contains(kCMFormatDescriptionExtension_VerbatimISOSampleEntry))
+        #expect(!extensions.contains(kCMFormatDescriptionExtension_VerbatimSampleDescription))
+        #expect(extensions.contains(kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms))
+
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: video, outputSettings: nil)
+        reader.add(output)
+        #expect(reader.startReading())
+        var frames = 0
+        while let sample = output.copyNextSampleBuffer() {
+            guard CMSampleBufferGetNumSamples(sample) > 0 else { continue }
+            let described = try #require(
+                DownloadedCopyWriter.sample(sample, describedBy: retagged), "Frame \(frames) wasn't retagged")
+            let format = try #require(CMSampleBufferGetFormatDescription(described))
+            #expect(CMFormatDescriptionGetMediaSubType(format) == DownloadedCopyWriter.fourCharCode("hvc1"))
+            #expect(CMSampleBufferGetPresentationTimeStamp(described) == CMSampleBufferGetPresentationTimeStamp(sample))
+            #expect(CMSampleBufferGetDecodeTimeStamp(described) == CMSampleBufferGetDecodeTimeStamp(sample))
+            #expect(CMSampleBufferGetTotalSampleSize(described) == CMSampleBufferGetTotalSampleSize(sample))
+            frames += 1
+        }
+        #expect(frames == 20)
+    }
+
+    /// The HEVC fixture's video alone, copied frame by frame into a movie the way the copy is written, recording what
+    /// the writer says when it stops.
+    @Test func hevcVideoAloneIsWrittenAsHvc1() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let asset = AVURLAsset(url: try fixture("HEVCFragmented"))
+        let videos = try await asset.loadTracks(withMediaType: .video)
+        let video = try #require(videos.first)
+        let formats = try await video.load(.formatDescriptions)
+        let arrived = try #require(formats.first)
+        let retagged = try #require(DownloadedCopyWriter.retagged(arrived))
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: video, outputSettings: nil)
+        reader.add(output)
+        let writer = try AVAssetWriter(outputURL: directory.appending(path: "video.mov"), fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: nil, sourceFormatHint: retagged)
+        input.expectsMediaDataInRealTime = false
+        try #require(writer.canAdd(input))
+        writer.add(input)
+        try #require(writer.startWriting(), "Not started: \(String(describing: writer.error))")
+        try #require(reader.startReading())
+        writer.startSession(atSourceTime: .zero)
+        var frame = 0
+        while let sample = output.copyNextSampleBuffer() {
+            guard CMSampleBufferGetNumSamples(sample) > 0 else { continue }
+            let described = try #require(DownloadedCopyWriter.sample(sample, describedBy: retagged))
+            while !input.isReadyForMoreMediaData {
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            try #require(input.append(described), "Frame \(frame) refused: \(String(describing: writer.error))")
+            frame += 1
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        #expect(writer.status == .completed, "Not finished: \(String(describing: writer.error))")
     }
 
     @Test func onlyHEVCAndDolbyVisionTaggedForStreamingAreRetagged() throws {

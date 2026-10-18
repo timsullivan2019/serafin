@@ -50,6 +50,10 @@ public struct DownloadedCopyWriter: DownloadPreparing {
         guard CMFormatDescriptionGetMediaType(description) == kCMMediaType_Video,
             let replacement = replacements[CMFormatDescriptionGetMediaSubType(description)]
         else { return nil }
+        // The sample entry as it arrived would otherwise be written back as it is, old tag and all.
+        var extensions = CMFormatDescriptionGetExtensions(description) as? [CFString: Any] ?? [:]
+        extensions[kCMFormatDescriptionExtension_VerbatimSampleDescription] = nil
+        extensions[kCMFormatDescriptionExtension_VerbatimISOSampleEntry] = nil
         let dimensions = CMVideoFormatDescriptionGetDimensions(description)
         var retagged: CMFormatDescription?
         let status = CMVideoFormatDescriptionCreate(
@@ -57,7 +61,7 @@ public struct DownloadedCopyWriter: DownloadPreparing {
             codecType: replacement,
             width: dimensions.width,
             height: dimensions.height,
-            extensions: CMFormatDescriptionGetExtensions(description),
+            extensions: extensions as CFDictionary,
             formatDescriptionOut: &retagged
         )
         return status == noErr ? retagged : nil
@@ -325,12 +329,16 @@ private final class MovieCopy: @unchecked Sendable {
         func next() throws -> CMSampleBuffer? {
             switch source {
             case .track(let output, let retagged):
-                guard let sample = output.copyNextSampleBuffer() else { return nil }
-                guard let retagged else { return sample }
-                guard let described = DownloadedCopyWriter.sample(sample, describedBy: retagged) else {
-                    throw DownloadPreparationError.unreadable
+                while let sample = output.copyNextSampleBuffer() {
+                    guard let retagged else { return sample }
+                    // A buffer that only marks something, such as the end of the media, has no frames to retag.
+                    guard CMSampleBufferGetNumSamples(sample) > 0 else { continue }
+                    guard let described = DownloadedCopyWriter.sample(sample, describedBy: retagged) else {
+                        throw DownloadPreparationError.unreadable
+                    }
+                    return described
                 }
-                return described
+                return nil
             case .text(let samples):
                 guard position < samples.count else { return nil }
                 position += 1
