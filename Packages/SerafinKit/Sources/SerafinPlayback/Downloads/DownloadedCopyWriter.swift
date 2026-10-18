@@ -97,12 +97,12 @@ public struct DownloadedCopyWriter: DownloadPreparing {
         guard status == noErr, let copy else { return nil }
         CMPropagateAttachments(sample, destination: copy)
         if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false)
-            as? [NSDictionary],
+            as? [[AnyHashable: Any]],
             let copied = CMSampleBufferGetSampleAttachmentsArray(copy, createIfNecessary: true)
                 as? [NSMutableDictionary]
         {
             for (from, to) in zip(attachments, copied) {
-                to.addEntries(from: from as [AnyHashable: Any])
+                to.addEntries(from: from)
             }
         }
         return copy
