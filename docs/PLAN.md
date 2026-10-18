@@ -259,6 +259,36 @@ Gate 3: two weeks of beta with no open `beta-blocker`. Then submit.
 
 ---
 
+## Phase 4 — Downloads (1.1)
+
+Goal: download a movie or an episode and watch it with no connection, in the same player, looking as good as streaming. Downloads stay off `main` until 1.0.0 is approved, so a review fix can still ship from `main`.
+
+Why this is harder for Serafin than for clients that download the original file: Serafin plays everything with AVPlayer, which opens MP4, M4V and MOV with H.264, HEVC or AV1 and nothing else. Every other file, MKV above all, is streamed today as HLS the server repackages or converts while it plays (`PlaybackNegotiator`). Clients built on VLC, mpv or ExoPlayer save the original and open anything; Serafin would save a file it can't play. Text subtitles reach the player through the server's HLS manifest, rewritten on the fly to fix Jellyfin's ten-second WebVTT offset (`SubtitlePlaylists`), and AVPlayer can't show subtitles from outside its stream. So a download is one of two things:
+
+- **Original**: the server says the original file direct plays on this device. Saved as it is from `GET /Items/{id}/Download`, which honours the user's "Allow media downloading" permission and supports ranges, so an interrupted download resumes.
+- **Converted**: everything else. The server makes an iPhone-ready copy, repackaged when the codecs fit and converted otherwise, at a quality the user picks, with the chosen subtitles inside it.
+
+Rules for every task in this phase:
+
+- Downloads belong to one account (server and user). Signing out or removing the server deletes them.
+- Files live under Application Support, excluded from backup, with `completeUntilFirstUserAuthentication` protection so a transfer can finish while the phone is locked. No server address, token or title in a file name.
+- Transfers use a background `URLSession`, so they go on while Serafin is suspended or closed, and answer certificate challenges with the user's pins. The token travels in the `Authorization` header, never in the URL.
+- Nothing is offered when the server's policy for the user turns downloading off.
+
+Tasks:
+
+- 4.1 Download engine for originals. `DownloadStore` (the index on disk, versioned), `DownloadTransfers` (the background session) and `Downloads` (the front door, owned by `Accounts`) in Core; `DownloadPlanner` in Playback asks PlaybackInfo with transcoding off and answers original or needs-converting. The account's download permission read from its policy. Unit tests for the store, the planner and the transfer bookkeeping.
+- 4.2 Download button and Downloads screen. A download control on movie and episode detail (download, progress, downloaded, delete) and in the item context menu; a Downloads list reached from Home and the library, with progress, size, swipe to delete and total space used; Settings: download over cellular, delete all downloads. Previews in light, dark and AX5.
+- 4.3 Offline playback. The coordinator plays the downloaded copy when there is one, through the same player: local file, no negotiation, progress kept locally. Subtitles and audio tracks inside the file show in the Audio and Subtitles sheet.
+- 4.4 Offline mode. Each download saves what its detail screen and card need (title, series, season and episode, runtime, overview) and its poster and backdrop at the sizes the screens use. With no connection, Serafin opens to the downloads it has, with the offline banner.
+- 4.5 Progress sync. Positions and played state changed offline are queued and sent once the server is reachable again, with `POST /UserItems/{itemId}/UserData`, and a newer change on the server wins.
+- 4.6 Converted downloads. Investigate first, in Jellyfin's source: how its transcode jobs end when the client stops asking, which delivery saves best (HLS through `AVAssetDownloadURLSession` or a progressive MP4), and how text subtitles end up in time in the saved copy. Then build it, with a quality choice, and honour the user's transcoding permissions.
+- 4.7 Series downloads. Download a season, or the next unwatched episodes, and offer to delete an episode once it's watched. Cut if it isn't finished to the bar.
+
+Gate 4: on the owner's server and on the demo server, a movie and an episode download, play in Airplane Mode with subtitles, and their progress reaches the server once back online.
+
+---
+
 ## First prompt for the coding agent
 
 Paste this to start:
