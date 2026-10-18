@@ -51,8 +51,9 @@ import os
     private(set) var usedBytes: Int64 = 0
     /// Whether the server's policy lets the account download.
     private(set) var isAllowed = false
-    /// The finished downloads whose files are on the device, newest first, as screens show them with no server, from
-    /// what was saved with them.
+    /// The finished downloads whose files are on the device, as screens show them with no server, from what was saved
+    /// with them. They're in the Downloads screen's order: each show's episodes together and in order, and the group
+    /// with the newest download first.
     private(set) var offlineItems: [MediaItem] = []
     /// The last download that couldn't start, shown as an alert.
     var failure: UserMessage?
@@ -401,7 +402,7 @@ import os
             usedBytes = try await downloads.usedBytes(for: key)
             self.records = records
             self.progress = progress
-            offlineItems = records.compactMap { offlineItem(of: $0) }
+            offlineItems = DownloadGroup.groups(of: records).flatMap(\.records).compactMap { offlineItem(of: $0) }
         } catch {
             Self.logger.error("Could not read the downloads: \(error.localizedDescription, privacy: .private)")
         }

@@ -7,7 +7,7 @@ import SwiftUI
 struct HomeDownloads: View {
     /// Why the server can't be reached.
     let reason: UserMessage
-    /// The downloads, newest first.
+    /// The downloads, each show's episodes together and in order, and the group with the newest download first.
     let items: [MediaItem]
     /// Whether Home is asking the server again, which shows on the banner's button.
     let isRetrying: Bool
