@@ -274,6 +274,9 @@ protocol MediaSource: Sendable {
     func genres() async throws -> [Genre]
     /// Everything a detail screen shows about an item.
     func details(of id: String) async throws -> ItemDetails
+    /// What a downloaded movie's or episode's page shows with no server, from what was saved with the download, or nil
+    /// when it isn't downloaded.
+    func savedDetails(of id: String) async -> ItemDetails?
     /// The episodes of one of a show's seasons, in order.
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem]
     /// Movies, shows, episodes, people and collections matching `term`.
@@ -284,7 +287,8 @@ protocol MediaSource: Sendable {
     func canRefreshMetadata() async -> Bool
     /// Asks the server to look up an item's metadata again.
     func refreshMetadata(of item: MediaItem) async throws
-    /// Marks an item played or not.
+    /// Marks an item played or not: on the server, or for an item shown from what was saved with its download, on the
+    /// device until the server answers.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws
     /// Adds an item to the favourites or takes it out.
     func setFavourite(_ isFavourite: Bool, for item: MediaItem) async throws

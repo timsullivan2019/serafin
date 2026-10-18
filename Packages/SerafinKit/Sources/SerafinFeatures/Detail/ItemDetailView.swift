@@ -13,6 +13,7 @@ struct ItemDetailView: View {
     @Environment(MediaActions.self) private var actions
     @Environment(\.zoomNamespace) private var zoom
     @Environment(AppSession.self) private var session: AppSession?
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
     private let zoomSource: String?
     private let arrivesFromHomeHero: Bool
 
@@ -66,14 +67,31 @@ struct ItemDetailView: View {
         }
         .background(Color.background)
         .zoomTransition(from: zoomSource, in: zoom)
-        .task(id: actions.revision) { await model.load(from: media) }
+        .task(id: actions.revision) {
+            await model.load(from: media)
+            // Once the server answers, what it couldn't say before: whether the account may download, and any picture
+            // the item's download is missing.
+            if let downloads, let item = model.details?.item, !model.showsSavedDetails {
+                await downloads.checkPermissionIfUnknown()
+                await downloads.saveMissingArtwork(of: item)
+            }
+        }
+        .onChange(of: downloads?.state(of: model.id) == .notDownloaded) { _, isGone in
+            // A page showing what was saved with a download that's just been deleted loads again, from the server or
+            // to say it can't be reached, rather than offering a Play that has nothing to play.
+            if isGone, model.showsSavedDetails {
+                Task { await model.load(from: media) }
+            }
+        }
         .toolbar {
             // From the first frame when a card opened the screen, so the buttons come in with it, as from Home's hero.
             if let item = model.details?.item ?? model.preview {
                 DetailToolbar(
                     item: item,
                     canRefreshMetadata: model.canRefreshMetadata,
-                    shareURL: session?.account.flatMap { item.webLink(on: $0.server.url) }
+                    shareURL: session?.account.flatMap { item.webLink(on: $0.server.url) },
+                    season: model.selectedSeason,
+                    seasonEpisodes: model.selectedSeasonID.flatMap { model.episodes[$0] }
                 )
             }
         }
@@ -538,16 +556,31 @@ private struct ChapterLink: View {
     }
 }
 
-/// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched,
-/// Refresh Metadata for administrators, and Share.
+/// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched, the
+/// download item, or for a show Download Season and Download Next Unwatched, Refresh Metadata for administrators, and
+/// Share. An item shown from what was saved with its download has Mark as Watched, Mark as Unwatched and the download
+/// item, since the rest needs the server; a mark made then reaches the server once it answers.
 private struct DetailToolbar: ToolbarContent {
     let item: MediaItem
     let canRefreshMetadata: Bool
     let shareURL: URL?
+    /// For a show, the season its page lists.
+    let season: ShowSeason?
+    /// The listed season's episodes, once they've loaded.
+    let seasonEpisodes: [MediaItem]?
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some ToolbarContent {
+        markButtons
+        if offersUnwatched || offersDownload || offersShowDownloads || offersRefresh || shareURL != nil {
+            moreMenu
+        }
+    }
+
+    /// Mark as Watched, and Favourite for an item from the server.
+    private var markButtons: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 Task { await actions.setPlayed(!item.card.isWatched, for: item, in: media) }
@@ -558,32 +591,44 @@ private struct DetailToolbar: ToolbarContent {
                     systemImage: item.card.isWatched ? "checkmark.circle.fill" : "checkmark.circle"
                 )
             }
-            Button {
-                Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
-            } label: {
-                Label(
-                    item.card.isFavourite
-                        ? String(
-                            localized: "Remove from Favorites", bundle: .module,
-                            comment: "Button and menu item that takes an item out of the favorites.")
-                        : String(
-                            localized: "Add to Favorites", bundle: .module,
-                            comment: "Button and menu item that adds an item to the favorites."),
-                    systemImage: item.card.isFavourite ? "heart.fill" : "heart"
-                )
+            if !item.isSaved {
+                Button {
+                    Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
+                } label: {
+                    Label(
+                        item.card.isFavourite
+                            ? String(
+                                localized: "Remove from Favorites", bundle: .module,
+                                comment: "Button and menu item that takes an item out of the favorites.")
+                            : String(
+                                localized: "Add to Favorites", bundle: .module,
+                                comment: "Button and menu item that adds an item to the favorites."),
+                        systemImage: item.card.isFavourite ? "heart.fill" : "heart"
+                    )
+                }
             }
         }
+    }
+
+    /// The More menu.
+    private var moreMenu: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                // Played, or part watched: either way, back to unwatched.
-                if item.card.isPlayed || item.card.isInProgress {
+                if offersUnwatched {
                     Button {
                         Task { await actions.setPlayed(false, for: item, in: media) }
                     } label: {
                         Label(Self.markUnwatched, systemImage: "circle")
                     }
                 }
-                if canRefreshMetadata {
+                if let downloads, offersDownload {
+                    DownloadMenuItem(item: item, downloads: downloads)
+                }
+                if let downloads, offersShowDownloads {
+                    ShowDownloadMenuItems(
+                        show: item, season: season, seasonEpisodes: seasonEpisodes, downloads: downloads)
+                }
+                if offersRefresh {
                     Button {
                         Task { await actions.refreshMetadata(of: item, in: media) }
                     } label: {
@@ -609,6 +654,28 @@ private struct DetailToolbar: ToolbarContent {
                     systemImage: "ellipsis")
             }
         }
+    }
+
+    /// Whether the menu offers Mark as Unwatched: for an item played, or part watched, which either way goes back to
+    /// unwatched.
+    private var offersUnwatched: Bool {
+        item.card.isPlayed || item.card.isInProgress
+    }
+
+    /// Whether the menu offers the download item, for a movie or an episode.
+    private var offersDownload: Bool {
+        downloads?.offersDownloadItem(for: item) ?? false
+    }
+
+    /// Whether the menu offers downloading a show's episodes: for a show from the server, for an account allowed to
+    /// download.
+    private var offersShowDownloads: Bool {
+        guard let downloads, item.card.kind == .series, item.source != nil else { return false }
+        return downloads.isAllowed
+    }
+
+    private var offersRefresh: Bool {
+        canRefreshMetadata && !item.isSaved
     }
 
     static var markWatched: String {

@@ -246,6 +246,36 @@ public actor LibraryRepository {
         }.items ?? []
     }
 
+    /// A show's episodes that have a file on the server, in the server's order, with what their cards and downloads
+    /// need: one season's, or every season's from one episode on. Episodes the server knows only from their metadata,
+    /// as one missing or yet to air, are left out.
+    ///
+    /// - Parameters:
+    ///   - seriesID: The show.
+    ///   - seasonID: The season, or nil for every season, in the server's order, which puts Specials first.
+    ///   - startID: The episode to start at, or nil for the first.
+    ///   - limit: The most episodes to return, or nil for all of them.
+    public func availableEpisodes(
+        series seriesID: String,
+        season seasonID: String? = nil,
+        from startID: String? = nil,
+        limit: Int? = nil
+    ) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetEpisodesParameters(userID: userID)
+        parameters.seasonID = seasonID
+        parameters.startItemID = startID
+        parameters.isMissing = false
+        parameters.limit = limit
+        parameters.fields = Self.cardFields
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableUserData = true
+        let request = Paths.getEpisodes(seriesID: seriesID, parameters: parameters)
+        return try await cached(request.url, request.query, statuses: [404: .notFound]) {
+            try await self.client.send(request).value
+        }.items ?? []
+    }
+
     /// Titles like the item, for the row at the bottom of its detail screen.
     public func similar(to itemID: String, limit: Int = 12) async throws -> [BaseItemDto] {
         var parameters = Paths.GetSimilarItemsParameters(userID: userID, limit: limit)
@@ -348,14 +378,29 @@ public actor LibraryRepository {
         try await currentUser().isAdministrator
     }
 
-    /// The two things Serafin reads about the signed-in user.
+    /// Whether the server's policy for the signed-in user allows downloading. A server that doesn't say allows it,
+    /// as Jellyfin does by default; its download endpoint has the last word either way.
+    public func canDownload() async throws -> Bool {
+        try await currentUser().canDownload
+    }
+
+    /// What the server's policy lets the signed-in user have converted, for downloads the server converts. A switch
+    /// the server doesn't send is on, as Jellyfin has it by default.
+    public func conversionPermissions() async throws -> ConversionPermissions {
+        try await currentUser().conversion
+    }
+
+    /// The things Serafin reads about the signed-in user.
     private struct CurrentUser: Sendable {
         let imageTag: String?
         let isAdministrator: Bool
+        let canDownload: Bool
+        let conversion: ConversionPermissions
     }
 
-    /// Reads the user's picture tag and role from the server's answer directly, so a server that leaves out a field
-    /// the SDK's user model requires, such as one of the policy's switches, doesn't hide either.
+    /// Reads the user's picture tag, role, and download and conversion permissions from the server's answer directly,
+    /// so a server that leaves out a field the SDK's user model requires, such as one of the policy's switches, doesn't
+    /// hide any.
     private func currentUser() async throws -> CurrentUser {
         let request = Paths.getCurrentUser
         return try await cached(request.url, request.query) {
@@ -366,10 +411,21 @@ public actor LibraryRepository {
             var imageTag: String?
             if case .string(let tag)? = user["PrimaryImageTag"] { imageTag = tag }
             var isAdministrator = false
-            if case .object(let policy)? = user["Policy"], case .bool(let admin)? = policy["IsAdministrator"] {
-                isAdministrator = admin
+            var canDownload = true
+            var conversion = ConversionPermissions.all
+            if case .object(let policy)? = user["Policy"] {
+                if case .bool(let admin)? = policy["IsAdministrator"] { isAdministrator = admin }
+                if case .bool(let allowed)? = policy["EnableContentDownloading"] { canDownload = allowed }
+                if case .bool(let allowed)? = policy["EnablePlaybackRemuxing"] { conversion.remuxing = allowed }
+                if case .bool(let allowed)? = policy["EnableVideoPlaybackTranscoding"] {
+                    conversion.videoTranscoding = allowed
+                }
+                if case .bool(let allowed)? = policy["EnableAudioPlaybackTranscoding"] {
+                    conversion.audioTranscoding = allowed
+                }
             }
-            return CurrentUser(imageTag: imageTag, isAdministrator: isAdministrator)
+            return CurrentUser(
+                imageTag: imageTag, isAdministrator: isAdministrator, canDownload: canDownload, conversion: conversion)
         }
     }
 

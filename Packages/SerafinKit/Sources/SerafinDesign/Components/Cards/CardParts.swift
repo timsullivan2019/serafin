@@ -124,6 +124,41 @@ struct PlayedBadge: View {
     }
 }
 
+/// The mark for a download, as tall as a caption: an arrow in a filled circle once it's saved, or while it's on its
+/// way, a ring that fills as it arrives, dashed while how much has arrived isn't known, as while it waits its turn.
+struct DownloadGlyph: View {
+    let mark: DownloadMark
+    @ScaledMetric(relativeTo: .caption) private var side = 12.0
+
+    var body: some View {
+        Group {
+            switch mark {
+            case .downloaded:
+                Image(systemName: "arrow.down.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+            case .downloading(let fraction?):
+                ZStack {
+                    Circle()
+                        .stroke(.textSecondary.opacity(0.35), lineWidth: 1.5)
+                    Circle()
+                        .trim(from: 0, to: fraction)
+                        .stroke(.textSecondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                .padding(0.75)
+            case .downloading(nil):
+                Circle()
+                    .stroke(.textSecondary, style: StrokeStyle(lineWidth: 1.5, dash: [2, 2]))
+                    .padding(0.75)
+            }
+        }
+        .frame(width: side, height: side)
+        .foregroundStyle(.textSecondary)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Highlights a plain button under an iPad pointer, the way system buttons respond. Other platforms have no hover
 /// effect.
 struct PointerHighlight: ViewModifier {

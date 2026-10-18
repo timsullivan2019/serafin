@@ -182,7 +182,7 @@ enum IntentError: Error, Equatable, CustomLocalizedStringResourceConvertible {
                 localized: "\(message.title). \(message.message)",
                 bundle: .module,
                 comment:
-                    "Two sentences in a row: a title, then what follows it, such as Can't Reach the Server. Check that the server is running. Siri says this when something fails, and VoiceOver reads it when Home's out-of-date banner appears."
+                    "Two sentences in a row: a title, then what follows it, such as Can't Reach the Server. Check that the server is running. Siri says this when something fails, and VoiceOver reads it when a banner appears on Home."
             )
         )
     }

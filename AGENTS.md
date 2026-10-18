@@ -9,7 +9,7 @@ Serafin is a native SwiftUI client for Jellyfin on iPhone and iPad. It exists to
 3. **Simple.** A short feature list, each item finished. Cut a feature before shipping it half-done.
 4. **Secure.** Tokens in the Keychain, TLS by default, the app collects nothing about the user.
 
-Out of scope until after 1.0. Do not build, scaffold, or stub these: downloads, Live TV, music, books, photos, tvOS, macOS app target, SharePlay, VLCKit, widgets, analytics of any kind.
+Downloads are Phase 4 in `docs/PLAN.md`, for 1.1, built on their own branch until 1.0.0 is approved. Out of scope until after 1.0. Do not build, scaffold, or stub these: Live TV, music, books, photos, tvOS, macOS app target, SharePlay, VLCKit, widgets, analytics of any kind.
 
 ## Naming and branding
 

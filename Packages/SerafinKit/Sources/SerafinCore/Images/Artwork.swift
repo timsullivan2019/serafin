@@ -67,19 +67,43 @@ public struct Artwork: Sendable {
         request(urls.userImageURL(userID: userID, tag: tag), pixels: Self.pixelWidth(points: width, scale: scale))
     }
 
+    /// `item`'s picture in `role`, `width` points wide on a screen of `scale`, as the server sends it, for saving with
+    /// a download. Nil when the item and its show have no such picture.
+    ///
+    /// - Throws: The image pipeline's error when the picture can't be loaded.
+    public func data(_ role: ImageRole, of item: BaseItemDto, width: CGFloat, scale: CGFloat) async throws -> Data? {
+        guard var request = request(role, of: item, width: width, scale: scale) else { return nil }
+        // Only the data is wanted, which the disk cache keeps for the request without the decoded size.
+        request.thumbnail = nil
+        return try await pipeline.data(for: request).0
+    }
+
+    /// The request for a picture saved on the device, such as a download's poster, drawn `width` points wide on a
+    /// screen of `scale`: decoded no larger than that, as a picture from the server is.
+    public static func request(file url: URL, width: CGFloat, scale: CGFloat) -> ImageRequest {
+        var request = ImageRequest(url: url)
+        request.thumbnail = Self.thumbnail(pixels: Self.pixelWidth(points: width, scale: scale))
+        return request
+    }
+
     private func request(_ url: URL?, pixels: Int, allowsConstrainedNetwork: Bool = true) -> ImageRequest? {
         guard let url else { return nil }
         var urlRequest = URLRequest(url: url)
         urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
         urlRequest.allowsConstrainedNetworkAccess = allowsConstrainedNetwork
         var request = ImageRequest(urlRequest: urlRequest)
-        // A box as wide as asked for and taller than any poster, so only the width limits the decoded size.
-        request.thumbnail = ImageRequest.ThumbnailOptions(
+        request.thumbnail = Self.thumbnail(pixels: pixels)
+        return request
+    }
+
+    /// Decodes an image no wider than `pixels`: a box as wide as that and taller than any poster, so only the width
+    /// limits the decoded size.
+    private static func thumbnail(pixels: Int) -> ImageRequest.ThumbnailOptions {
+        ImageRequest.ThumbnailOptions(
             size: CGSize(width: pixels, height: pixels * 4),
             unit: .pixels,
             contentMode: .aspectFit
         )
-        return request
     }
 
     /// The widest image Serafin asks for, in pixels: wider than any hero on any screen it runs on. A view measured

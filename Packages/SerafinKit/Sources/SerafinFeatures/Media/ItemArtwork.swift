@@ -5,11 +5,11 @@ import SerafinCore
 import SerafinDesign
 import SwiftUI
 
-/// Loads an item's artwork for one role and hands it to `content`: from the server through the shared pipeline, or
-/// the generated art for the samples.
+/// Loads an item's artwork for one role and hands it to `content`: from the server through the shared pipeline, from
+/// the device for an item shown from what was saved with its download, or the generated art for the samples.
 ///
-/// The server is asked for an image as wide as `content` is laid out, or `width` when given. Until the artwork
-/// arrives, `content` gets nil and draws its placeholder.
+/// The server is asked for an image as wide as `content` is laid out, or `width` when given, and a saved picture is
+/// decoded no wider. Until the artwork arrives, `content` gets nil and draws its placeholder.
 struct ItemArtwork<Content: View>: View {
     private let item: MediaItem
     private let role: ImageRole
@@ -43,8 +43,8 @@ struct ItemArtwork<Content: View>: View {
     }
 
     var body: some View {
-        if let artwork, let source = item.source {
-            LazyImage(request: request(from: artwork, for: source)) { state in
+        if let artwork, item.isSaved || item.source != nil {
+            LazyImage(request: request(from: artwork)) { state in
                 content(state.image)
             }
             .pipeline(artwork.pipeline)
@@ -63,11 +63,15 @@ struct ItemArtwork<Content: View>: View {
         }
     }
 
-    /// The request once the width is known, so the first request is already the right size.
-    private func request(from artwork: Artwork, for source: BaseItemDto) -> ImageRequest? {
+    /// The request once the width is known, so the first request is already the right size: for the picture saved
+    /// with the item's download when it's shown from that, otherwise for the server's.
+    private func request(from artwork: Artwork) -> ImageRequest? {
         let width = fixedWidth ?? measuredWidth
         guard width > 0 else { return nil }
-        return artwork.request(role, of: source, width: width, scale: scale)
+        if let saved = item.savedArtwork {
+            return saved.url(for: role).map { Artwork.request(file: $0, width: width, scale: scale) }
+        }
+        return item.source.flatMap { artwork.request(role, of: $0, width: width, scale: scale) }
     }
 
     private var sampleImage: Image? {
