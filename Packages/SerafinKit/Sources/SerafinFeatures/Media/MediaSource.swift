@@ -287,7 +287,8 @@ protocol MediaSource: Sendable {
     func canRefreshMetadata() async -> Bool
     /// Asks the server to look up an item's metadata again.
     func refreshMetadata(of item: MediaItem) async throws
-    /// Marks an item played or not.
+    /// Marks an item played or not: on the server, or for an item shown from what was saved with its download, on the
+    /// device until the server answers.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws
     /// Adds an item to the favourites or takes it out.
     func setFavourite(_ isFavourite: Bool, for item: MediaItem) async throws

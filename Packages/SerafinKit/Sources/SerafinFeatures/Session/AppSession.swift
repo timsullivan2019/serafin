@@ -221,7 +221,8 @@ import os
                         key: current.key,
                         planner: DownloadPlanner(client: client, userID: current.user.id),
                         library: library,
-                        artwork: artwork
+                        artwork: artwork,
+                        sync: PlaybackSync(client: client, key: current.key, downloads: $0)
                     )
                 }
                 player = PlayerEngine(

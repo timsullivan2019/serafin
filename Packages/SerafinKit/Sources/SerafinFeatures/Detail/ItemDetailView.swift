@@ -556,7 +556,8 @@ private struct ChapterLink: View {
 
 /// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched, the
 /// download item, Refresh Metadata for administrators, and Share. An item shown from what was saved with its download
-/// has only the download item, since the rest needs the server.
+/// has Mark as Watched, Mark as Unwatched and the download item, since the rest needs the server; a mark made then
+/// reaches the server once it answers.
 private struct DetailToolbar: ToolbarContent {
     let item: MediaItem
     let canRefreshMetadata: Bool
@@ -566,15 +567,13 @@ private struct DetailToolbar: ToolbarContent {
     @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some ToolbarContent {
-        if !item.isSaved {
-            markButtons
-        }
+        markButtons
         if offersUnwatched || offersDownload || offersRefresh || shareURL != nil {
             moreMenu
         }
     }
 
-    /// Mark as Watched and Favourite.
+    /// Mark as Watched, and Favourite for an item from the server.
     private var markButtons: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
@@ -586,19 +585,21 @@ private struct DetailToolbar: ToolbarContent {
                     systemImage: item.card.isWatched ? "checkmark.circle.fill" : "checkmark.circle"
                 )
             }
-            Button {
-                Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
-            } label: {
-                Label(
-                    item.card.isFavourite
-                        ? String(
-                            localized: "Remove from Favorites", bundle: .module,
-                            comment: "Button and menu item that takes an item out of the favorites.")
-                        : String(
-                            localized: "Add to Favorites", bundle: .module,
-                            comment: "Button and menu item that adds an item to the favorites."),
-                    systemImage: item.card.isFavourite ? "heart.fill" : "heart"
-                )
+            if !item.isSaved {
+                Button {
+                    Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
+                } label: {
+                    Label(
+                        item.card.isFavourite
+                            ? String(
+                                localized: "Remove from Favorites", bundle: .module,
+                                comment: "Button and menu item that takes an item out of the favorites.")
+                            : String(
+                                localized: "Add to Favorites", bundle: .module,
+                                comment: "Button and menu item that adds an item to the favorites."),
+                        systemImage: item.card.isFavourite ? "heart.fill" : "heart"
+                    )
+                }
             }
         }
     }
@@ -648,7 +649,7 @@ private struct DetailToolbar: ToolbarContent {
     /// Whether the menu offers Mark as Unwatched: for an item played, or part watched, which either way goes back to
     /// unwatched.
     private var offersUnwatched: Bool {
-        !item.isSaved && (item.card.isPlayed || item.card.isInProgress)
+        item.card.isPlayed || item.card.isInProgress
     }
 
     /// Whether the menu offers the download item: for an item the account may download, and for one downloaded or on

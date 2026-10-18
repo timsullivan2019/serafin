@@ -199,6 +199,35 @@ struct MainTabs: View {
             Text(actions.failure?.message ?? "")
         }
         .modifier(DownloadFailureAlert(downloads: downloads))
+        .modifier(DownloadProgressSync(downloads: downloads, actions: actions))
+    }
+}
+
+/// Sends the server the progress made with downloads when it may answer again: when the device joins a network, and
+/// when Serafin comes back to the foreground. The screens reload once the server has it.
+private struct DownloadProgressSync: ViewModifier {
+    let downloads: DownloadCenter?
+    let actions: MediaActions
+    @Environment(\.scenePhase) private var scenePhase
+    private let network = NetworkWatcher.shared
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: network.connection) { _, connection in
+                if connection.isOnline { sync() }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { sync() }
+            }
+    }
+
+    private func sync() {
+        guard let downloads else { return }
+        Task {
+            if await downloads.syncPlayback() {
+                actions.reload()
+            }
+        }
     }
 }
 

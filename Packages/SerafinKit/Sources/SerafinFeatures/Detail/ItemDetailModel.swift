@@ -126,13 +126,13 @@ import SwiftUI
 
     /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the server's details
     /// already showing. For a downloaded item, what was saved with the download shows while the server doesn't
-    /// answer, and when it fails.
+    /// answer, and when it fails, read again at once on a reload, as after marking it watched with no server.
     ///
     /// A show's page keeps the season it lists across reloads, as after marking an episode watched, and loads that
     /// season's episodes again with the details, so the page changes all at once.
     func load(from media: any MediaSource) async {
         async let canRefresh = media.canRefreshMetadata()
-        if preview?.isSaved == true {
+        if preview?.isSaved == true || showsSavedDetails {
             await showSavedDetailsWhileLoading(from: media)
         }
         // A server that's slow to answer, as one out of reach, doesn't keep a download's page waiting.
@@ -194,14 +194,18 @@ import SwiftUI
         canRefreshMetadata = await canRefresh
     }
 
-    /// Shows what was saved with the item's download while nothing else shows yet, or does nothing for an item that
-    /// isn't downloaded.
+    /// Shows what was saved with the item's download, read afresh, while nothing else shows yet or while it's what
+    /// shows, or does nothing for an item that isn't downloaded.
     private func showSavedDetailsWhileLoading(from media: any MediaSource) async {
-        guard case .loading = phase, let saved = await media.savedDetails(of: id), case .loading = phase else {
-            return
-        }
+        guard isLoadingOrSaved, let saved = await media.savedDetails(of: id), isLoadingOrSaved else { return }
         showsSavedDetails = true
         phase = .loaded(saved)
+    }
+
+    /// Whether nothing shows yet, or what was saved with the item's download shows.
+    private var isLoadingOrSaved: Bool {
+        if case .loading = phase { return true }
+        return showsSavedDetails
     }
 
     /// The server's details didn't load. The server's details already showing stay; otherwise what was saved with the

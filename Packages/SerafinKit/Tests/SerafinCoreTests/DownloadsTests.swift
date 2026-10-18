@@ -28,6 +28,11 @@ private func isSaved(_ url: URL) -> Bool {
         )
     }
 
+    /// A change to `record`'s playback, stopped at `position`, for the server.
+    private func change(of record: DownloadRecord, at position: Duration) -> PlaybackChange {
+        PlaybackChange(key: key, itemID: record.itemID, position: position, isPlayed: false, changed: .now)
+    }
+
     @Test func savedDownloadsSurviveARelaunch() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = DownloadStore(directory: directory)
@@ -47,7 +52,106 @@ private func isSaved(_ url: URL) -> Bool {
         #expect(json.contains(#""version" : 1"#))
         #expect(!json.lowercased().contains("token"))
         #expect(!json.contains("http"))
+        #expect(!json.contains(#""changes""#))
         #expect(saved.fileName == "\(saved.id).mp4")
+    }
+
+    @Test func aChangeForTheServerNamesOnlyTheAccountAndTheItem() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        let saved = record("item-1")
+        try await store.save(saved)
+        let waiting = change(of: saved, at: .seconds(400))
+
+        try await store.updatePlayback(id: saved.id) { _ in waiting }
+
+        let data = try Data(contentsOf: directory.appending(path: "downloads.json"))
+        let index = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let changes = try #require(index["changes"] as? [[String: Any]])
+        let keys = Set(try #require(changes.first).keys)
+        #expect(changes.count == 1)
+        #expect(keys == ["serverID", "userID", "itemID", "position", "isPlayed", "changed"])
+    }
+
+    @Test func changesForTheServerOutliveARelaunchAndTheirDownload() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        let saved = record("item-1")
+        try await store.save(saved)
+        let waiting = change(of: saved, at: .seconds(400))
+
+        try await store.updatePlayback(id: saved.id) { _ in waiting }
+        try await store.remove(ids: [saved.id])
+
+        let reloaded = DownloadStore(directory: directory)
+        #expect(try await reloaded.changes() == [waiting])
+        #expect(try await reloaded.records().isEmpty)
+    }
+
+    @Test func aLaterChangeToAnItemTakesTheEarliersPlace() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        let first = record("item-1")
+        let second = record("item-2")
+        try await store.save(first)
+        try await store.save(second)
+        let earlier = change(of: first, at: .seconds(400))
+        let other = change(of: second, at: .seconds(100))
+        let later = change(of: first, at: .seconds(700))
+
+        try await store.updatePlayback(id: first.id) { _ in earlier }
+        try await store.updatePlayback(id: second.id) { _ in other }
+        try await store.updatePlayback(id: first.id) { _ in later }
+
+        #expect(try await store.changes() == [other, later])
+    }
+
+    @Test func aChangeSentIsForgottenButNotOneMadeSince() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        let saved = record("item-1")
+        try await store.save(saved)
+        let sent = change(of: saved, at: .seconds(400))
+        let since = change(of: saved, at: .seconds(700))
+        try await store.updatePlayback(id: saved.id) { _ in sent }
+        try await store.updatePlayback(id: saved.id) { _ in since }
+
+        try await store.removeChange(sent)
+        #expect(try await store.changes() == [since])
+
+        try await store.removeChange(since)
+        #expect(try await store.changes().isEmpty)
+    }
+
+    @Test func theServersPlaybackWaitsForAChangeMadeOnTheDevice() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        var saved = record("item-1")
+        saved.playback = DownloadPlayback(position: .seconds(400))
+        try await store.save(saved)
+        let waiting = change(of: saved, at: .seconds(400))
+        try await store.updatePlayback(id: saved.id) { _ in waiting }
+        let date = Date(timeIntervalSince1970: 1_790_000_000)
+        let server = DownloadPlayback(position: .zero, changed: date, isPlayed: true)
+
+        // The change made on the device, waiting for the server, is newer.
+        let kept = try await store.setServerPlayback(server, forItem: "item-1", key: key, replacingChanges: false)
+        #expect(!kept)
+        #expect(try await store.record(id: saved.id)?.playback == saved.playback)
+        #expect(try await store.changes() == [waiting])
+
+        // A change made on the server since, as a mark made there, is newer still.
+        let replaced = try await store.setServerPlayback(server, forItem: "item-1", key: key, replacingChanges: true)
+        #expect(replaced)
+        #expect(try await store.record(id: saved.id)?.playback == server)
+        #expect(try await store.changes().isEmpty)
+
+        // With nothing waiting, the same again changes nothing, and nil clears it.
+        let again = try await store.setServerPlayback(server, forItem: "item-1", key: key, replacingChanges: false)
+        #expect(!again)
+        let cleared = try await store.setServerPlayback(nil, forItem: "item-1", key: key, replacingChanges: false)
+        #expect(cleared)
+        #expect(try await store.record(id: saved.id)?.playback == nil)
     }
 
     @Test func theFolderIsExcludedFromBackup() async throws {
@@ -164,10 +268,12 @@ private func isSaved(_ url: URL) -> Bool {
             """
         try Data(index.utf8).write(to: directory.appending(path: "downloads.json"))
 
-        let saved = try #require(try await DownloadStore(directory: directory).records().first)
+        let store = DownloadStore(directory: directory)
+        let saved = try #require(try await store.records().first)
 
         #expect(saved.metadata == DownloadMetadata(title: "Sintel", kind: .movie, year: 2010))
         #expect(saved.playback == nil)
+        #expect(try await store.changes().isEmpty)
     }
 
     @Test func anUnreadableIndexIsAnError() async throws {
@@ -222,6 +328,11 @@ private func isSaved(_ url: URL) -> Bool {
     @Test func withNoRuntimeOrNoPositionNothingIsWatched() {
         #expect(!DownloadPlayback(position: .seconds(4900)).isPlayed(runtime: nil))
         #expect(!DownloadPlayback(position: .zero).isPlayed(runtime: movie))
+    }
+
+    @Test func aMarkOrTheServerSaysWhetherItsWatched() {
+        #expect(DownloadPlayback(position: .zero, isPlayed: true).isPlayed(runtime: movie))
+        #expect(!DownloadPlayback(position: .seconds(4900), isPlayed: false).isPlayed(runtime: movie))
     }
 }
 
@@ -450,6 +561,81 @@ private struct DownloadsHarness {
         let kept = try #require(try await harness.downloads.record(forItem: "item-1", key: harness.key))
         #expect(kept.playback?.position == .seconds(95))
         #expect(kept.state == .finished)
+    }
+
+    @Test func whereADownloadStopsIsKeptForTheServerAsJellyfinRecordsIt() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let host = "downloads-stop-for-server.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+        var request = try harness.request(host: host)
+        request.metadata.runtime = .seconds(888)
+        try await harness.downloads.start(request, for: harness.key)
+        let record = try await harness.settled()
+
+        try await harness.downloads.savePosition(.seconds(400), of: record.id)
+        let partway = try #require(try await harness.downloads.playbackChanges(for: harness.key).first)
+        #expect(partway.itemID == "item-1")
+        #expect(partway.position == .seconds(400))
+        #expect(!partway.isPlayed)
+
+        // Stopped near the end, it's watched, and resumes from the start.
+        try await harness.downloads.savePosition(.seconds(860), of: record.id)
+        let changes = try await harness.downloads.playbackChanges(for: harness.key)
+        #expect(changes.count == 1)
+        #expect(changes.first?.position == .zero)
+        #expect(changes.first?.isPlayed == true)
+        let kept = try #require(try await harness.downloads.record(forItem: "item-1", key: harness.key))
+        #expect(kept.playback?.position == .seconds(860))
+        #expect(kept.playback?.isPlayed == true)
+        #expect(kept.playback?.changed == changes.first?.changed)
+    }
+
+    @Test func aDownloadMarkedWatchedWithNoServerKeepsTheMarkForIt() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let host = "downloads-mark-for-server.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+        try await harness.downloads.start(try harness.request(host: host), for: harness.key)
+        _ = try await harness.settled()
+
+        try await harness.downloads.setPlayed(true, ofItem: "item-1", key: harness.key)
+        try await harness.downloads.setPlayed(true, ofItem: "item-9", key: harness.key)
+
+        let kept = try #require(try await harness.downloads.record(forItem: "item-1", key: harness.key))
+        #expect(kept.playback?.position == .zero)
+        #expect(kept.playback?.isPlayed == true)
+        let changes = try await harness.downloads.playbackChanges(for: harness.key)
+        #expect(changes.map(\.itemID) == ["item-1"])
+        #expect(changes.first?.position == .zero)
+        #expect(changes.first?.isPlayed == true)
+    }
+
+    @Test func signingOutForgetsTheProgressWaitingForTheServer() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let otherKey = SessionKey(serverID: "server-2", userID: "user-2")
+        let mine = DownloadRecord(
+            key: harness.key, itemID: "item-1", mediaSourceID: "item-1", fileExtension: "mp4", state: .finished,
+            metadata: DownloadMetadata(title: "Sintel", kind: .movie))
+        let theirs = DownloadRecord(
+            key: otherKey, itemID: "item-2", mediaSourceID: "item-2", fileExtension: "mp4", state: .finished,
+            metadata: DownloadMetadata(title: "Spring", kind: .movie))
+        for record in [mine, theirs] {
+            try await harness.store.save(record)
+            try await harness.downloads.savePosition(.seconds(60), of: record.id)
+        }
+
+        // Deleted before the server heard where it stopped, which still waits for it.
+        try await harness.downloads.delete(mine.id)
+        #expect(try await harness.downloads.playbackChanges(for: harness.key).count == 1)
+
+        try await harness.downloads.deleteAll(for: harness.key)
+        #expect(try await harness.downloads.playbackChanges(for: harness.key).isEmpty)
+        #expect(try await harness.downloads.playbackChanges(for: otherKey).count == 1)
+
+        try await harness.downloads.deleteAll(forServer: "server-2")
+        #expect(try await harness.store.changes().isEmpty)
     }
 
     @Test func aPositionForADeletedDownloadIsDropped() async throws {

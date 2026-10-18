@@ -243,17 +243,24 @@ public struct DownloadTrack: Codable, Hashable, Sendable {
     }
 }
 
-/// Where playback of a download last stopped on this device, so it resumes there with no server to ask.
+/// Where playback of a download last stopped, so it resumes there with no server to ask, and whether it's been
+/// watched.
 public struct DownloadPlayback: Codable, Hashable, Sendable {
-    /// Where playback stopped.
+    /// Where playback stopped on this device, or where the server says the item resumes.
     public var position: Duration
-    /// When it stopped there.
+    /// When it stopped there, or when the server says the item was last played.
     public var changed: Date
+    /// Whether the item has been watched: as the stop at ``position`` counted, as it was marked, or as the server says.
+    /// Nil for a download saved before this was kept, whose stop decides.
+    public var isPlayed: Bool?
 
     /// Creates a stop at `position`.
-    public init(position: Duration, changed: Date = .now) {
+    ///
+    /// - Parameter isPlayed: Whether the item has been watched, or nil for the stop to decide.
+    public init(position: Duration, changed: Date = .now, isPlayed: Bool? = nil) {
         self.position = position
         self.changed = changed
+        self.isPlayed = isPlayed
     }
 
     /// Where the download resumes after stopping at ``position`` in a video `runtime` long, as Jellyfin records a stop
@@ -267,13 +274,55 @@ public struct DownloadPlayback: Codable, Hashable, Sendable {
         return share < 0.05 || share > 0.9 || runtime < .seconds(300) ? .zero : position
     }
 
-    /// Whether stopping at ``position`` in a video `runtime` long counts as watching it, as Jellyfin records a stop
-    /// with its standard settings: a stop in the last 10%, or past the first 5% of a video under five minutes. With
-    /// the runtime unknown, it doesn't.
+    /// Whether the item has been watched: as ``isPlayed`` says, or when it doesn't, whether stopping at ``position``
+    /// in a video `runtime` long counts as watching it, as Jellyfin records a stop with its standard settings: a stop
+    /// in the last 10%, or past the first 5% of a video under five minutes. With the runtime unknown, it doesn't.
     public func isPlayed(runtime: Duration?) -> Bool {
+        if let isPlayed { return isPlayed }
         guard position > .zero, let runtime, runtime > .zero else { return false }
         let share = position / runtime
         return share > 0.9 || (share >= 0.05 && runtime < .seconds(300))
+    }
+}
+
+/// A change to an item's playback made on this device with its download, which the server hasn't heard yet: where the
+/// item resumes and whether it's been watched, as the server keeps them, and when it changed, which decides whether a
+/// change made on the server meanwhile wins over it.
+///
+/// It names the account and the item, never a title, the server's address or the token, and it stays when its
+/// download is deleted, so progress made offline still reaches the server.
+public struct PlaybackChange: Codable, Hashable, Sendable {
+    /// The server the item is on.
+    public let serverID: String
+    /// The user whose playback changed.
+    public let userID: String
+    /// The movie or episode.
+    public let itemID: String
+    /// Where the item resumes, as the server keeps it: from the start after a stop near either end, or once watched.
+    public var position: Duration
+    /// Whether the item has been watched.
+    public var isPlayed: Bool
+    /// When it changed on this device.
+    public var changed: Date
+
+    /// Creates a change to the account `key`'s playback of `itemID`.
+    public init(key: SessionKey, itemID: String, position: Duration, isPlayed: Bool, changed: Date) {
+        self.serverID = key.serverID
+        self.userID = key.userID
+        self.itemID = itemID
+        self.position = position
+        self.isPlayed = isPlayed
+        self.changed = changed
+    }
+
+    /// The account whose playback changed.
+    public var key: SessionKey {
+        SessionKey(serverID: serverID, userID: userID)
+    }
+
+    /// Whether this changes the account `key`'s playback of `itemID`.
+    func isFor(_ itemID: String, key: SessionKey) -> Bool {
+        self.itemID == itemID && serverID == key.serverID && userID == key.userID
     }
 }
 

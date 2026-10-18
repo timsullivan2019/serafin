@@ -7,7 +7,9 @@ import os
 /// Everything is excluded from backup, since a restored phone can download again, and protected until the device is
 /// first unlocked after a restart, so a transfer that finishes while the phone is locked can still be saved. The
 /// index holds no address, token or pin, and files are named by each download's ID: the video in `Media`, and its
-/// poster and backdrop in `Artwork`. Its format is versioned so later releases can migrate it:
+/// poster and backdrop in `Artwork`. The index also keeps the changes to playback made with downloads that the server
+/// hasn't heard yet, which stay when their download is deleted. Its format is versioned so later releases can migrate
+/// it:
 ///
 /// ```json
 /// {
@@ -18,7 +20,10 @@ import os
 ///       "metadata": { "title": "…", "kind": "movie", "year": 2010, "overview": "…" },
 ///       "tracks": { "audio": [{ "index": 1, "codec": "aac", "language": "eng", "isDefault": true, … }],
 ///                   "subtitles": [], "defaultAudio": 1 },
-///       "playback": { "position": […], "changed": … } }
+///       "playback": { "position": […], "changed": …, "isPlayed": false } }
+///   ],
+///   "changes": [
+///     { "serverID": "…", "userID": "…", "itemID": "…", "position": […], "isPlayed": false, "changed": … }
 ///   ]
 /// }
 /// ```
@@ -26,6 +31,15 @@ public actor DownloadStore {
     private struct File: Codable {
         var version: Int
         var downloads: [DownloadRecord]
+        /// The changes to playback the server hasn't heard yet, oldest first. Left out when there are none, and of an
+        /// index saved before they were kept.
+        var changes: [PlaybackChange]?
+    }
+
+    /// What the index holds, as it's read and saved.
+    private struct Contents {
+        var downloads: [DownloadRecord] = []
+        var changes: [PlaybackChange] = []
     }
 
     private static let currentVersion = 1
@@ -35,7 +49,7 @@ public actor DownloadStore {
 
     /// The folder that holds the index and the files.
     public nonisolated let directory: URL
-    private var cached: [DownloadRecord]?
+    private var cached: Contents?
 
     /// Creates a store.
     ///
@@ -84,10 +98,12 @@ public actor DownloadStore {
 
     /// Every download, oldest first.
     public func records() throws -> [DownloadRecord] {
-        if let cached { return cached }
-        let loaded = try load()
-        cached = loaded
-        return loaded
+        try currentContents().downloads
+    }
+
+    /// The changes to playback made with downloads that the server hasn't heard yet, oldest first.
+    public func changes() throws -> [PlaybackChange] {
+        try currentContents().changes
     }
 
     /// The download with `id`, if there is one.
@@ -97,27 +113,89 @@ public actor DownloadStore {
 
     /// Saves `record`, replacing a download with the same ID or adding it at the end.
     public func save(_ record: DownloadRecord) throws {
-        var list = try records()
-        if let index = list.firstIndex(where: { $0.id == record.id }) {
-            list[index] = record
+        var contents = try currentContents()
+        if let index = contents.downloads.firstIndex(where: { $0.id == record.id }) {
+            contents.downloads[index] = record
         } else {
-            list.append(record)
+            contents.downloads.append(record)
         }
-        try write(list)
+        try write(contents)
     }
 
     /// Changes the download with `id` and saves it, or does nothing when there's no such download, as when it was
     /// deleted meanwhile, so a change never brings a deleted download back. Returns the download as it now is.
     @discardableResult
     public func update(id: String, _ change: @Sendable (inout DownloadRecord) -> Void) throws -> DownloadRecord? {
-        var list = try records()
-        guard let index = list.firstIndex(where: { $0.id == id }) else { return nil }
-        let unchanged = list[index]
-        change(&list[index])
-        if list[index] != unchanged {
-            try write(list)
+        var contents = try currentContents()
+        guard let index = contents.downloads.firstIndex(where: { $0.id == id }) else { return nil }
+        let unchanged = contents.downloads[index]
+        change(&contents.downloads[index])
+        if contents.downloads[index] != unchanged {
+            try write(contents)
         }
-        return list[index]
+        return contents.downloads[index]
+    }
+
+    /// Changes the download with `id`'s playback with `change`, and keeps the change to playback it returns for the
+    /// server, in place of an earlier one to the same item that hasn't been sent, all in one save. Does nothing when
+    /// there's no such download. Returns the download as it now is.
+    @discardableResult
+    public func updatePlayback(
+        id: String,
+        _ change: @Sendable (inout DownloadRecord) -> PlaybackChange
+    ) throws -> DownloadRecord? {
+        var contents = try currentContents()
+        guard let index = contents.downloads.firstIndex(where: { $0.id == id }) else { return nil }
+        let queued = change(&contents.downloads[index])
+        contents.changes.removeAll { $0.isFor(queued.itemID, key: queued.key) }
+        contents.changes.append(queued)
+        try write(contents)
+        return contents.downloads[index]
+    }
+
+    /// Forgets `change`, once the server has heard it or has a newer one. A change to the same item made since stays.
+    public func removeChange(_ change: PlaybackChange) throws {
+        var contents = try currentContents()
+        guard let index = contents.changes.firstIndex(of: change) else { return }
+        contents.changes.remove(at: index)
+        try write(contents)
+    }
+
+    /// Forgets the changes `isRemoved` picks, as an account's when it signs out.
+    public func removeChanges(where isRemoved: @Sendable (PlaybackChange) -> Bool) throws {
+        var contents = try currentContents()
+        let count = contents.changes.count
+        contents.changes.removeAll(where: isRemoved)
+        guard contents.changes.count != count else { return }
+        try write(contents)
+    }
+
+    /// Keeps `playback`, as the server has it, with the account `key`'s download of `itemID`, or clears it for nil.
+    /// While a change to the item waits for the server, which is newer, nothing changes, unless `replacingChanges`,
+    /// for what the server has after a change made there, which is newer still: then the waiting change is forgotten.
+    /// Returns whether the download changed.
+    @discardableResult
+    public func setServerPlayback(
+        _ playback: DownloadPlayback?,
+        forItem itemID: String,
+        key: SessionKey,
+        replacingChanges: Bool
+    ) throws -> Bool {
+        var contents = try currentContents()
+        let waiting = contents.changes.contains { $0.isFor(itemID, key: key) }
+        if waiting {
+            guard replacingChanges else { return false }
+            contents.changes.removeAll { $0.isFor(itemID, key: key) }
+        }
+        let index = contents.downloads.firstIndex { $0.key == key && $0.itemID == itemID }
+        let changesDownload = index.map { contents.downloads[$0].playback != playback } ?? false
+        if let index, changesDownload {
+            contents.downloads[index].playback = playback
+        }
+        if waiting || changesDownload {
+            try write(contents)
+        }
+        return changesDownload
     }
 
     /// Saves `data` as the download `id`'s picture of `kind`, in place of one saved before, and returns whether it did.
@@ -141,12 +219,14 @@ public actor DownloadStore {
         return true
     }
 
-    /// Removes the downloads with `ids` and deletes their files and pictures. IDs that aren't saved are ignored.
+    /// Removes the downloads with `ids` and deletes their files and pictures. IDs that aren't saved are ignored. The
+    /// changes to their playback that the server hasn't heard yet stay.
     public func remove(ids: Set<String>) throws {
-        let list = try records()
-        let removed = list.filter { ids.contains($0.id) }
+        var contents = try currentContents()
+        let removed = contents.downloads.filter { ids.contains($0.id) }
         guard !removed.isEmpty else { return }
-        try write(list.filter { !ids.contains($0.id) })
+        contents.downloads.removeAll { ids.contains($0.id) }
+        try write(contents)
         for record in removed {
             deleteFile(at: fileURL(for: record))
             for kind in DownloadArtwork.allCases {
@@ -190,24 +270,38 @@ public actor DownloadStore {
         }
     }
 
-    private func load() throws -> [DownloadRecord] {
-        guard FileManager.default.fileExists(atPath: indexURL.path(percentEncoded: false)) else { return [] }
+    /// What the index holds, read once and then kept.
+    private func currentContents() throws -> Contents {
+        if let cached { return cached }
+        let loaded = try load()
+        cached = loaded
+        return loaded
+    }
+
+    private func load() throws -> Contents {
+        guard FileManager.default.fileExists(atPath: indexURL.path(percentEncoded: false)) else { return Contents() }
         do {
-            return try JSONDecoder().decode(File.self, from: Data(contentsOf: indexURL)).downloads
+            let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: indexURL))
+            return Contents(downloads: file.downloads, changes: file.changes ?? [])
         } catch {
             Self.logger.error("Could not read the downloads: \(error.localizedDescription, privacy: .private)")
             throw DownloadError.storeUnavailable
         }
     }
 
-    private func write(_ list: [DownloadRecord]) throws {
+    private func write(_ contents: Contents) throws {
         try prepareDirectories()
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(File(version: Self.currentVersion, downloads: list))
+            let file = File(
+                version: Self.currentVersion,
+                downloads: contents.downloads,
+                changes: contents.changes.isEmpty ? nil : contents.changes
+            )
+            let data = try encoder.encode(file)
             try data.write(to: indexURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            cached = list
+            cached = contents
         } catch {
             Self.logger.error("Could not save the downloads: \(error.localizedDescription, privacy: .private)")
             throw DownloadError.storeUnavailable

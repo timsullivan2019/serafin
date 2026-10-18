@@ -88,8 +88,8 @@ import SwiftUI
 /// The items in a card's context menu: Play, Go to Show for an episode, Mark as Watched and Favourite.
 ///
 /// A card that plays when tapped, as an episode does on its show's page and in Continue Watching and Next Up, offers
-/// Episode Details in place of Play. An item shown from what was saved with its download offers Play alone, since
-/// the rest needs the server.
+/// Episode Details in place of Play. An item shown from what was saved with its download offers Play and Mark as
+/// Watched, which reaches the server once it answers, since the rest needs the server.
 struct CardMenuItems: View {
     let item: MediaItem
     /// Whether tapping the card plays the item, so the menu opens its page instead.
@@ -124,14 +124,7 @@ struct CardMenuItems: View {
                 )
             }
         }
-        if !item.isSaved {
-            serverItems
-        }
-    }
-
-    /// Go to Show, Mark as Watched and Favourite, which need the server.
-    @ViewBuilder private var serverItems: some View {
-        if offersShow, let show = item.showRoute {
+        if !item.isSaved, offersShow, let show = item.showRoute {
             Button {
                 navigate(show)
             } label: {
@@ -143,6 +136,14 @@ struct CardMenuItems: View {
                 )
             }
         }
+        playedButton
+        if !item.isSaved {
+            favouriteButton
+        }
+    }
+
+    /// Mark as Watched or Mark as Unwatched.
+    private var playedButton: some View {
         Button {
             Task { await actions.setPlayed(!item.card.isWatched, for: item, in: media) }
         } label: {
@@ -162,6 +163,10 @@ struct CardMenuItems: View {
                 )
             }
         }
+    }
+
+    /// Add to Favorites or Remove from Favorites, which needs the server.
+    private var favouriteButton: some View {
         Button {
             Task { await actions.setFavourite(!item.card.isFavourite, for: item, in: media) }
         } label: {

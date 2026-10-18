@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 import Observation
 import SerafinCore
 import SerafinDesign
@@ -10,7 +11,8 @@ import os
 ///
 /// It reads the account's downloads again each time one starts, moves on, finishes, fails, is deleted, saves a picture
 /// or keeps where playback stopped, and whether the server lets the account download at all. Each download keeps what
-/// its card and page show, with its poster and backdrop, so they show with no server.
+/// its card and page show, with its poster and backdrop, so they show with no server. Where playback of a download
+/// stops, and a download marked watched with no server, reach the server once it answers.
 @Observable @MainActor final class DownloadCenter {
     /// Where one movie's or episode's download is.
     enum ItemState: Equatable {
@@ -55,19 +57,23 @@ import os
     @ObservationIgnored private let planner: DownloadPlanner
     @ObservationIgnored private let library: LibraryRepository
     @ObservationIgnored private let artwork: Artwork?
+    @ObservationIgnored private let sync: PlaybackSync?
     @ObservationIgnored private let defaults: UserDefaults
     /// Whether the server has said if the account may download, which it can't while it's out of reach.
     @ObservationIgnored private var knowsPermission = false
 
     /// Creates the downloads of the account `key`, and starts following them.
     ///
-    /// - Parameter artwork: Loads the pictures each download saves, or nil to save none.
+    /// - Parameters:
+    ///   - artwork: Loads the pictures each download saves, or nil to save none.
+    ///   - sync: Sends the server the changes to playback made with the downloads, or nil to send none.
     init(
         downloads: Downloads,
         key: SessionKey,
         planner: DownloadPlanner,
         library: LibraryRepository,
         artwork: Artwork? = nil,
+        sync: PlaybackSync? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.downloads = downloads
@@ -75,6 +81,7 @@ import os
         self.planner = planner
         self.library = library
         self.artwork = artwork
+        self.sync = sync
         self.defaults = defaults
         Task { [weak self, downloads] in
             let changes = await downloads.changes()
@@ -171,6 +178,35 @@ import os
         return PlayableDownload(record: record, copy: copy)
     }
 
+    /// Sends the server the changes to playback made with the downloads that it hasn't heard yet, and has each
+    /// download take on what the server has, or does nothing while the server can't be reached. Returns whether the
+    /// server took any change, after which screens showing its progress should load again.
+    @discardableResult
+    func syncPlayback() async -> Bool {
+        guard let sync, await sync.run() else { return false }
+        // Answers from before would show the progress as it was.
+        await library.clearCache()
+        return true
+    }
+
+    /// Marks the downloaded `item` watched or not on the device, as when it shows with no server, and sends the mark
+    /// once the server answers.
+    func setPlayed(_ isPlayed: Bool, ofSaved item: MediaItem) async throws {
+        try await downloads.setPlayed(isPlayed, ofItem: item.id, key: key)
+        Task { await syncPlayback() }
+    }
+
+    /// Keeps `userData`, as the server has it after the account changed it there, with the download of `itemID`, in
+    /// place of a change made with the download that the server hasn't heard yet, which it's newer than.
+    func keepServerPlayback(_ userData: UserItemDataDto, of itemID: String) async {
+        do {
+            try await downloads.keepServerPlayback(
+                DownloadPlayback(userData), forItem: itemID, key: key, replacingChanges: true)
+        } catch {
+            Self.logger.error("Could not keep a download's progress: \(error.localizedDescription, privacy: .private)")
+        }
+    }
+
     /// Deletes the download of `itemID`, stopping it if it's on its way.
     func delete(itemID: String) async {
         guard let record = records.first(where: { $0.itemID == itemID }) else { return }
@@ -245,13 +281,11 @@ import os
         }
     }
 
-    /// Where the server says playback of `item` last stopped, for resuming its download there with no server, or nil
-    /// when it hasn't been started. It's dated when the server heard of it, so a later stop on this device wins.
+    /// Where the server says playback of `item` last stopped, and whether it's been watched, for showing and resuming
+    /// its download with no server, or nil when it hasn't been started. It's dated when the server says it was last
+    /// played, so a later stop on this device wins.
     nonisolated static func serverPlayback(of item: MediaItem) -> DownloadPlayback? {
-        guard let userData = item.source?.userData, let ticks = userData.playbackPositionTicks, ticks > 0 else {
-            return nil
-        }
-        return DownloadPlayback(position: Ticks.duration(ticks), changed: userData.lastPlayedDate ?? .distantPast)
+        item.source?.userData.flatMap { DownloadPlayback($0) }
     }
 
     /// Where `record` is, given the progress of the running downloads.

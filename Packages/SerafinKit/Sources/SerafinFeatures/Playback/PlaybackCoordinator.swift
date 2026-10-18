@@ -342,6 +342,7 @@ import SerafinPlayback
     private static let turnDuration = Duration.milliseconds(400)
 
     /// Stops playback, closes the player and Picture in Picture, and has the screens reload to show the new progress.
+    /// Progress made playing a download is sent to the server first, when it answers.
     func stop() {
         loading?.cancel()
         loading = nil
@@ -355,8 +356,12 @@ import SerafinPlayback
             nowPlaying = nil
         }
         guard let engine else { return }
-        Task { [media, actions] in
+        let playedDownload = engine.plan?.isDownloaded == true
+        Task { [media, actions, downloads] in
             await engine.stop()
+            if playedDownload {
+                await downloads?.syncPlayback()
+            }
             await media.refresh()
             actions.reload()
         }

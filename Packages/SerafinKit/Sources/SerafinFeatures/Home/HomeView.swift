@@ -8,7 +8,7 @@ import SwiftUI
 /// out before they reach the status bar, and the top edge blurs once Home is scrolled at all. When the server can't
 /// be reached, Home shows the downloads, which play without it, under a banner saying so, or with nothing downloaded,
 /// the rows it last had. After a failure it asks again when the device joins a network or Serafin comes back to the
-/// foreground.
+/// foreground. Each time the server answers, the progress made with downloads that it hasn't heard yet is sent.
 struct HomeView: View {
     @State private var model = HomeModel()
     /// Whether Home has been scrolled at all, which brings the top edge's blur over whatever passes under the status
@@ -54,6 +54,11 @@ struct HomeView: View {
             .task(id: Load(revision: actions.revision, attempt: attempt)) {
                 model.artwork = artwork
                 await model.load(from: media)
+                // The server answers, so progress made with downloads while it didn't can reach it now.
+                guard !Task.isCancelled, model.failure == nil, let downloads else { return }
+                if await downloads.syncPlayback() {
+                    actions.reload()
+                }
             }
             .task(id: model.revision) {
                 prefetchNextPage()

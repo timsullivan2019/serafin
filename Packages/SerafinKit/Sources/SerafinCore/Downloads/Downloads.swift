@@ -4,6 +4,9 @@ import os
 /// SerafinCore's front door for downloads: starts, tracks, retries and deletes them for each account, keeping
 /// ``DownloadStore`` and ``DownloadTransfers`` in step, and keeps each one's pictures and where its playback stopped.
 ///
+/// Each change to a download's playback made on this device, where it stopped or a mark as watched, is also kept for
+/// the server until it's sent, and stays when the download is deleted; signing out forgets the account's.
+///
 /// ``Accounts`` owns the one instance. It hands each transfer the account's `Authorization` header, so the token
 /// never appears in a URL. Resume data is kept in memory only, because it carries that header: a transfer that stops
 /// carries on from where it stopped during this launch, and starts again after a relaunch.
@@ -243,16 +246,76 @@ public actor Downloads {
         notify()
     }
 
-    /// Keeps where playback of the download `id` stopped, so it resumes there with no server to ask. Does nothing
-    /// when the download has been deleted.
+    // MARK: - Progress
+
+    /// Keeps where playback of the download `id` stopped, so it resumes there with no server to ask, and keeps it for
+    /// the server: where the item resumes and whether the stop counts as watching it, as Jellyfin records a stop with
+    /// its standard settings. Does nothing when the download has been deleted.
     public func savePosition(_ position: Duration, of id: String) async throws {
-        let saved = try await store.update(id: id) { record in
-            record.playback = DownloadPlayback(position: position)
+        let saved = try await store.updatePlayback(id: id) { record in
+            let stop = DownloadPlayback(position: position)
+            let runtime = record.metadata.runtime
+            let isPlayed = stop.isPlayed(runtime: runtime)
+            record.playback = DownloadPlayback(position: position, changed: stop.changed, isPlayed: isPlayed)
+            return PlaybackChange(
+                key: record.key,
+                itemID: record.itemID,
+                position: stop.resumePosition(runtime: runtime),
+                isPlayed: isPlayed,
+                changed: stop.changed
+            )
         }
         if saved != nil {
             notify()
         }
     }
+
+    /// Marks the account `key`'s download of `itemID` watched or not, from the start either way, as when the server
+    /// can't be reached, and keeps the mark for the server. Does nothing when the item isn't downloaded.
+    public func setPlayed(_ isPlayed: Bool, ofItem itemID: String, key: SessionKey) async throws {
+        guard let record = try await self.record(forItem: itemID, key: key) else { return }
+        let saved = try await store.updatePlayback(id: record.id) { record in
+            let mark = DownloadPlayback(position: .zero, isPlayed: isPlayed)
+            record.playback = mark
+            return PlaybackChange(
+                key: record.key, itemID: record.itemID, position: .zero, isPlayed: isPlayed, changed: mark.changed)
+        }
+        if saved != nil {
+            notify()
+        }
+    }
+
+    /// The changes to the account `key`'s playback made with its downloads that the server hasn't heard yet, oldest
+    /// first, whether or not the downloads are still here.
+    public func playbackChanges(for key: SessionKey) async throws -> [PlaybackChange] {
+        try await store.changes().filter { $0.key == key }
+    }
+
+    /// Forgets `change`, once the server has heard it or has a newer one. A change to the same item made since stays.
+    public func removeChange(_ change: PlaybackChange) async throws {
+        try await store.removeChange(change)
+    }
+
+    /// Keeps `playback`, as the server has it, with the account `key`'s download of `itemID`, so it resumes there with
+    /// no server, or clears it for nil, which is an item the server says hasn't been started.
+    ///
+    /// - Parameter replacingChanges: Whether it replaces a change made on this device that the server hasn't heard
+    ///   yet, as when the account has just changed the item on the server. Otherwise such a change, which is newer,
+    ///   stays, and so does the download's playback.
+    public func keepServerPlayback(
+        _ playback: DownloadPlayback?,
+        forItem itemID: String,
+        key: SessionKey,
+        replacingChanges: Bool = false
+    ) async throws {
+        let changed = try await store.setServerPlayback(
+            playback, forItem: itemID, key: key, replacingChanges: replacingChanges)
+        if changed {
+            notify()
+        }
+    }
+
+    // MARK: - Pictures and deleting
 
     /// Saves `data`, as the server sent it, as the picture of `kind` of the download `id`, so its card and detail
     /// screen show it with no server. Does nothing when the download has been deleted, or when `data` isn't a picture.
@@ -272,13 +335,17 @@ public actor Downloads {
         notify()
     }
 
-    /// Deletes every download of the account `key`, as when the user signs out.
+    /// Deletes every download of the account `key`, and the changes to its playback the server hasn't heard yet, as
+    /// when the user signs out.
     public func deleteAll(for key: SessionKey) async throws {
+        try await store.removeChanges { $0.key == key }
         try await delete(try await store.records().filter { $0.key == key })
     }
 
-    /// Deletes every download from the server `serverID`, as when the server is removed.
+    /// Deletes every download from the server `serverID`, and the changes to playback on it the server hasn't heard
+    /// yet, as when the server is removed.
     public func deleteAll(forServer serverID: String) async throws {
+        try await store.removeChanges { $0.serverID == serverID }
         try await delete(try await store.records().filter { $0.serverID == serverID })
     }
 

@@ -28,12 +28,12 @@ private func episode(
         download: record("\(seriesID ?? seriesName)-s\(season)e\(number)", metadata), artwork: SavedArtwork())
 }
 
-/// The fifteen-minute movie Sintel as shown from its download, stopped at `position`.
-private func sintel(at position: Duration? = nil) throws -> MediaItem {
+/// The fifteen-minute movie Sintel as shown from its download, stopped at `position`, and marked watched or not as
+/// `isPlayed` says, or for nil, as the stop counts.
+private func sintel(at position: Duration? = nil, isPlayed: Bool? = nil) throws -> MediaItem {
     let card = try #require(MockMedia.movies.first { $0.id == "movie-sintel" })
-    return MediaItem(
-        download: record(card.id, DownloadMetadata(card), playback: position.map { DownloadPlayback(position: $0) }),
-        artwork: SavedArtwork())
+    let playback = position.map { DownloadPlayback(position: $0, isPlayed: isPlayed) }
+    return MediaItem(download: record(card.id, DownloadMetadata(card), playback: playback), artwork: SavedArtwork())
 }
 
 @Suite struct SavedDownloadTests {
@@ -86,6 +86,14 @@ private func sintel(at position: Duration? = nil) throws -> MediaItem {
         #expect(item.card.progress == 0)
     }
 
+    @Test func aMarkMadeWithNoServerSaysWhetherItsWatched() throws {
+        #expect(try sintel(at: .zero, isPlayed: true).card.isWatched)
+        // Marked unwatched after a stop near the end.
+        let unwatched = try sintel(at: .seconds(14 * 60 + 30), isPlayed: false)
+        #expect(!unwatched.card.isPlayed)
+        #expect(unwatched.card.progress == 0)
+    }
+
     @Test func aDownloadNotYetPlayedHasNoProgress() throws {
         let item = try sintel()
         #expect(item.card.progress == 0)
@@ -124,7 +132,16 @@ private func sintel(at position: Duration? = nil) throws -> MediaItem {
                         key: "aaaa1111", lastPlayedDate: lastPlayed, playbackPositionTicks: 600 * 10_000_000))))
         #expect(
             DownloadCenter.serverPlayback(of: started)
-                == DownloadPlayback(position: .seconds(600), changed: lastPlayed))
+                == DownloadPlayback(position: .seconds(600), changed: lastPlayed, isPlayed: false))
+
+        let watched = try #require(
+            MediaItem(
+                BaseItemDto(
+                    id: "cccc3333", name: "Big Buck Bunny", type: .movie,
+                    userData: UserItemDataDto(isPlayed: true, key: "cccc3333", lastPlayedDate: lastPlayed))))
+        let server = try #require(DownloadCenter.serverPlayback(of: watched))
+        #expect(server.isPlayed(runtime: .seconds(596)))
+        #expect(server.resumePosition(runtime: .seconds(596)) == .zero)
 
         let unstarted = try #require(MediaItem(BaseItemDto(id: "bbbb2222", name: "Spring", type: .movie)))
         #expect(DownloadCenter.serverPlayback(of: unstarted) == nil)
@@ -276,6 +293,21 @@ private func sintel(at position: Duration? = nil) throws -> MediaItem {
         await model.load(from: TestMediaSource(detailsFailure: .offline))
         #expect(model.details == nil)
         #expect(!model.showsSavedDetails)
+    }
+
+    @Test func aReloadShowsAMarkMadeWithNoServerAtOnce() async throws {
+        let unwatched = try sintel()
+        let model = ItemDetailModel(id: unwatched.id)
+        await model.load(from: TestMediaSource(detailsFailure: .offline, downloaded: [unwatched]))
+        #expect(model.details?.item.card.isWatched == false)
+
+        // Marked watched, it shows as watched without waiting for the server, which is slow to answer.
+        let watched = try sintel(at: .zero, isPlayed: true)
+        let media = TestMediaSource(detailsDelay: .seconds(30), downloaded: [watched])
+        let reloading = Task { await model.load(from: media) }
+        defer { reloading.cancel() }
+        try await waitUntil { model.details?.item.card.isWatched == true }
+        #expect(model.showsSavedDetails)
     }
 
     @Test func theServersDetailsStayWhenAReloadFails() async throws {
