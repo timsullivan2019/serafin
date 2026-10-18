@@ -63,7 +63,11 @@ import os
     /// - Parameter deviceName: The device name servers show, such as "iPhone".
     public static func live(deviceName: String) -> AppSession {
         AppSession(
-            accounts: Accounts(secrets: KeychainSecretStore(), deviceName: deviceName, downloads: .live),
+            accounts: Accounts(
+                secrets: KeychainSecretStore(),
+                deviceName: deviceName,
+                downloads: .live(preparer: DownloadedCopyWriter())
+            ),
             spotlight: .shared
         )
     }

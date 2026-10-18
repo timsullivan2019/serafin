@@ -73,6 +73,8 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         ("ContainerNotSupported", "h264", "aac", true),
         // HEVC without Apple's codec tag: the server rewrites the tag as it copies.
         ("ContainerNotSupported,VideoCodecTagNotSupported", "hevc,h264", "aac", true),
+        // The same, as Jellyfin writes several reasons, with a space after each comma.
+        ("ContainerNotSupported,%20VideoCodecTagNotSupported", "hevc,h264", "aac", true),
         // Dolby Vision the player can't show: the server has to change the video.
         ("ContainerNotSupported,VideoRangeTypeNotSupported", "hevc,h264", "aac", false),
         // Audio the stream doesn't carry: the server converts it.

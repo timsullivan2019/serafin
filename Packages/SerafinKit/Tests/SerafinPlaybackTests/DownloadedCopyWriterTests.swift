@@ -16,14 +16,29 @@ import Testing
 @Suite struct DownloadedCopyWriterTests {
     private let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
 
+    /// Where a copy works from: a fixture copied as the file that arrived, which the writer retags in place.
+    private var arrived: URL {
+        directory.appending(path: "arrived.mp4")
+    }
+
     private func fixture(_ name: String) throws -> URL {
         try #require(Bundle.module.url(forResource: name, withExtension: "mp4", subdirectory: "Fixtures"))
     }
 
-    /// Writes a copy of fixture `name` with `subtitles` added, each a WebVTT file's text and the track it becomes, and
-    /// returns the copy.
-    private func writeCopy(of name: String, adding subtitles: [(String, DownloadTrack)] = []) async throws -> AVAsset {
+    /// Copies fixture `name` to ``arrived``, as the file that arrived.
+    private func arrive(_ name: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: try fixture(name), to: arrived)
+    }
+
+    /// Writes a copy of fixture `name` with `subtitles` added, each a WebVTT file's text and the track it becomes,
+    /// signalling `dolbyVision`, and returns the copy.
+    private func writeCopy(
+        of name: String,
+        adding subtitles: [(String, DownloadTrack)] = [],
+        dolbyVision: DolbyVisionConfiguration? = nil
+    ) async throws -> AVAsset {
+        try arrive(name)
         var added: [AddedSubtitles] = []
         for (number, (text, track)) in subtitles.enumerated() {
             let file = directory.appending(path: "\(number).vtt")
@@ -31,9 +46,18 @@ import Testing
             added.append(AddedSubtitles(track: track, file: file))
         }
         let output = directory.appending(path: "copy.mov")
-        let job = DownloadPreparationJob(arrived: try fixture(name), subtitles: added, output: output)
+        let job = DownloadPreparationJob(arrived: arrived, subtitles: added, output: output, dolbyVision: dolbyVision)
         try await DownloadedCopyWriter().prepare(job)
         return AVURLAsset(url: output)
+    }
+
+    /// The boxes `track`'s format carries beside its codec's own description, by type.
+    private func atoms(of track: AVAssetTrack) async throws -> [String: Data] {
+        let formats = try await track.load(.formatDescriptions)
+        let format = try #require(formats.first)
+        let atoms = CMFormatDescriptionGetExtension(
+            format, extensionKey: kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms)
+        return (atoms as? [String: Any] ?? [:]).compactMapValues { $0 as? Data }
     }
 
     /// The four-character code of `track`'s format, such as `hvc1`.
@@ -109,11 +133,13 @@ import Testing
         let videos = try await copy.loadTracks(withMediaType: .video)
         let video = try #require(videos.first)
         #expect(try await subtype(of: video) == DownloadedCopyWriter.fourCharCode("hvc1"))
+        #expect(try await atoms(of: video).keys.contains("hvcC"))
         #expect(try await copy.loadTracks(withMediaType: .audio).count == 1)
         let duration = try await copy.load(.duration)
         #expect(abs(duration.seconds - 2) < 0.1)
 
-        let original = AVURLAsset(url: try fixture("HEVCFragmented"))
+        // The file that arrived, retagged in place, which AVFoundation now reads.
+        let original = AVURLAsset(url: arrived)
         let originalVideos = try await original.loadTracks(withMediaType: .video)
         let originalVideo = try #require(originalVideos.first)
         let copied = try frames(of: video, in: copy)
@@ -226,99 +252,132 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: output.path(percentEncoded: false)))
     }
 
-    @Test func everyHEVCFrameTakesTheRetaggedFormatAndKeepsItsTiming() async throws {
-        let asset = AVURLAsset(url: try fixture("HEVCFragmented"))
-        let videos = try await asset.loadTracks(withMediaType: .video)
-        let video = try #require(videos.first)
-        let formats = try await video.load(.formatDescriptions)
-        let arrived = try #require(formats.first)
-        let retagged = try #require(DownloadedCopyWriter.retagged(arrived))
-        let extensions = Set((CMFormatDescriptionGetExtensions(retagged) as? [CFString: Any] ?? [:]).keys)
-        #expect(!extensions.contains(kCMFormatDescriptionExtension_VerbatimISOSampleEntry))
-        #expect(!extensions.contains(kCMFormatDescriptionExtension_VerbatimSampleDescription))
-        #expect(extensions.contains(kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms))
-
-        let reader = try AVAssetReader(asset: asset)
-        let output = AVAssetReaderTrackOutput(track: video, outputSettings: nil)
-        reader.add(output)
-        #expect(reader.startReading())
-        var frames = 0
-        while let sample = output.copyNextSampleBuffer() {
-            guard CMSampleBufferGetNumSamples(sample) > 0 else { continue }
-            let described = try #require(
-                DownloadedCopyWriter.sample(sample, describedBy: retagged), "Frame \(frames) wasn't retagged")
-            let format = try #require(CMSampleBufferGetFormatDescription(described))
-            #expect(CMFormatDescriptionGetMediaSubType(format) == DownloadedCopyWriter.fourCharCode("hvc1"))
-            #expect(CMSampleBufferGetPresentationTimeStamp(described) == CMSampleBufferGetPresentationTimeStamp(sample))
-            #expect(CMSampleBufferGetDecodeTimeStamp(described) == CMSampleBufferGetDecodeTimeStamp(sample))
-            #expect(CMSampleBufferGetTotalSampleSize(described) == CMSampleBufferGetTotalSampleSize(sample))
-            frames += 1
-        }
-        #expect(frames == 20)
-    }
-
-    /// The HEVC fixture's video alone, copied frame by frame into a movie the way the copy is written, recording what
-    /// the writer says when it stops.
-    @Test func hevcVideoAloneIsWrittenAsHvc1() async throws {
+    @Test func theFileThatArrivedIsRetaggedInPlace() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let asset = AVURLAsset(url: try fixture("HEVCFragmented"))
-        let videos = try await asset.loadTracks(withMediaType: .video)
+        // As it arrives, tagged hev1, the video isn't among the tracks AVFoundation lists.
+        try arrive("HEVCFragmented")
+        let before = try Data(contentsOf: arrived)
+
+        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 1)
+        let after = try Data(contentsOf: arrived)
+        #expect(after.count == before.count)
+        // Only the four bytes of the video's tag change, in the sample description ffmpeg wrote.
+        let changed = zip(before, after).enumerated().filter { $0.element.0 != $0.element.1 }.map(\.offset)
+        #expect(changed.allSatisfy { (461..<465).contains($0) })
+        #expect(String(decoding: after[461..<465], as: UTF8.self) == "hvc1")
+        let videos = try await AVURLAsset(url: arrived).loadTracks(withMediaType: .video)
         let video = try #require(videos.first)
-        let formats = try await video.load(.formatDescriptions)
-        let arrived = try #require(formats.first)
-        let retagged = try #require(DownloadedCopyWriter.retagged(arrived))
-        let reader = try AVAssetReader(asset: asset)
-        let output = AVAssetReaderTrackOutput(track: video, outputSettings: nil)
-        reader.add(output)
-        let writer = try AVAssetWriter(outputURL: directory.appending(path: "video.mov"), fileType: .mov)
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: nil, sourceFormatHint: retagged)
-        input.expectsMediaDataInRealTime = false
-        try #require(writer.canAdd(input))
-        writer.add(input)
-        try #require(writer.startWriting(), "Not started: \(String(describing: writer.error))")
-        try #require(reader.startReading())
-        writer.startSession(atSourceTime: .zero)
-        var frame = 0
-        while let sample = output.copyNextSampleBuffer() {
-            guard CMSampleBufferGetNumSamples(sample) > 0 else { continue }
-            let described = try #require(DownloadedCopyWriter.sample(sample, describedBy: retagged))
-            while !input.isReadyForMoreMediaData {
-                try await Task.sleep(for: .milliseconds(1))
-            }
-            try #require(input.append(described), "Frame \(frame) refused: \(String(describing: writer.error))")
-            frame += 1
-        }
-        input.markAsFinished()
-        await writer.finishWriting()
-        #expect(writer.status == .completed, "Not finished: \(String(describing: writer.error))")
+        #expect(try await subtype(of: video) == DownloadedCopyWriter.fourCharCode("hvc1"))
+        // Once is enough.
+        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 0)
     }
 
-    @Test func onlyHEVCAndDolbyVisionTaggedForStreamingAreRetagged() throws {
-        func format(_ code: String) throws -> CMFormatDescription {
+    @Test func filesWithoutHEVCTaggedHev1AreLeftAsTheyAre() throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try arrive("H264AC3Fragmented")
+        let before = try Data(contentsOf: arrived)
+        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 0)
+        #expect(try Data(contentsOf: arrived) == before)
+
+        try Data("not a video".utf8).write(to: arrived)
+        #expect(try SampleEntryTags.rewrite(fileAt: arrived) == 0)
+    }
+
+    @Test func boxesThatDontFitWhatHoldsThemAreLeftAlone() {
+        func box(_ type: String, _ contents: [UInt8], size: Int? = nil) -> [UInt8] {
+            let length = UInt32(size ?? 8 + contents.count)
+            return withUnsafeBytes(of: length.bigEndian) { Array($0) } + Array(type.utf8) + contents
+        }
+        func track(_ descriptions: [UInt8]) -> [UInt8] {
+            box("trak", box("mdia", box("minf", box("stbl", descriptions))))
+        }
+        let entry = box("hev1", [UInt8](repeating: 0, count: 8))
+        let header: [UInt8] = [0, 0, 0, 0, 0, 0, 0, 1]
+        // Four boxes' headers down to the descriptions, then theirs, its own header, and the entry's size.
+        #expect(SampleEntryTags.tagOffsets(inMovie: track(box("stsd", header + entry))).map(\.offset) == [52])
+        // An entry claiming more than the box holding it, and a box claiming less than its own header.
+        let overlong = box("stsd", header + box("hev1", [], size: 64))
+        #expect(SampleEntryTags.tagOffsets(inMovie: track(overlong)).isEmpty)
+        #expect(SampleEntryTags.tagOffsets(inMovie: box("trak", box("mdia", [], size: 4))).isEmpty)
+        #expect(SampleEntryTags.boxes(in: [0, 0, 0], 0..<3).isEmpty)
+    }
+
+    @Test func dolbyVisionIsSignalledAsApplesOwnVideosSignalIt() throws {
+        func format(_ code: String, atoms: [String: Data] = [:]) throws -> CMFormatDescription {
+            let key = kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms
+            let extensions: CFDictionary? = atoms.isEmpty ? nil : [key: atoms] as CFDictionary
             var description: CMFormatDescription?
             let status = CMVideoFormatDescriptionCreate(
                 allocator: kCFAllocatorDefault,
                 codecType: DownloadedCopyWriter.fourCharCode(code),
                 width: 160,
                 height: 90,
-                extensions: nil,
+                extensions: extensions,
                 formatDescriptionOut: &description
             )
             #expect(status == noErr)
             return try #require(description)
         }
-        let hev1 = try format("hev1")
-        let dvhe = try format("dvhe")
-        let hvc1 = try format("hvc1")
-        let avc1 = try format("avc1")
-        let fromHev1 = try #require(DownloadedCopyWriter.retagged(hev1))
-        #expect(CMFormatDescriptionGetMediaSubType(fromHev1) == DownloadedCopyWriter.fourCharCode("hvc1"))
-        #expect(CMVideoFormatDescriptionGetDimensions(fromHev1).width == 160)
-        let fromDvhe = try #require(DownloadedCopyWriter.retagged(dvhe))
-        #expect(CMFormatDescriptionGetMediaSubType(fromDvhe) == DownloadedCopyWriter.fourCharCode("dvh1"))
-        #expect(DownloadedCopyWriter.retagged(hvc1) == nil)
-        #expect(DownloadedCopyWriter.retagged(avc1) == nil)
+        func atoms(of description: CMFormatDescription) -> [String: Data] {
+            let atoms = CMFormatDescriptionGetExtension(
+                description, extensionKey: kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms)
+            return (atoms as? [String: Any] ?? [:]).compactMapValues { $0 as? Data }
+        }
+        let hevc = try format("hvc1", atoms: ["hvcC": Data([1, 2, 3])])
+        let profile8 = DolbyVisionConfiguration(profile: 8, level: 6, baseLayerCompatibility: 1)
+        let profile5 = DolbyVisionConfiguration(profile: 5, level: 6, baseLayerCompatibility: 0)
+        let profile10 = DolbyVisionConfiguration(profile: 10, level: 6, baseLayerCompatibility: 0)
+
+        // Profile 8 plays as HDR10 without Dolby Vision, so it stays HEVC, with its configuration beside.
+        let withHDR10 = try #require(DownloadedCopyWriter.format(hevc, signalling: profile8))
+        #expect(CMFormatDescriptionGetMediaSubType(withHDR10) == DownloadedCopyWriter.fourCharCode("hvc1"))
+        #expect(atoms(of: withHDR10) == ["hvcC": Data([1, 2, 3]), "dvvC": profile8.record])
+        #expect(CMVideoFormatDescriptionGetDimensions(withHDR10).width == 160)
+        // Profile 5 shows as nothing without it.
+        let alone = try #require(DownloadedCopyWriter.format(hevc, signalling: profile5))
+        #expect(CMFormatDescriptionGetMediaSubType(alone) == DownloadedCopyWriter.fourCharCode("dvh1"))
+        #expect(atoms(of: alone).keys.sorted() == ["dvcC", "hvcC"])
+        let av1 = try #require(DownloadedCopyWriter.format(try format("av01"), signalling: profile10))
+        #expect(CMFormatDescriptionGetMediaSubType(av1) == DownloadedCopyWriter.fourCharCode("dav1"))
+        #expect(atoms(of: av1).keys.sorted() == ["dvvC"])
+
+        #expect(DownloadedCopyWriter.format(try format("hvc1", atoms: ["dvvC": Data()]), signalling: profile8) == nil)
+        #expect(DownloadedCopyWriter.format(try format("dvh1"), signalling: profile5) == nil)
+        #expect(DownloadedCopyWriter.format(try format("avc1"), signalling: profile8) == nil)
+    }
+
+    @Test func theConfigurationIsWrittenAsDolbysRecord() {
+        let profile8 = DolbyVisionConfiguration(profile: 8, level: 6, baseLayerCompatibility: 1)
+        #expect(profile8.record == Data([1, 0, 0x10, 0x35, 0x10, 0] + [UInt8](repeating: 0, count: 18)))
+        #expect(profile8.boxType == "dvvC")
+        let profile5 = DolbyVisionConfiguration(
+            versionMajor: 2, versionMinor: 1, profile: 5, level: 9, hasRPU: true, hasEnhancementLayer: true,
+            hasBaseLayer: false, baseLayerCompatibility: 0)
+        #expect(profile5.record.prefix(6) == Data([2, 1, 0x0A, 0x4E, 0, 0]))
+        #expect(profile5.boxType == "dvcC")
+        #expect(DolbyVisionConfiguration(profile: 20, level: 1, baseLayerCompatibility: 2).boxType == "dvwC")
+        #expect(DolbyVisionConfiguration(profile: 200, level: 99, baseLayerCompatibility: 99).record.count == 24)
+    }
+
+    @Test func aCopyOfDolbyVisionVideoSaysSo() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let profile8 = DolbyVisionConfiguration(profile: 8, level: 1, baseLayerCompatibility: 1)
+        let copy = try await writeCopy(of: "HEVCFragmented", dolbyVision: profile8)
+        let videos = try await copy.loadTracks(withMediaType: .video)
+        let video = try #require(videos.first)
+        #expect(try await subtype(of: video) == DownloadedCopyWriter.fourCharCode("hvc1"))
+        #expect(try await atoms(of: video)["dvvC"] == profile8.record)
+        #expect(try frames(of: video, in: copy).all == 20)
+    }
+
+    @Test func aCopyOfDolbyVisionProfile5IsTaggedDvh1() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let profile5 = DolbyVisionConfiguration(profile: 5, level: 1, baseLayerCompatibility: 0)
+        let copy = try await writeCopy(of: "HEVCFragmented", dolbyVision: profile5)
+        let videos = try await copy.loadTracks(withMediaType: .video)
+        let video = try #require(videos.first)
+        #expect(try await subtype(of: video) == DownloadedCopyWriter.fourCharCode("dvh1"))
+        #expect(try await atoms(of: video)["dvcC"] == profile5.record)
     }
 
     @Test func forcedSubtitlesAreMarkedForcedInTheirFormat() throws {

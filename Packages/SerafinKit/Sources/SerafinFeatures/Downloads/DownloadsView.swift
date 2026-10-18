@@ -137,11 +137,14 @@ struct DownloadRow: View {
         if case .failed = state { true } else { false }
     }
 
-    /// The size when it's saved, the share that has arrived while it's on its way, or why it failed.
+    /// The size when it's saved, the share that has arrived while it's on its way, that it's being prepared, or why
+    /// it failed.
     private var status: String {
         switch state {
         case .notDownloaded, .finished:
             return Self.size(record.bytes ?? 0)
+        case .preparing:
+            return Self.preparing
         case .downloading(let fraction):
             guard let fraction else {
                 return String(
@@ -155,6 +158,13 @@ struct DownloadRow: View {
         case .failed(let failure):
             return Self.reason(failure)
         }
+    }
+
+    /// A download's status while Serafin writes the copy the player opens from the file that arrived.
+    static var preparing: String {
+        String(
+            localized: "Preparing…", bundle: .module,
+            comment: "A download's status once its file has arrived, while Serafin makes it ready to play offline.")
     }
 
     /// `bytes` as a size, such as "4.2 GB".
@@ -177,6 +187,10 @@ struct DownloadRow: View {
         case .interrupted:
             String(
                 localized: "Stopped when Serafin was closed", bundle: .module, comment: "A failed download's status.")
+        case .preparationFailed:
+            String(
+                localized: "Couldn't prepare the video", bundle: .module,
+                comment: "A failed download's status: its file arrived, but Serafin couldn't make it ready to play.")
         case .network, .serverError, nil:
             String(localized: "Couldn't finish downloading", bundle: .module, comment: "A failed download's status.")
         }
@@ -202,6 +216,11 @@ struct DownloadRow: View {
                 id: "c", key: key, itemID: "movie-spring", mediaSourceID: "movie-spring", fileExtension: "mp4",
                 state: .failed, failure: .interrupted,
                 metadata: DownloadMetadata(title: "Spring", kind: .movie, year: 2019)),
+            DownloadRecord(
+                id: "d", key: key, itemID: "movie-nosferatu", mediaSourceID: "movie-nosferatu", fileExtension: "mov",
+                state: .preparing, bytes: 2_100_000_000,
+                metadata: DownloadMetadata(title: "Nosferatu", kind: .movie, year: 1922),
+                preparation: DownloadPreparation(arrivingExtension: "mp4")),
         ]
 
         static let progress = ["a": Downloads.Progress(received: 504_000_000, expected: 1_200_000_000)]

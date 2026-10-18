@@ -20,6 +20,8 @@ import os
         case notDownloaded
         /// On its way, with the share that has arrived when the size is known.
         case downloading(Double?)
+        /// Arrived, while Serafin writes the copy the player opens from it.
+        case preparing
         /// Saved on the device.
         case finished
         /// Stopped before the end, and why.
@@ -178,6 +180,12 @@ import os
         return PlayableDownload(record: record, copy: copy)
     }
 
+    /// Writes the copies of the downloads that arrived while Serafin couldn't, as when iOS stopped it in the
+    /// background first.
+    func prepareArrived() async {
+        await downloads.prepareArrived()
+    }
+
     /// Sends the server the changes to playback made with the downloads that it hasn't heard yet, and has each
     /// download take on what the server has, or does nothing while the server can't be reached. Returns whether the
     /// server took any change, after which screens showing its progress should load again.
@@ -293,6 +301,7 @@ import os
         guard let record else { return .notDownloaded }
         switch record.state {
         case .downloading: return .downloading(progress[record.id]?.fraction)
+        case .preparing: return .preparing
         case .finished: return .finished
         case .failed: return .failed(record.failure)
         }

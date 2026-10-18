@@ -7,9 +7,10 @@ import os
 /// Everything is excluded from backup, since a restored phone can download again, and protected until the device is
 /// first unlocked after a restart, so a transfer that finishes while the phone is locked can still be saved. The
 /// index holds no address, token or pin, and files are named by each download's ID: the video in `Media`, and its
-/// poster and backdrop in `Artwork`. The index also keeps the changes to playback made with downloads that the server
-/// hasn't heard yet, which stay when their download is deleted. Its format is versioned so later releases can migrate
-/// it:
+/// poster and backdrop in `Artwork`. A download whose copy Serafin writes keeps the file that arrived and its
+/// subtitles in `Media` too until the copy is saved. The index also keeps the changes to playback made with downloads
+/// that the server hasn't heard yet, which stay when their download is deleted. Its format is versioned so later
+/// releases can migrate it:
 ///
 /// ```json
 /// {
@@ -20,7 +21,8 @@ import os
 ///       "metadata": { "title": "…", "kind": "movie", "year": 2010, "overview": "…" },
 ///       "tracks": { "audio": [{ "index": 1, "codec": "aac", "language": "eng", "isDefault": true, … }],
 ///                   "subtitles": [], "defaultAudio": 1 },
-///       "playback": { "position": […], "changed": …, "isPlayed": false } }
+///       "playback": { "position": […], "changed": …, "isPlayed": false },
+///       "preparation": { "arrivingExtension": "mp4", "subtitles": [3] } }
 ///   ],
 ///   "changes": [
 ///     { "serverID": "…", "userID": "…", "itemID": "…", "position": […], "isPlayed": false, "changed": … }
@@ -88,6 +90,23 @@ public actor DownloadStore {
     /// Where `record`'s file is saved, whether or not it's there yet.
     public nonisolated func fileURL(for record: DownloadRecord) -> URL {
         fileURL(named: record.fileName)
+    }
+
+    /// Where the file `record`'s transfer brings is put: its saved file's place, or until a copy is written from it,
+    /// a place of its own.
+    nonisolated func arrivedURL(for record: DownloadRecord) -> URL {
+        fileURL(named: record.transferName)
+    }
+
+    /// Where the WebVTT file of `record`'s subtitles with the server's stream `index` is kept until they're in the
+    /// copy.
+    nonisolated func subtitlesURL(_ index: Int, of record: DownloadRecord) -> URL {
+        fileURL(named: record.subtitlesName(index))
+    }
+
+    /// Where `record`'s copy is written, until it's whole.
+    nonisolated func savingURL(for record: DownloadRecord) -> URL {
+        fileURL(named: record.savingName)
     }
 
     /// Where the download `id`'s picture of `kind` is saved, whether or not it's there yet. Like the file, it's named
@@ -228,7 +247,9 @@ public actor DownloadStore {
         contents.downloads.removeAll { ids.contains($0.id) }
         try write(contents)
         for record in removed {
-            deleteFile(at: fileURL(for: record))
+            for name in record.fileNames {
+                deleteFile(at: fileURL(named: name))
+            }
             for kind in DownloadArtwork.allCases {
                 deleteFile(at: artworkURL(kind, of: record.id))
             }
@@ -238,7 +259,7 @@ public actor DownloadStore {
     /// Deletes files and pictures that no download names, such as a file that finished after its download was removed.
     public func removeOrphanedFiles() throws {
         let list = try records()
-        let names = Set(list.map(\.fileName))
+        let names = list.reduce(into: Set<String>()) { $0.formUnion($1.fileNames) }
         let pictures = Set(
             list.flatMap { record in DownloadArtwork.allCases.map { artworkURL($0, of: record.id).lastPathComponent } })
         for (folder, kept) in [(mediaDirectory, names), (artworkDirectory, pictures)] {
@@ -314,7 +335,16 @@ public actor DownloadStore {
         return CGImageSourceGetType(source) != nil && CGImageSourceGetCount(source) > 0
     }
 
-    private func deleteFile(at url: URL) {
+    /// Deletes what `record` kept while its copy was written: the file that arrived, its subtitles, and the copy as
+    /// far as it got.
+    nonisolated func removePreparationFiles(of record: DownloadRecord) {
+        for name in record.fileNames where name != record.fileName {
+            deleteFile(at: fileURL(named: name))
+        }
+    }
+
+    /// Deletes the file at `url`, if there is one.
+    nonisolated func deleteFile(at url: URL) {
         guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
         do {
             try FileManager.default.removeItem(at: url)

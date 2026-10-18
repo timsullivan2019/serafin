@@ -354,15 +354,23 @@ public actor LibraryRepository {
         try await currentUser().canDownload
     }
 
+    /// What the server's policy lets the signed-in user have converted, for downloads the server converts. A switch
+    /// the server doesn't send is on, as Jellyfin has it by default.
+    public func conversionPermissions() async throws -> ConversionPermissions {
+        try await currentUser().conversion
+    }
+
     /// The things Serafin reads about the signed-in user.
     private struct CurrentUser: Sendable {
         let imageTag: String?
         let isAdministrator: Bool
         let canDownload: Bool
+        let conversion: ConversionPermissions
     }
 
-    /// Reads the user's picture tag, role and download permission from the server's answer directly, so a server that
-    /// leaves out a field the SDK's user model requires, such as one of the policy's switches, doesn't hide any.
+    /// Reads the user's picture tag, role, and download and conversion permissions from the server's answer directly,
+    /// so a server that leaves out a field the SDK's user model requires, such as one of the policy's switches, doesn't
+    /// hide any.
     private func currentUser() async throws -> CurrentUser {
         let request = Paths.getCurrentUser
         return try await cached(request.url, request.query) {
@@ -374,11 +382,20 @@ public actor LibraryRepository {
             if case .string(let tag)? = user["PrimaryImageTag"] { imageTag = tag }
             var isAdministrator = false
             var canDownload = true
+            var conversion = ConversionPermissions.all
             if case .object(let policy)? = user["Policy"] {
                 if case .bool(let admin)? = policy["IsAdministrator"] { isAdministrator = admin }
                 if case .bool(let allowed)? = policy["EnableContentDownloading"] { canDownload = allowed }
+                if case .bool(let allowed)? = policy["EnablePlaybackRemuxing"] { conversion.remuxing = allowed }
+                if case .bool(let allowed)? = policy["EnableVideoPlaybackTranscoding"] {
+                    conversion.videoTranscoding = allowed
+                }
+                if case .bool(let allowed)? = policy["EnableAudioPlaybackTranscoding"] {
+                    conversion.audioTranscoding = allowed
+                }
             }
-            return CurrentUser(imageTag: imageTag, isAdministrator: isAdministrator, canDownload: canDownload)
+            return CurrentUser(
+                imageTag: imageTag, isAdministrator: isAdministrator, canDownload: canDownload, conversion: conversion)
         }
     }
 

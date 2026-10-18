@@ -7,6 +7,11 @@ import os
 /// Each change to a download's playback made on this device, where it stopped or a mark as watched, is also kept for
 /// the server until it's sent, and stays when the download is deleted; signing out forgets the account's.
 ///
+/// A download that isn't saved as it arrives, as when the server converts the video for the player while it's sent,
+/// is prepared once its file arrives: a ``DownloadPreparing`` writes the copy the player opens, with the subtitles
+/// saved beside it, one download at a time, for as long as iOS lets Serafin run in the background, and carries on
+/// when Serafin is next active.
+///
 /// ``Accounts`` owns the one instance. It hands each transfer the account's `Authorization` header, so the token
 /// never appears in a URL. Resume data is kept in memory only, because it carries that header: a transfer that stops
 /// carries on from where it stopped during this launch, and starts again after a relaunch.
@@ -19,9 +24,9 @@ public actor Downloads {
         public var mediaSourceID: String
         /// The file's address, without the token.
         public var url: URL
-        /// The saved file's extension, such as `mp4`.
+        /// The extension of the file the server sends, such as `mp4`.
         public var fileExtension: String
-        /// The file's size in bytes, when the server said.
+        /// The file's size in bytes, when the server said, or an estimate of it for a file the server converts.
         public var bytes: Int64?
         /// What the Downloads screen shows for it.
         public var metadata: DownloadMetadata
@@ -30,6 +35,8 @@ public actor Downloads {
         /// Where the server says playback last stopped, for resuming there with no server to ask, or nil when it
         /// hasn't been started.
         public var playback: DownloadPlayback?
+        /// How the saved copy is written once the file arrives, or nil to save the file as it arrives.
+        public var preparation: Preparation?
         /// Whether the transfer may use cellular data.
         public var allowsCellularAccess: Bool
 
@@ -43,6 +50,7 @@ public actor Downloads {
             metadata: DownloadMetadata,
             tracks: DownloadTracks = DownloadTracks(),
             playback: DownloadPlayback? = nil,
+            preparation: Preparation? = nil,
             allowsCellularAccess: Bool
         ) {
             self.itemID = itemID
@@ -53,7 +61,38 @@ public actor Downloads {
             self.metadata = metadata
             self.tracks = tracks
             self.playback = playback
+            self.preparation = preparation
             self.allowsCellularAccess = allowsCellularAccess
+        }
+    }
+
+    /// How a download's saved copy is written once its file arrives: the file is copied into a QuickTime movie, with
+    /// subtitles added after those inside it.
+    public struct Preparation: Sendable, Equatable {
+        /// The subtitles to add, in order.
+        public var subtitles: [Subtitles]
+        /// The Dolby Vision the copy signals, for Dolby Vision video the server copies into a file that doesn't say
+        /// so, or nil.
+        public var dolbyVision: DolbyVisionConfiguration?
+
+        /// Creates a preparation.
+        public init(subtitles: [Subtitles] = [], dolbyVision: DolbyVisionConfiguration? = nil) {
+            self.subtitles = subtitles
+            self.dolbyVision = dolbyVision
+        }
+    }
+
+    /// Subtitles to add to a download's copy.
+    public struct Subtitles: Sendable, Equatable {
+        /// The server's index for the stream, which is among the request's ``Request/tracks``.
+        public var index: Int
+        /// The subtitles as a WebVTT file, as the server sent it.
+        public var webVTT: Data
+
+        /// Creates subtitles.
+        public init(index: Int, webVTT: Data) {
+            self.index = index
+            self.webVTT = webVTT
         }
     }
 
@@ -63,17 +102,22 @@ public actor Downloads {
         public var received: Int64
         /// Bytes in all, when known.
         public var expected: Int64?
+        /// Whether ``expected`` is an estimate made before the transfer, since the server didn't say, as when it
+        /// converts the file while it sends it.
+        public var isEstimate: Bool
 
         /// Creates progress.
-        public init(received: Int64, expected: Int64?) {
+        public init(received: Int64, expected: Int64?, isEstimate: Bool = false) {
             self.received = received
             self.expected = expected
+            self.isEstimate = isEstimate
         }
 
-        /// The share that has arrived, from 0 to 1, or nil when the size isn't known.
+        /// The share that has arrived, from 0 to 1, or nil when the size isn't known. Short of 1 while it's measured
+        /// against an estimate, which the file can outgrow.
         public var fraction: Double? {
             guard let expected, expected > 0 else { return nil }
-            return min(1, Double(received) / Double(expected))
+            return min(isEstimate ? 0.99 : 1, Double(received) / Double(expected))
         }
     }
 
@@ -86,6 +130,7 @@ public actor Downloads {
     private let transfers: DownloadTransfers
     private let identity: DeviceIdentity
     private let sessions: SessionStore
+    private let preparer: (any DownloadPreparing)?
     /// How the transfers that stopped this launch carry on, by file name.
     private var resumeData: [String: Data] = [:]
     /// How far each running download has got, by download ID.
@@ -93,6 +138,12 @@ public actor Downloads {
     private var watchers: [UUID: AsyncStream<Void>.Continuation] = [:]
     private var activation: Task<Void, Never>?
     private var listening: Task<Void, Never>?
+    /// The task writing the copies of downloads whose files have arrived, while it runs.
+    private var preparing: Task<Void, Never>?
+    /// Whether a download's file has arrived since the copies being written were looked for.
+    private var needsPreparing = false
+    /// The download whose copy is being written, and the task writing it, so deleting the download stops it.
+    private var writing: (id: String, task: Task<Void, any Error>)?
 
     /// Creates the downloads.
     ///
@@ -101,17 +152,25 @@ public actor Downloads {
     ///   - transfers: The session that moves the files.
     ///   - identity: Who this install is to the server, for the `Authorization` header.
     ///   - sessions: Where each account's token is kept.
-    init(store: DownloadStore, transfers: DownloadTransfers, identity: DeviceIdentity, sessions: SessionStore) {
+    ///   - preparer: Writes the copies of downloads that aren't saved as they arrive, or nil to take none.
+    init(
+        store: DownloadStore,
+        transfers: DownloadTransfers,
+        identity: DeviceIdentity,
+        sessions: SessionStore,
+        preparer: (any DownloadPreparing)? = nil
+    ) {
         self.store = store
         self.transfers = transfers
         self.identity = identity
         self.sessions = sessions
+        self.preparer = preparer
     }
 
     /// Checks the downloads left from the last launch, then starts reading what the transfers report, once.
     /// Downloads that were running when Serafin last stopped and have no transfer any more, as when it was closed from
-    /// the app switcher, are marked interrupted. Starting a download waits for this, so a new download is never taken
-    /// for one left over.
+    /// the app switcher, are marked interrupted, and the copies left to write are written. Starting a download waits
+    /// for this, so a new download is never taken for one left over.
     func activate() async {
         if let activation {
             return await activation.value
@@ -125,6 +184,7 @@ public actor Downloads {
                 await self?.handle(event)
             }
         }
+        startPreparing()
     }
 
     // MARK: - Reading
@@ -186,7 +246,8 @@ public actor Downloads {
     // MARK: - Changing
 
     /// Downloads `request` for the account `key`. An item already downloaded or downloading for the account is left
-    /// as it is; one that failed is tried again.
+    /// as it is; one that failed is tried again, afresh when its copy is written on the device, since the server
+    /// converts its file anew.
     ///
     /// - Throws: ``DownloadError/notEnoughSpace`` when the file wouldn't fit, ``DownloadError/storeUnavailable`` when
     ///   the list of downloads can't be saved, and ``SerafinError/notSignedIn`` when the account has no token.
@@ -194,26 +255,39 @@ public actor Downloads {
     public func start(_ request: Request, for key: SessionKey) async throws -> DownloadRecord {
         await activate()
         if let existing = try await record(forItem: request.itemID, key: key) {
-            if existing.state == .failed {
+            guard existing.state == .failed else { return existing }
+            guard existing.preparation != nil || request.preparation != nil else {
                 try await retry(existing.id, from: request.url, allowsCellularAccess: request.allowsCellularAccess)
                 return try await store.record(id: existing.id) ?? existing
             }
-            return existing
+            try await delete(existing.id)
         }
-        guard Self.playableExtensions.contains(request.fileExtension) else { throw DownloadError.storeUnavailable }
-        try checkSpace(for: request.bytes)
+        guard Self.playableExtensions.contains(request.fileExtension),
+            request.preparation == nil || preparer != nil
+        else { throw DownloadError.storeUnavailable }
+        // A copy needs room for the file that arrives and the copy written from it, until the first is deleted.
+        try checkSpace(for: request.bytes.map { request.preparation == nil ? $0 : Self.twice($0) })
+        let preparation = request.preparation.map { preparation in
+            DownloadPreparation(
+                arrivingExtension: request.fileExtension,
+                subtitles: preparation.subtitles.map(\.index),
+                dolbyVision: preparation.dolbyVision
+            )
+        }
         let record = DownloadRecord(
             key: key,
             itemID: request.itemID,
             mediaSourceID: request.mediaSourceID,
-            fileExtension: request.fileExtension,
+            fileExtension: preparation == nil ? request.fileExtension : "mov",
             bytes: request.bytes,
             metadata: request.metadata,
             tracks: request.tracks,
-            playback: request.playback
+            playback: request.playback,
+            preparation: preparation
         )
         try await store.save(record)
         do {
+            try saveSubtitles(request.preparation?.subtitles ?? [], of: record)
             try await transfer(record, from: request.url, allowsCellularAccess: request.allowsCellularAccess)
         } catch {
             try? await store.remove(ids: [record.id])
@@ -230,11 +304,10 @@ public actor Downloads {
     ///   - id: The download.
     ///   - url: The file's address, as the server offers it now, used when the transfer starts again.
     ///   - allowsCellularAccess: Whether the transfer may use cellular data.
-    public func retry(_ id: String, from url: URL, allowsCellularAccess: Bool) async throws {
-        await activate()
+    private func retry(_ id: String, from url: URL, allowsCellularAccess: Bool) async throws {
         guard let record = try await store.record(id: id), record.state == .failed else { return }
-        if let data = resumeData.removeValue(forKey: record.fileName) {
-            transfers.resume(data, fileName: record.fileName)
+        if let data = resumeData.removeValue(forKey: record.transferName) {
+            transfers.resume(data, fileName: record.transferName)
         } else {
             try await transfer(record, from: url, allowsCellularAccess: allowsCellularAccess)
         }
@@ -325,12 +398,14 @@ public actor Downloads {
         }
     }
 
-    /// Deletes a download, its file and its pictures, stopping its transfer if it's running.
+    /// Deletes a download, its file and its pictures, stopping its transfer, or the writing of its copy, if it's
+    /// running.
     public func delete(_ id: String) async throws {
         guard let record = try await store.record(id: id) else { return }
+        stopWriting([id])
         try await store.remove(ids: [id])
-        await transfers.cancel(fileName: record.fileName)
-        resumeData[record.fileName] = nil
+        await transfers.cancel(fileName: record.transferName)
+        resumeData[record.transferName] = nil
         progressByID[id] = nil
         notify()
     }
@@ -351,13 +426,166 @@ public actor Downloads {
 
     private func delete(_ records: [DownloadRecord]) async throws {
         guard !records.isEmpty else { return }
-        try await store.remove(ids: Set(records.map(\.id)))
+        let ids = Set(records.map(\.id))
+        stopWriting(ids)
+        try await store.remove(ids: ids)
         for record in records {
-            await transfers.cancel(fileName: record.fileName)
-            resumeData[record.fileName] = nil
+            await transfers.cancel(fileName: record.transferName)
+            resumeData[record.transferName] = nil
             progressByID[record.id] = nil
         }
         notify()
+    }
+
+    /// Stops writing the copy of the download it's being written for, when that's one of `ids`.
+    private func stopWriting(_ ids: Set<String>) {
+        guard let writing, ids.contains(writing.id) else { return }
+        writing.task.cancel()
+    }
+
+    // MARK: - Preparing
+
+    /// Writes the copies of the downloads whose files have arrived and still wait for one, as when Serafin ran out of
+    /// time in the background before it could, unless that's under way.
+    public func prepareArrived() async {
+        await activate()
+        startPreparing()
+    }
+
+    /// Starts writing the copies waiting to be written, one at a time, unless that's under way, in which case it
+    /// looks for them again once it's done.
+    private func startPreparing() {
+        guard let preparer else { return }
+        needsPreparing = true
+        guard preparing == nil else { return }
+        preparing = Task {
+            await Self.keepingAwake {
+                await self.prepareWhileNeeded(with: preparer)
+            }
+        }
+    }
+
+    private func prepareWhileNeeded(with preparer: any DownloadPreparing) async {
+        while needsPreparing, !Task.isCancelled {
+            needsPreparing = false
+            await prepareEach(with: preparer)
+        }
+        preparing = nil
+    }
+
+    /// Writes the copy of each download waiting for one, oldest first, until none is left or the task is cancelled.
+    private func prepareEach(with preparer: any DownloadPreparing) async {
+        var tried: Set<String> = []
+        while !Task.isCancelled {
+            guard let records = try? await store.records(),
+                let record = records.first(where: { $0.state == .preparing && !tried.contains($0.id) })
+            else { return }
+            tried.insert(record.id)
+            await prepare(record, with: preparer)
+        }
+    }
+
+    /// Writes `record`'s copy and saves it, which finishes the download, or fails it when the copy can't be written.
+    /// When the task is cancelled, as when iOS won't let Serafin run any longer, it stays waiting, to be written again.
+    private func prepare(_ record: DownloadRecord, with preparer: any DownloadPreparing) async {
+        guard let preparation = record.preparation else { return }
+        let subtitles = preparation.subtitles.compactMap { index -> AddedSubtitles? in
+            guard let track = record.tracks?.subtitles.first(where: { $0.index == index }) else { return nil }
+            return AddedSubtitles(track: track, file: store.subtitlesURL(index, of: record))
+        }
+        let saving = store.savingURL(for: record)
+        let job = DownloadPreparationJob(
+            arrived: store.arrivedURL(for: record),
+            subtitles: subtitles,
+            output: saving,
+            dolbyVision: preparation.dolbyVision
+        )
+        let task = Task { try await preparer.prepare(job) }
+        writing = (record.id, task)
+        defer { writing = nil }
+        do {
+            try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+        } catch is CancellationError {
+            store.deleteFile(at: saving)
+            return
+        } catch {
+            let failure: DownloadFailure =
+                error as? DownloadPreparationError == .storageFull ? .storageFull : .preparationFailed
+            await failPreparing(record, failure)
+            return
+        }
+        await finishPreparing(record)
+    }
+
+    /// Saves `record`'s copy, once it's written, as its file, and finishes the download.
+    private func finishPreparing(_ record: DownloadRecord) async {
+        do {
+            let saved = store.fileURL(for: record)
+            store.deleteFile(at: saved)
+            try FileManager.default.moveItem(at: store.savingURL(for: record), to: saved)
+            let size = try? saved.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            let finished = try await store.update(id: record.id) { record in
+                guard record.state == .preparing else { return }
+                record.state = .finished
+                record.failure = nil
+                record.preparation = nil
+                record.bytes = size.map(Int64.init) ?? record.bytes
+            }
+            if finished?.state == .finished {
+                // The file that arrived and the subtitles are in the copy now.
+                store.removePreparationFiles(of: record)
+            } else {
+                // Deleted while its copy was written.
+                try await store.removeOrphanedFiles()
+            }
+        } catch {
+            Self.logger.error("Could not save a download's copy: \(error.localizedDescription, privacy: .private)")
+            await failPreparing(record, .preparationFailed)
+            return
+        }
+        notify()
+    }
+
+    /// Fails `record`, whose copy couldn't be written, and deletes what was kept for it, which trying again brings
+    /// afresh.
+    private func failPreparing(_ record: DownloadRecord, _ failure: DownloadFailure) async {
+        do {
+            try await store.update(id: record.id) { record in
+                guard record.state == .preparing else { return }
+                record.state = .failed
+                record.failure = failure
+            }
+        } catch {
+            Self.logger.error("Could not update a download: \(error.localizedDescription, privacy: .private)")
+        }
+        store.removePreparationFiles(of: record)
+        notify()
+    }
+
+    /// Runs `operation`, asking iOS to keep Serafin running until it ends, as when it's in the background, and
+    /// cancelling it once iOS won't any longer.
+    private static func keepingAwake(_ operation: @escaping @Sendable () async -> Void) async {
+        let task = Task { await operation() }
+        #if canImport(UIKit)
+            let ended = DispatchSemaphore(value: 0)
+            ProcessInfo.processInfo.performExpiringActivity(withReason: "Saving downloads") { expired in
+                if expired {
+                    task.cancel()
+                } else {
+                    // Serafin keeps running while this waits.
+                    Task {
+                        await task.value
+                        ended.signal()
+                    }
+                    ended.wait()
+                }
+            }
+        #endif
+        await task.value
     }
 
     // MARK: - Transfers
@@ -369,7 +597,31 @@ public actor Downloads {
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
         request.allowsCellularAccess = allowsCellularAccess
         try store.prepareDirectories()
-        transfers.start(request, fileName: record.fileName)
+        transfers.start(request, fileName: record.transferName)
+    }
+
+    /// Saves the WebVTT files of `subtitles` beside `record`'s file, until they're in its copy.
+    private func saveSubtitles(_ subtitles: [Subtitles], of record: DownloadRecord) throws {
+        guard !subtitles.isEmpty else { return }
+        try store.prepareDirectories()
+        for file in subtitles {
+            do {
+                try file.webVTT.write(
+                    to: store.subtitlesURL(file.index, of: record),
+                    options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+                )
+            } catch {
+                Self.logger.error(
+                    "Could not save a download's subtitles: \(error.localizedDescription, privacy: .private)")
+                throw DownloadError.storeUnavailable
+            }
+        }
+    }
+
+    /// Twice `bytes`, or the most there can be when that's more.
+    private static func twice(_ bytes: Int64) -> Int64 {
+        let (doubled, overflow) = bytes.multipliedReportingOverflow(by: 2)
+        return overflow ? .max : doubled
     }
 
     /// Throws when a file of `bytes` wouldn't leave room on the device for anything else.
@@ -388,7 +640,7 @@ public actor Downloads {
         let running = await transfers.runningFileNames()
         do {
             for record in try await store.records() where record.state == .downloading {
-                guard !running.contains(record.fileName) else { continue }
+                guard !running.contains(record.transferName) else { continue }
                 try await store.update(id: record.id) { record in
                     guard record.state == .downloading else { return }
                     record.state = .failed
@@ -407,10 +659,12 @@ public actor Downloads {
             switch event {
             case .progress(let fileName, let received, let expected):
                 guard let record = try await self.record(named: fileName) else { return }
-                progressByID[record.id] = Progress(received: received, expected: expected ?? record.bytes)
+                progressByID[record.id] = Progress(
+                    received: received, expected: expected ?? record.bytes, isEstimate: expected == nil)
             case .finished(let fileName, let bytes):
                 let finished = try await update(named: fileName) { record in
-                    record.state = .finished
+                    // A copy is written from the file before the download is finished.
+                    record.state = record.preparation == nil ? .finished : .preparing
                     record.failure = nil
                     record.bytes = bytes
                 }
@@ -420,9 +674,12 @@ public actor Downloads {
                     return
                 }
                 progressByID[finished.id] = nil
+                if finished.state == .preparing {
+                    startPreparing()
+                }
             case .failed(let fileName, let failure, let data):
                 let failed = try await update(named: fileName) { record in
-                    guard record.state != .finished else { return }
+                    guard record.state == .downloading || record.state == .failed else { return }
                     record.state = .failed
                     record.failure = failure
                 }
@@ -436,11 +693,13 @@ public actor Downloads {
         notify()
     }
 
+    /// The download whose transfer brings the file `fileName`.
     private func record(named fileName: String) async throws -> DownloadRecord? {
-        try await store.records().first { $0.fileName == fileName }
+        try await store.records().first { $0.transferName == fileName }
     }
 
-    /// Changes the download whose file is `fileName`, or does nothing when there's none, as when it was deleted.
+    /// Changes the download whose transfer brings the file `fileName`, or does nothing when there's none, as when it
+    /// was deleted.
     private func update(
         named fileName: String,
         _ change: @Sendable (inout DownloadRecord) -> Void
@@ -450,21 +709,32 @@ public actor Downloads {
     }
 }
 
-/// Where ``Accounts`` keeps downloads and how their files travel.
+/// Where ``Accounts`` keeps downloads, how their files travel, and what writes the copies of those that aren't saved
+/// as they arrive.
 public struct DownloadsSetup: Sendable {
     /// The folder for the index and the files.
     public var directory: URL
     /// Makes the transfers' session configuration.
     public var configuration: @Sendable () -> URLSessionConfiguration
+    /// Writes the copies of downloads that aren't saved as they arrive, or nil to take none.
+    public var preparer: (any DownloadPreparing)?
 
     /// Creates a setup.
-    public init(directory: URL, configuration: @escaping @Sendable () -> URLSessionConfiguration) {
+    public init(
+        directory: URL,
+        preparer: (any DownloadPreparing)? = nil,
+        configuration: @escaping @Sendable () -> URLSessionConfiguration
+    ) {
         self.directory = directory
+        self.preparer = preparer
         self.configuration = configuration
     }
 
-    /// The app's: `Serafin/Downloads` in Application Support, moved in the background session.
-    public static var live: DownloadsSetup {
-        DownloadsSetup(directory: DownloadStore.defaultDirectory) { DownloadTransfers.backgroundConfiguration() }
+    /// The app's: `Serafin/Downloads` in Application Support, moved in the background session, with `preparer`
+    /// writing the copies of downloads that aren't saved as they arrive.
+    public static func live(preparer: any DownloadPreparing) -> DownloadsSetup {
+        DownloadsSetup(directory: DownloadStore.defaultDirectory, preparer: preparer) {
+            DownloadTransfers.backgroundConfiguration()
+        }
     }
 }

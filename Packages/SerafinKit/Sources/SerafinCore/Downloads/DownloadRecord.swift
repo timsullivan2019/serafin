@@ -9,6 +9,9 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     public enum State: String, Codable, Sendable {
         /// The file is on its way.
         case downloading
+        /// The file has arrived, and Serafin is writing the copy the player opens from it, as
+        /// ``DownloadRecord/preparation`` says.
+        case preparing
         /// The whole file is saved and plays offline.
         case finished
         /// The transfer stopped before the end; ``DownloadRecord/failure`` says why. It can be tried again.
@@ -25,7 +28,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     public let itemID: String
     /// The server's ID for the version saved.
     public let mediaSourceID: String
-    /// The saved file's extension, such as `mp4`, so the player knows its container.
+    /// The saved file's extension, such as `mp4`, so the player knows its container: `mov` for a copy Serafin
+    /// writes.
     public let fileExtension: String
     /// When the download was asked for.
     public let created: Date
@@ -43,6 +47,9 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// Where playback of the download last stopped: on this device, or else where the server said it had when the
     /// download started. Nil when it hasn't been started.
     public var playback: DownloadPlayback?
+    /// How the saved file is written once the file arrives, for a download that isn't saved as it arrives, until it's
+    /// written. Nil for a file saved as it arrives, and once the copy is saved.
+    public var preparation: DownloadPreparation?
 
     /// Creates a record.
     public init(
@@ -57,7 +64,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
         bytes: Int64? = nil,
         metadata: DownloadMetadata,
         tracks: DownloadTracks? = nil,
-        playback: DownloadPlayback? = nil
+        playback: DownloadPlayback? = nil,
+        preparation: DownloadPreparation? = nil
     ) {
         self.id = id
         self.serverID = key.serverID
@@ -72,6 +80,7 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
         self.metadata = metadata
         self.tracks = tracks
         self.playback = playback
+        self.preparation = preparation
     }
 
     /// The account the download belongs to.
@@ -82,6 +91,100 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// The saved file's name: the ID and the extension.
     public var fileName: String {
         "\(id).\(fileExtension)"
+    }
+
+    /// The name the file arrives under: the saved file's, or until a copy is written from it, the ID, `-arrived` and
+    /// the extension of what the server sends.
+    public var transferName: String {
+        guard let preparation else { return fileName }
+        return "\(id)-arrived.\(preparation.arrivingExtension)"
+    }
+
+    /// The name of the WebVTT file of the subtitles with the server's stream `index`, kept until they're in the copy.
+    func subtitlesName(_ index: Int) -> String {
+        "\(id)-subtitles-\(index).vtt"
+    }
+
+    /// The name of the copy while it's written, which takes ``fileName`` once it's whole.
+    var savingName: String {
+        "\(id)-saving.mov"
+    }
+
+    /// The names of every file the download may have beside the index: the saved file, and until the copy is written,
+    /// the file that arrived, its subtitles and the copy as far as it's got.
+    var fileNames: Set<String> {
+        var names: Set = [fileName]
+        if let preparation {
+            names.insert(transferName)
+            names.insert(savingName)
+            names.formUnion(preparation.subtitles.map { subtitlesName($0) })
+        }
+        return names
+    }
+}
+
+/// How a download's saved file is written when it isn't saved as it arrives, as when the server converts the video
+/// for the player while it's sent: Serafin copies the file that arrives into a QuickTime movie the player opens,
+/// adding subtitles the server sent as WebVTT. Until the copy is written, the file that arrived and the subtitles are
+/// kept beside the index, named by the download's ID alone.
+public struct DownloadPreparation: Codable, Hashable, Sendable {
+    /// The extension of the file the server sends, such as `mp4`.
+    public var arrivingExtension: String
+    /// The subtitles added to the copy, by the server's stream index, in order. Each is among the download's
+    /// ``DownloadRecord/tracks``, after the subtitles inside the file that arrives.
+    public var subtitles: [Int]
+    /// The Dolby Vision the copy signals, for Dolby Vision video the server copied into a file that doesn't say so,
+    /// or nil.
+    public var dolbyVision: DolbyVisionConfiguration?
+
+    /// Creates a preparation.
+    public init(arrivingExtension: String, subtitles: [Int] = [], dolbyVision: DolbyVisionConfiguration? = nil) {
+        self.arrivingExtension = arrivingExtension
+        self.subtitles = subtitles
+        self.dolbyVision = dolbyVision
+    }
+}
+
+/// How a video is coded in Dolby Vision, as the server reads it from the original's own configuration: what a copy
+/// needs to say so the player shows the video as Dolby Vision.
+public struct DolbyVisionConfiguration: Codable, Hashable, Sendable {
+    /// The configuration's major version.
+    public var versionMajor: Int
+    /// The configuration's minor version.
+    public var versionMinor: Int
+    /// The Dolby Vision profile, such as 5 or 8.
+    public var profile: Int
+    /// The Dolby Vision level, such as 6.
+    public var level: Int
+    /// Whether the video carries Dolby Vision's metadata for each frame.
+    public var hasRPU: Bool
+    /// Whether the video carries an enhancement layer.
+    public var hasEnhancementLayer: Bool
+    /// Whether the video carries a base layer.
+    public var hasBaseLayer: Bool
+    /// What the base layer plays as without Dolby Vision, as Dolby numbers it: 0 for nothing a player shows as it
+    /// is, as in profile 5, 1 for HDR10, 2 for SDR and 4 for HLG.
+    public var baseLayerCompatibility: Int
+
+    /// Creates a configuration.
+    public init(
+        versionMajor: Int = 1,
+        versionMinor: Int = 0,
+        profile: Int,
+        level: Int,
+        hasRPU: Bool = true,
+        hasEnhancementLayer: Bool = false,
+        hasBaseLayer: Bool = true,
+        baseLayerCompatibility: Int
+    ) {
+        self.versionMajor = versionMajor
+        self.versionMinor = versionMinor
+        self.profile = profile
+        self.level = level
+        self.hasRPU = hasRPU
+        self.hasEnhancementLayer = hasEnhancementLayer
+        self.hasBaseLayer = hasBaseLayer
+        self.baseLayerCompatibility = baseLayerCompatibility
     }
 }
 
@@ -99,6 +202,8 @@ public enum DownloadFailure: String, Codable, Sendable {
     case storageFull
     /// The transfer stopped while Serafin wasn't running, as when it's closed from the app switcher.
     case interrupted
+    /// The file arrived, but Serafin couldn't write a copy the player opens from it.
+    case preparationFailed
 }
 
 /// What the Downloads screen, the player, and a download's card and detail screen show for it while there may be no
@@ -173,24 +278,31 @@ public enum DownloadArtwork: String, CaseIterable, Sendable {
 public struct DownloadTracks: Codable, Hashable, Sendable {
     /// The audio tracks, in the file's order.
     public var audio: [DownloadTrack]
-    /// The subtitle tracks the player can show from the file, in the file's order.
+    /// The subtitle tracks the player can show from the file, in the file's order, or the subtitles burned into its
+    /// picture.
     public var subtitles: [DownloadTrack]
     /// The audio the server chose for the account, by stream index, or nil to leave it to the file.
     public var defaultAudio: Int?
     /// The subtitles the server chose for the account, by stream index, or nil for none.
     public var defaultSubtitles: Int?
+    /// The subtitles the server burned into the picture of a video it converted, by stream index, or nil when it
+    /// burned in none. They're among ``subtitles``, but they aren't a track: they always show, and no other
+    /// subtitles do.
+    public var burnedIn: Int?
 
     /// Creates tracks.
     public init(
         audio: [DownloadTrack] = [],
         subtitles: [DownloadTrack] = [],
         defaultAudio: Int? = nil,
-        defaultSubtitles: Int? = nil
+        defaultSubtitles: Int? = nil,
+        burnedIn: Int? = nil
     ) {
         self.audio = audio
         self.subtitles = subtitles
         self.defaultAudio = defaultAudio
         self.defaultSubtitles = defaultSubtitles
+        self.burnedIn = burnedIn
     }
 }
 

@@ -9,12 +9,14 @@ import os
 /// file becomes a text track.
 ///
 /// Jellyfin sends a video it converts for a download as fragmented MP4, made while it's sent. An HEVC video it copies
-/// there carries the `hev1` tag, which AVPlayer doesn't play, so the copy carries `hvc1`, as the server's own HLS
-/// streams do, and Dolby Vision's `dvhe` becomes `dvh1`. Text subtitles can't go into the server's MP4 at all, so they
-/// come from its subtitle endpoint as WebVTT, timed on the video's own timeline, and become 3GPP text tracks, the
-/// subtitles AVPlayer shows from MP4 and QuickTime files. They follow the file's own subtitle tracks, in one alternate
-/// group that shows none until the player picks one. A QuickTime movie, because it's the container AVAssetWriter
-/// copies every kind of track into.
+/// there carries the `hev1` tag, under which AVFoundation doesn't see the video at all, so the file that arrived is
+/// retagged `hvc1` first, as the server tags the same video in its own HLS streams; see ``SampleEntryTags``. Nor does
+/// that MP4 say when the video it copied is Dolby Vision, so the copy says so, from the configuration the server
+/// reported, as its HLS streams do. Text subtitles can't go into the server's MP4 at all, so they come from its
+/// subtitle endpoint as WebVTT, timed on the video's own timeline, and become 3GPP text tracks, the subtitles AVPlayer
+/// shows from MP4 and QuickTime files. They follow the file's own subtitle tracks, in one alternate group that shows
+/// none until the player picks one. A QuickTime movie, because it's the container AVAssetWriter copies every kind of
+/// track into.
 public struct DownloadedCopyWriter: DownloadPreparing {
     private static let logger = Logger(serafinCategory: "downloads")
 
@@ -22,6 +24,12 @@ public struct DownloadedCopyWriter: DownloadPreparing {
     public init() {}
 
     public func prepare(_ job: DownloadPreparationJob) async throws {
+        do {
+            try SampleEntryTags.rewrite(fileAt: job.arrived)
+        } catch {
+            Self.logger.error("Could not retag a download: \(error.localizedDescription, privacy: .private)")
+            throw DownloadPreparationError.unreadable
+        }
         let asset = AVURLAsset(url: job.arrived)
         let sources: [SourceTrack]
         do {
@@ -39,32 +47,44 @@ public struct DownloadedCopyWriter: DownloadPreparing {
         if FileManager.default.fileExists(atPath: job.output.path(percentEncoded: false)) {
             try? FileManager.default.removeItem(at: job.output)
         }
-        let copy = try MovieCopy(asset: asset, sources: sources, subtitles: subtitles, output: job.output)
+        let copy = try MovieCopy(
+            asset: asset, sources: sources, subtitles: subtitles, dolbyVision: job.dolbyVision, output: job.output)
         try await copy.run()
     }
 
-    /// The format `description` takes in the copy: HEVC tagged `hvc1`, or Dolby Vision `dvh1`, where it arrived as
-    /// `hev1` or `dvhe`, which AVPlayer doesn't play. Nil when it stays as it is.
-    static func retagged(_ description: CMFormatDescription) -> CMFormatDescription? {
-        let replacements = [fourCharCode("hev1"): fourCharCode("hvc1"), fourCharCode("dvhe"): fourCharCode("dvh1")]
+    /// The format `description` takes in the copy to signal Dolby Vision `configuration` the way Apple's own videos
+    /// do: a `dvcC`, `dvvC` or `dvwC` box beside the HEVC or AV1 configuration, and for a video whose base layer
+    /// shows as nothing without Dolby Vision, as in profile 5, the `dvh1` or `dav1` tag. Nil when it stays as it is:
+    /// for a video that isn't HEVC or AV1, or that signals Dolby Vision already.
+    static func format(
+        _ description: CMFormatDescription,
+        signalling configuration: DolbyVisionConfiguration
+    ) -> CMFormatDescription? {
+        let dolbyVisionTags = [fourCharCode("hvc1"): fourCharCode("dvh1"), fourCharCode("av01"): fourCharCode("dav1")]
+        let subtype = CMFormatDescriptionGetMediaSubType(description)
         guard CMFormatDescriptionGetMediaType(description) == kCMMediaType_Video,
-            let replacement = replacements[CMFormatDescriptionGetMediaSubType(description)]
+            let dolbyVisionTag = dolbyVisionTags[subtype]
         else { return nil }
-        // The sample entry as it arrived would otherwise be written back as it is, old tag and all.
         var extensions = CMFormatDescriptionGetExtensions(description) as? [CFString: Any] ?? [:]
+        let atomsKey = kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms
+        var atoms = extensions[atomsKey] as? [String: Any] ?? [:]
+        guard !atoms.keys.contains(where: { DolbyVisionConfiguration.boxTypes.contains($0) }) else { return nil }
+        atoms[configuration.boxType] = configuration.record
+        extensions[atomsKey] = atoms
+        // The sample entry as it arrived would otherwise be written back as it is, without the box.
         extensions[kCMFormatDescriptionExtension_VerbatimSampleDescription] = nil
         extensions[kCMFormatDescriptionExtension_VerbatimISOSampleEntry] = nil
         let dimensions = CMVideoFormatDescriptionGetDimensions(description)
-        var retagged: CMFormatDescription?
+        var signalled: CMFormatDescription?
         let status = CMVideoFormatDescriptionCreate(
             allocator: kCFAllocatorDefault,
-            codecType: replacement,
+            codecType: configuration.baseLayerCompatibility == 0 ? dolbyVisionTag : subtype,
             width: dimensions.width,
             height: dimensions.height,
             extensions: extensions as CFDictionary,
-            formatDescriptionOut: &retagged
+            formatDescriptionOut: &signalled
         )
-        return status == noErr ? retagged : nil
+        return status == noErr ? signalled : nil
     }
 
     /// `sample` described by `description` in place of its own format, with its data, its timing and what each
@@ -235,6 +255,41 @@ public struct DownloadedCopyWriter: DownloadPreparing {
     }
 }
 
+extension DolbyVisionConfiguration {
+    /// The types of box that hold a Dolby Vision configuration.
+    static let boxTypes: Set<String> = ["dvcC", "dvvC", "dvwC"]
+
+    /// The type of box the configuration goes in, by its profile: `dvcC` up to profile 7, `dvvC` up to 10, and `dvwC`
+    /// beyond.
+    var boxType: String {
+        profile > 10 ? "dvwC" : profile > 7 ? "dvvC" : "dvcC"
+    }
+
+    /// The configuration as the box holds it: Dolby's 24-byte decoder configuration record.
+    var record: Data {
+        func clamped(_ value: Int, bits: Int) -> UInt32 {
+            UInt32(max(0, min(value, (1 << bits) - 1)))
+        }
+        // The profile, the level, three flags and the base layer's compatibility, in 7, 6, 1, 1, 1 and 4 bits.
+        var flags = clamped(profile, bits: 7) << 25 | clamped(level, bits: 6) << 19
+        flags |= clamped(baseLayerCompatibility, bits: 4) << 12
+        if hasRPU {
+            flags |= 1 << 18
+        }
+        if hasEnhancementLayer {
+            flags |= 1 << 17
+        }
+        if hasBaseLayer {
+            flags |= 1 << 16
+        }
+        var record = Data([UInt8(clamped(versionMajor, bits: 8)), UInt8(clamped(versionMinor, bits: 8))])
+        withUnsafeBytes(of: flags.bigEndian) { record.append(contentsOf: $0) }
+        // The rest is reserved.
+        record.append(contentsOf: [UInt8](repeating: 0, count: 18))
+        return record
+    }
+}
+
 /// A track copied from the file that arrived, with what the copy keeps of it.
 private struct SourceTrack {
     /// The characteristics a copied track keeps.
@@ -308,7 +363,7 @@ private final class MovieCopy: @unchecked Sendable {
     private final class Feed {
         enum Source {
             /// A track of the asset, with the format its samples take in the copy, when it changes.
-            case track(AVAssetReaderTrackOutput, retagged: CMFormatDescription?)
+            case track(AVAssetReaderTrackOutput, describedBy: CMFormatDescription?)
             /// Subtitle samples, in order.
             case text([CMSampleBuffer])
         }
@@ -328,12 +383,12 @@ private final class MovieCopy: @unchecked Sendable {
         /// - Throws: ``DownloadPreparationError/unreadable`` when a sample can't take the copy's format.
         func next() throws -> CMSampleBuffer? {
             switch source {
-            case .track(let output, let retagged):
+            case .track(let output, let format):
                 while let sample = output.copyNextSampleBuffer() {
-                    guard let retagged else { return sample }
-                    // A buffer that only marks something, such as the end of the media, has no frames to retag.
+                    guard let format else { return sample }
+                    // A buffer that only marks something, such as the end of the media, has no frames to describe.
                     guard CMSampleBufferGetNumSamples(sample) > 0 else { continue }
-                    guard let described = DownloadedCopyWriter.sample(sample, describedBy: retagged) else {
+                    guard let described = DownloadedCopyWriter.sample(sample, describedBy: format) else {
                         throw DownloadPreparationError.unreadable
                     }
                     return described
@@ -359,7 +414,13 @@ private final class MovieCopy: @unchecked Sendable {
     /// Whether the copy has finished, failed or been cancelled.
     private var isOver = false
 
-    init(asset: AVAsset, sources: [SourceTrack], subtitles: [TextTrack], output: URL) throws {
+    init(
+        asset: AVAsset,
+        sources: [SourceTrack],
+        subtitles: [TextTrack],
+        dolbyVision: DolbyVisionConfiguration?,
+        output: URL
+    ) throws {
         do {
             reader = try AVAssetReader(asset: asset)
             writer = try AVAssetWriter(outputURL: output, fileType: .mov)
@@ -374,9 +435,12 @@ private final class MovieCopy: @unchecked Sendable {
             trackOutput.alwaysCopiesSampleData = false
             guard reader.canAdd(trackOutput) else { throw DownloadPreparationError.unreadable }
             reader.add(trackOutput)
-            let retagged = source.format.flatMap { DownloadedCopyWriter.retagged($0) }
+            var described: CMFormatDescription?
+            if source.mediaType == .video, let format = source.format, let dolbyVision {
+                described = DownloadedCopyWriter.format(format, signalling: dolbyVision)
+            }
             let input = AVAssetWriterInput(
-                mediaType: source.mediaType, outputSettings: nil, sourceFormatHint: retagged ?? source.format)
+                mediaType: source.mediaType, outputSettings: nil, sourceFormatHint: described ?? source.format)
             input.expectsMediaDataInRealTime = false
             switch source.mediaType {
             case .video:
@@ -400,7 +464,7 @@ private final class MovieCopy: @unchecked Sendable {
             }
             guard writer.canAdd(input) else { throw DownloadPreparationError.unreadable }
             writer.add(input)
-            feeds.append(Feed(input: input, source: .track(trackOutput, retagged: retagged)))
+            feeds.append(Feed(input: input, source: .track(trackOutput, describedBy: described)))
         }
         for subtitle in subtitles {
             guard let format = DownloadedCopyWriter.textFormat(forced: subtitle.track.isForced) else {

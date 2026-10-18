@@ -20,12 +20,21 @@ public struct DownloadPreparationJob: Sendable {
     public var subtitles: [AddedSubtitles]
     /// Where to write the saved file. Anything there already is replaced.
     public var output: URL
+    /// The Dolby Vision the saved file signals, for Dolby Vision video the server copied into a file that doesn't
+    /// say so, or nil.
+    public var dolbyVision: DolbyVisionConfiguration?
 
     /// Creates a job.
-    public init(arrived: URL, subtitles: [AddedSubtitles], output: URL) {
+    public init(
+        arrived: URL,
+        subtitles: [AddedSubtitles],
+        output: URL,
+        dolbyVision: DolbyVisionConfiguration? = nil
+    ) {
         self.arrived = arrived
         self.subtitles = subtitles
         self.output = output
+        self.dolbyVision = dolbyVision
     }
 }
 

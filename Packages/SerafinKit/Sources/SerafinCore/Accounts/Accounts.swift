@@ -50,8 +50,8 @@ public actor Accounts {
     ///   - homeSnapshots: Where each account's last Home is kept. Tests pass a throwaway folder.
     ///   - sessionConfiguration: Makes the `URLSession` configuration for every request. Tests pass one with a stub
     ///     protocol.
-    ///   - downloads: Where downloads are kept and how they travel. The app passes ``DownloadsSetup/live``; without
-    ///     one there are no downloads.
+    ///   - downloads: Where downloads are kept and how they travel. The app passes
+    ///     ``DownloadsSetup/live(preparer:)``; without one there are no downloads.
     public init(
         secrets: any SecretStore,
         deviceName: String,
@@ -92,7 +92,13 @@ public actor Accounts {
                 pinning: pinning,
                 mediaDirectory: store.mediaDirectory
             )
-            let created = Downloads(store: store, transfers: transfers, identity: identity, sessions: sessions)
+            let created = Downloads(
+                store: store,
+                transfers: transfers,
+                identity: identity,
+                sessions: sessions,
+                preparer: downloads.preparer
+            )
             self.downloads = created
             Task { await created.activate() }
         } else {

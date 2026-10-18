@@ -314,6 +314,9 @@
     "Couldn't finish downloading" : {
       "comment" : "A failed download's status."
     },
+    "Couldn't prepare the video" : {
+      "comment" : "A failed download's status: its file arrived, but Serafin couldn't make it ready to play."
+    },
     "Created from the audio" : {
       "comment" : "Detail of subtitles the device generates from a video's audio."
     },
@@ -665,6 +668,9 @@
     },
     "Plays the movie or episode you were last watching in Serafin, or the next episode of a show you're watching." : {
       "comment" : "Description of the Continue Watching shortcut."
+    },
+    "Preparing…" : {
+      "comment" : "A download's status once its file has arrived, while Serafin makes it ready to play offline."
     },
     "Preview" : {
       "comment" : "Header over sample controls in the chosen accent colour."

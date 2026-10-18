@@ -204,7 +204,8 @@ struct MainTabs: View {
 }
 
 /// Sends the server the progress made with downloads when it may answer again: when the device joins a network, and
-/// when Serafin comes back to the foreground. The screens reload once the server has it.
+/// when Serafin comes back to the foreground. The screens reload once the server has it. Coming back to the
+/// foreground also carries on writing the copies of downloads that arrived while Serafin couldn't.
 private struct DownloadProgressSync: ViewModifier {
     let downloads: DownloadCenter?
     let actions: MediaActions
@@ -217,7 +218,11 @@ private struct DownloadProgressSync: ViewModifier {
                 if connection.isOnline { sync() }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { sync() }
+                guard phase == .active else { return }
+                if let downloads {
+                    Task { await downloads.prepareArrived() }
+                }
+                sync()
             }
     }
 
