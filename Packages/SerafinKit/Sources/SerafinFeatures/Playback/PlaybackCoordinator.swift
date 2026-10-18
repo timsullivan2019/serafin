@@ -112,6 +112,22 @@ import SerafinPlayback
         return engine.state == .playing
     }
 
+    /// The episode after the one playing, as the next episode's card shows it and Play Next plays it, or nil when
+    /// there's none. One the engine took from the downloads, as when the server couldn't say which comes next, shows
+    /// as what was saved with it, with its pictures, since the server's can't load.
+    var nextItem: MediaItem? {
+        engine?.nextItem.flatMap { Self.item(for: $0, among: downloads?.offlineItems ?? []) }
+    }
+
+    /// `next` as the player shows it: as what was saved with its download, among the account's downloads as `saved`,
+    /// when it's the item made from that, and otherwise as the server describes it.
+    nonisolated static func item(for next: BaseItemDto, among saved: [MediaItem]) -> MediaItem? {
+        if let item = saved.first(where: { $0.id == next.id }), item.source == next {
+            return item
+        }
+        return MediaItem(next)
+    }
+
     /// The most bits per second to stream from the account's server on the current network, or nil for no cap.
     var maxBitrate: Int? {
         PlaybackQuality.saved(onCellular: isOnExpensiveNetwork(), server: serverID, in: defaults).bitsPerSecond
@@ -180,21 +196,20 @@ import SerafinPlayback
     /// and anything else stops.
     func endedWithoutThePlayer() {
         guard !isPlayerPresented, nowPlaying != nil else { return }
-        guard let engine, engine.playsNextEpisodeAutomatically, let next = engine.nextItem, let item = MediaItem(next)
-        else {
+        guard let engine, engine.playsNextEpisodeAutomatically, let next = nextItem else {
             stop()
             return
         }
-        play(item, from: .beginning, presentsPlayer: false, continuing: true)
+        play(next, from: .beginning, presentsPlayer: false, continuing: true)
     }
 
     /// Plays the episode after the one that just ended, with the subtitles picked in the player for it.
     func playNext() {
-        guard let next = engine?.nextItem, let item = MediaItem(next) else {
+        guard let next = nextItem else {
             stop()
             return
         }
-        play(item, from: .beginning, continuing: true)
+        play(next, from: .beginning, continuing: true)
     }
 
     /// Tries the item again from where playback was.

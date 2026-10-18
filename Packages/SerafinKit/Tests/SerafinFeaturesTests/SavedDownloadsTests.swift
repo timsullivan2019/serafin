@@ -178,6 +178,55 @@ private func sintel(at position: Duration? = nil, isPlayed: Bool? = nil) throws 
     }
 }
 
+@Suite struct NextDownloadedEpisodeTests {
+    /// A downloaded episode without an episode number, as one the server hadn't numbered.
+    private let unnumbered = MediaItem(
+        download: record(
+            "show1111-pilot",
+            DownloadMetadata(
+                title: "Unaired Pilot", kind: .episode, seriesID: "show1111", seriesName: "Sherlock Holmes",
+                seasonNumber: 1)),
+        artwork: SavedArtwork())
+
+    @Test func theNextOneIsTheShowsNextDownloadedByNumberAcrossSeasons() {
+        let special = episode(1, season: 0)
+        let downloads = [
+            episode(1, season: 2), episode(5), episode(3), episode(4, seriesID: "show2222"), episode(1), special,
+            unnumbered,
+        ]
+        #expect(episode(3).nextEpisode(among: downloads) == episode(5))
+        #expect(episode(5).nextEpisode(among: downloads) == episode(1, season: 2))
+        #expect(episode(1, season: 2).nextEpisode(among: downloads) == nil)
+        // Specials come before the first season.
+        #expect(special.nextEpisode(among: downloads) == episode(1))
+    }
+
+    @Test func episodesSavedWithoutTheirShowsIDFollowByItsName() {
+        let downloads = [
+            episode(1, seriesID: nil), episode(3, seriesID: nil), episode(2, seriesID: nil, seriesName: "Alice"),
+        ]
+        #expect(episode(1, seriesID: nil).nextEpisode(among: downloads) == episode(3, seriesID: nil))
+    }
+
+    @Test func onlyAnEpisodeWithBothNumbersHasANextOne() throws {
+        let downloads = [episode(1), episode(2), unnumbered, try sintel()]
+        #expect(unnumbered.nextEpisode(among: downloads) == nil)
+        #expect(try sintel().nextEpisode(among: downloads) == nil)
+    }
+
+    @Test func theEpisodeTakenFromTheDownloadsShowsWithWhatWasSavedWithIt() throws {
+        let second = episode(2)
+        let saved = try #require(second.source)
+        #expect(PlaybackCoordinator.item(for: saved, among: [episode(1), second]) == second)
+        // The server's description of the same episode, as when the server named it, shows as the server has it.
+        var server = saved
+        server.userData = UserItemDataDto(isPlayed: true, key: "show1111-s1e2")
+        let item = PlaybackCoordinator.item(for: server, among: [second])
+        #expect(item?.isSaved == false)
+        #expect(item?.card.isPlayed == true)
+    }
+}
+
 @Suite struct DownloadArtworkSizesTests {
     @Test func aPhonesPicturesAreAsWideAsItsScreenDrawsThem() {
         let sizes = DownloadArtworkSizes(screen: CGSize(width: 440, height: 956), scale: 3)

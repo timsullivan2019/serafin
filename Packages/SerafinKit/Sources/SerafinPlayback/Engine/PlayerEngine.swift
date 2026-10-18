@@ -50,7 +50,8 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var plan: PlaybackPlan?
     /// Why playback failed, when ``state`` is ``PlaybackState/failed``.
     public private(set) var failure: (any Error)?
-    /// The episode after the one playing, for autoplay. Nil for movies and last episodes.
+    /// The episode after the one playing, for autoplay. Nil for movies and last episodes. When the server can't say,
+    /// as with no connection, a downloaded episode's is the one downloaded after it, if any.
     public private(set) var nextItem: BaseItemDto?
     /// Whether the next episode plays by itself after a countdown, as the account's Play Next Episode Automatically
     /// setting says. On until the account says otherwise.
@@ -245,7 +246,8 @@ public enum PlaybackState: Equatable, Sendable {
     /// A downloaded copy plays as the original file does, with the tracks inside it, and keeps where it stops on the
     /// device rather than telling the server. Its subtitles follow Settings when the server answers for the account's
     /// settings within ``settingsWaitForCopies``, so a copy starts promptly with no server, and otherwise follow the
-    /// server's choice when the copy was saved.
+    /// server's choice when the copy was saved. When the server can't say which episode comes next, the episode
+    /// downloaded after it does.
     ///
     /// - Parameters:
     ///   - item: The movie or episode.
@@ -357,7 +359,7 @@ public enum PlaybackState: Equatable, Sendable {
             return
         }
         if item.type == .episode {
-            let next = try? await nextEpisode.after(item)
+            let next = await nextEpisode.after(item, orDownloaded: copy?.nextEpisode)
             if load == generation {
                 nextItem = next
             }

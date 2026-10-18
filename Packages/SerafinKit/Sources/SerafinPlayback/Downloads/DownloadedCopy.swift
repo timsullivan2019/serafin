@@ -3,7 +3,7 @@ import JellyfinAPI
 import SerafinCore
 
 /// A movie or episode saved on this device, which ``PlayerEngine`` plays with no server: the saved file, the tracks
-/// inside it, and where to keep how far playback got.
+/// inside it, where to keep how far playback got, and for an episode, the one downloaded after it.
 public struct DownloadedCopy: Sendable {
     /// The saved file.
     public var file: URL
@@ -11,6 +11,9 @@ public struct DownloadedCopy: Sendable {
     public var mediaSourceID: String
     /// The audio and subtitle tracks inside the file, or nil when they weren't saved with it.
     public var tracks: DownloadTracks?
+    /// For an episode, the episode after it in its show that's downloaded too, which plays next when the server can't
+    /// say which does, as with no connection. Nil for a movie, or when none after it is downloaded.
+    public var nextEpisode: BaseItemDto?
     /// Keeps where playback stopped, on this device.
     public var keepPosition: @Sendable (Duration) async -> Void
 
@@ -20,16 +23,19 @@ public struct DownloadedCopy: Sendable {
     ///   - file: The saved file.
     ///   - mediaSourceID: The server's ID for the version saved.
     ///   - tracks: The audio and subtitle tracks inside the file, or nil when they weren't saved with it.
+    ///   - nextEpisode: For an episode, the episode after it in its show that's downloaded too, or nil.
     ///   - keepPosition: Keeps where playback stopped, on this device.
     public init(
         file: URL,
         mediaSourceID: String,
         tracks: DownloadTracks?,
+        nextEpisode: BaseItemDto? = nil,
         keepPosition: @escaping @Sendable (Duration) async -> Void
     ) {
         self.file = file
         self.mediaSourceID = mediaSourceID
         self.tracks = tracks
+        self.nextEpisode = nextEpisode
         self.keepPosition = keepPosition
     }
 }

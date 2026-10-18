@@ -302,7 +302,8 @@ import os
     }
 
     /// The finished download of `itemID` with its file on the device, ready to play, or nil when there's none. Its
-    /// copy keeps where playback stops in the download.
+    /// copy keeps where playback stops in the download, and for an episode, names the next one downloaded, which plays
+    /// next when the server can't say which does.
     func playableDownload(of itemID: String) -> PlayableDownload? {
         guard let record = records.first(where: { $0.itemID == itemID && $0.state == .finished }),
             let file = downloads.fileURL(for: record)
@@ -315,8 +316,10 @@ import os
                 logger.error("Could not keep a download's position: \(error.localizedDescription, privacy: .private)")
             }
         }
+        let next = offlineItems.first { $0.id == itemID }?.nextEpisode(among: offlineItems)
         let copy = DownloadedCopy(
-            file: file, mediaSourceID: record.mediaSourceID, tracks: record.tracks, keepPosition: keep)
+            file: file, mediaSourceID: record.mediaSourceID, tracks: record.tracks, nextEpisode: next?.source,
+            keepPosition: keep)
         return PlayableDownload(record: record, copy: copy)
     }
 

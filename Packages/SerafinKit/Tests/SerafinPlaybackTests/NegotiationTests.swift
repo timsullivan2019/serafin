@@ -404,4 +404,29 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Shows/show/Episodes").first)
         #expect(request.query("adjacentTo") == "e2")
     }
+
+    @Test func withNoServerTheEpisodeDownloadedAfterIsNext() async throws {
+        let host = "next-episode-offline.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Shows/show/Episodes", .failure(.notConnectedToInternet))
+        let finder = NextEpisode(client: try stubClient(on: host), userID: "user-1")
+        #expect(await finder.after(episode("e2"), orDownloaded: episode("e4"))?.id == "e4")
+        #expect(await finder.after(episode("e2"), orDownloaded: nil) == nil)
+    }
+
+    @Test func theServersAnswerStandsOverTheEpisodeDownloadedAfter() async throws {
+        let host = "next-episode-online.example.com"
+        StubURLProtocol.stub(
+            "\(host):443",
+            path: "/Shows/show/Episodes",
+            .json(
+                200,
+                #"{"Items":[{"Id":"e1","Type":"Episode"},{"Id":"e2","Type":"Episode"},{"Id":"e3","Type":"Episode"}],"TotalRecordCount":3}"#
+            ),
+            .json(200, #"{"Items":[{"Id":"e1","Type":"Episode"},{"Id":"e2","Type":"Episode"}],"TotalRecordCount":2}"#)
+        )
+        let finder = NextEpisode(client: try stubClient(on: host), userID: "user-1")
+        #expect(await finder.after(episode("e2"), orDownloaded: episode("e4"))?.id == "e3")
+        // The server says it's the last episode.
+        #expect(await finder.after(episode("e2"), orDownloaded: episode("e4")) == nil)
+    }
 }

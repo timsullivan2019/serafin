@@ -86,12 +86,45 @@ extension MediaItem {
         self.init(card: card, source: source, savedArtwork: artwork)
     }
 
+    /// The episode after this one in its show among `items`, by season and episode number, or nil when none of them
+    /// comes after it. Specials, season 0, come before the first season, and an episode without both numbers has no
+    /// place among them.
+    func nextEpisode(among items: [MediaItem]) -> MediaItem? {
+        guard let place = episodePlace else { return nil }
+        var next: (item: MediaItem, place: EpisodePlace)?
+        for item in items where item.isInSameShow(as: self) {
+            guard let candidate = item.episodePlace, candidate > place else { continue }
+            if next.map({ candidate < $0.place }) ?? true {
+                next = (item, candidate)
+            }
+        }
+        return next?.item
+    }
+
+    /// An episode's season and episode number, which order a show's episodes.
+    private typealias EpisodePlace = (Int, Int)
+
+    /// The episode's season and episode number, or nil for anything else, or an episode without both.
+    private var episodePlace: EpisodePlace? {
+        guard card.kind == .episode, let season = source?.parentIndexNumber, let episode = source?.indexNumber else {
+            return nil
+        }
+        return (season, episode)
+    }
+
     /// Whether this episode and `other` are in the same season of the same show, by the show's ID, or its name for
     /// episodes that weren't saved with the ID.
     fileprivate func isInSameSeason(as other: MediaItem) -> Bool {
         guard let mine = card.episode, let theirs = other.card.episode, mine.seasonNumber == theirs.seasonNumber else {
             return false
         }
+        return isInSameShow(as: other)
+    }
+
+    /// Whether this episode and `other` are of the same show, by the show's ID, or its name for episodes that weren't
+    /// saved with the ID.
+    private func isInSameShow(as other: MediaItem) -> Bool {
+        guard let mine = card.episode, let theirs = other.card.episode else { return false }
         if !mine.seriesID.isEmpty, !theirs.seriesID.isEmpty {
             return mine.seriesID == theirs.seriesID
         }
