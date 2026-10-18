@@ -113,6 +113,30 @@ import Testing
         #expect(!PlayerEngine.retimesSubtitles(in: plan))
     }
 
+    @Test func subtitlesBurnedIntoACopyAlwaysShow() throws {
+        let tracks = DownloadTracks(
+            audio: [DownloadTrack(index: 1, codec: "aac", language: "eng")],
+            subtitles: [DownloadTrack(index: 5, codec: "pgssub", language: "eng", isForced: true)],
+            defaultAudio: 1, defaultSubtitles: 5, burnedIn: 5)
+        let plan = PlaybackPlan(
+            itemID: movie, copy: copy(tracks: tracks), options: PlaybackOptions(subtitleStreamIndex: -1))
+        #expect(plan.subtitleStreamIndex == 5)
+        let burned = try #require(plan.streams(.subtitle).first)
+        #expect(burned.deliveryMethod == .encode)
+        #expect(PlayerEngine.isBurnedIn(plan.subtitleStreamIndex, in: plan.streams(.subtitle)))
+        #expect(PlayerEngine.carriedSubtitles(of: plan).isEmpty)
+        // Whatever the video before had, they're what the copy starts with.
+        #expect(PlayerEngine.startingSubtitles(carrying: .off, rules: nil, in: plan) == .stream(5))
+        #expect(PlayerEngine.startingSubtitles(carrying: nil, rules: nil, in: plan) == .stream(5))
+
+        // A stream with subtitles burned in is asked for again instead.
+        let streamed = PlaybackPlan(
+            itemID: movie, mediaSource: plan.mediaSource,
+            url: try #require(URL(string: "https://example.com/videos/master.m3u8")), method: .transcode,
+            playSessionID: "session", startPosition: .zero, audioStreamIndex: 1, subtitleStreamIndex: 5)
+        #expect(PlayerEngine.startingSubtitles(carrying: .off, rules: nil, in: streamed) == .off)
+    }
+
     @Test func aCopyHoldsNoGeneratedSubtitlesBack() {
         let plan = PlaybackPlan(itemID: movie, copy: copy(tracks: DownloadTracks(source)), options: PlaybackOptions())
         // iOS offers only a translation, because the file has English text subtitles. Streaming would load a stream

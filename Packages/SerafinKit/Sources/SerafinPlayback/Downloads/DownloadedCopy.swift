@@ -37,6 +37,7 @@ public struct DownloadedCopy: Sendable {
 extension PlaybackPlan {
     /// The plan for playing a downloaded copy: the saved file, played as the original file is, with the tracks inside
     /// it. The audio and subtitles in `options` stand, or else the ones the server chose when the copy was saved.
+    /// Subtitles burned into the copy's picture always show, whatever `options` ask for.
     init(itemID: String, copy: DownloadedCopy, options: PlaybackOptions) {
         let tracks = copy.tracks ?? DownloadTracks()
         self.init(
@@ -47,7 +48,7 @@ extension PlaybackPlan {
             playSessionID: nil,
             startPosition: options.startPosition,
             audioStreamIndex: options.audioStreamIndex ?? tracks.defaultAudio,
-            subtitleStreamIndex: options.subtitleStreamIndex ?? tracks.defaultSubtitles
+            subtitleStreamIndex: tracks.burnedIn ?? options.subtitleStreamIndex ?? tracks.defaultSubtitles
         )
     }
 
@@ -77,13 +78,21 @@ extension DownloadTracks {
         )
     }
 
-    /// The version the tracks belong to, as the engine plays it: the saved tracks as the file's streams.
+    /// The version the tracks belong to, as the engine plays it: the saved tracks as the file's streams, and the
+    /// subtitles burned into the picture as the server describes subtitles it burns in.
     func mediaSource(id: String) -> MediaSourceInfo {
-        MediaSourceInfo(
+        let subtitleStreams = subtitles.map { track in
+            var stream = track.stream(of: .subtitle)
+            if track.index == burnedIn {
+                stream.deliveryMethod = .encode
+            }
+            return stream
+        }
+        return MediaSourceInfo(
             defaultAudioStreamIndex: defaultAudio,
             defaultSubtitleStreamIndex: defaultSubtitles,
             id: id,
-            mediaStreams: audio.map { $0.stream(of: .audio) } + subtitles.map { $0.stream(of: .subtitle) }
+            mediaStreams: audio.map { $0.stream(of: .audio) } + subtitleStreams
         )
     }
 }

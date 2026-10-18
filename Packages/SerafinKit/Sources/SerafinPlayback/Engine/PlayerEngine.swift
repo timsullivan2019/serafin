@@ -807,12 +807,18 @@ public enum PlaybackState: Equatable, Sendable {
 
     /// The subtitles a video starts with: those picked in the player for the video before, when this one carries on
     /// from it and has them; otherwise what Settings' `rules` say; or, when the account's settings couldn't be read,
-    /// the server's own choice.
+    /// the server's own choice. A downloaded copy with subtitles burned into its picture starts with them, since
+    /// nothing else can show.
     nonisolated static func startingSubtitles(
         carrying choice: SubtitleChoice?,
         rules: SubtitleRules?,
         in plan: PlaybackPlan
     ) -> SubtitleSelection {
+        if plan.isDownloaded, let burnedIn = plan.subtitleStreamIndex,
+            isBurnedIn(burnedIn, in: plan.streams(.subtitle))
+        {
+            return .stream(burnedIn)
+        }
         switch choice {
         case .off:
             return .off
