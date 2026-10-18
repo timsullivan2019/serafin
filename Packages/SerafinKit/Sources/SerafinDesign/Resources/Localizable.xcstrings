@@ -60,6 +60,15 @@
     "Direct play" : {
       "comment" : "How a video plays: the original file as it is."
     },
+    "Downloaded" : {
+      "comment" : "Spoken state of a movie or an episode saved on the device."
+    },
+    "Downloading" : {
+      "comment" : "Spoken state of a download on its way or waiting, when how much has arrived isn't known."
+    },
+    "Downloading, %@" : {
+      "comment" : "Spoken state of a download on its way. The value is a percentage, such as 40%."
+    },
     "Episode %lld" : {
       "comment" : "The number over an episode's title on its show's page, such as Episode 3. Shown in capitals."
     },

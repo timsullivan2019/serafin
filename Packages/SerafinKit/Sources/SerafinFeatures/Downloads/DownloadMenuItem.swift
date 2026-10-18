@@ -1,9 +1,9 @@
 import SerafinCore
 import SwiftUI
 
-/// The detail screen's More menu item for downloading a movie or an episode: Download, Cancel Download while it waits,
-/// is on its way or is being prepared, Delete Download once it's saved, or Try Downloading Again after it failed, with
-/// how far it got or why.
+/// The item for downloading a movie or an episode in its page's More menu and its card's menu: Download, Cancel
+/// Download while it waits, is on its way or is being prepared, Delete Download once it's saved, or Try Downloading
+/// Again after it failed, with how far it got or why.
 struct DownloadMenuItem: View {
     let item: MediaItem
     let downloads: DownloadCenter
@@ -68,5 +68,61 @@ struct DownloadMenuItem: View {
                 Text(detail)
             }
         }
+    }
+}
+
+/// A show page's More menu items for downloading its episodes: Download Season for the season the page lists, while
+/// any of its episodes can start, and Download Next Unwatched, with a choice of how many, until the show is watched.
+struct ShowDownloadMenuItems: View {
+    let show: MediaItem
+    /// The season the page lists.
+    let season: ShowSeason?
+    /// The season's episodes, once they've loaded.
+    let seasonEpisodes: [MediaItem]?
+    let downloads: DownloadCenter
+
+    /// How many of the next episodes not yet watched Download Next Unwatched offers.
+    static let unwatchedCounts = [3, 5, 10]
+
+    var body: some View {
+        if let season, seasonEpisodes?.contains(where: { downloads.canStart($0) }) ?? true {
+            Button {
+                Task { await downloads.downloadSeason(season.id, of: show.id) }
+            } label: {
+                Label(
+                    String(
+                        localized: "Download \(season.title)", bundle: .module,
+                        comment:
+                            "Menu item on a show's page that downloads the episodes of the season it lists. The value is the season's name, such as Season 2 or Specials."
+                    ),
+                    systemImage: "arrow.down.circle")
+            }
+        }
+        if !show.card.isPlayed {
+            Menu {
+                ForEach(Self.unwatchedCounts, id: \.self) { count in
+                    Button {
+                        Task { await downloads.downloadNextUnwatched(count, of: show.id) }
+                    } label: {
+                        Text(Self.episodes(count))
+                    }
+                }
+            } label: {
+                Label(
+                    String(
+                        localized: "Download Next Unwatched", bundle: .module,
+                        comment:
+                            "Menu on a show's page that downloads the next episodes not yet watched, with a choice of how many."
+                    ),
+                    systemImage: "arrow.down.to.line.circle")
+            }
+        }
+    }
+
+    /// A choice under Download Next Unwatched, such as "5 Episodes".
+    static func episodes(_ count: Int) -> String {
+        String(
+            localized: "\(count) Episodes", bundle: .module,
+            comment: "Choice under Download Next Unwatched: how many episodes, such as 5 Episodes.")
     }
 }

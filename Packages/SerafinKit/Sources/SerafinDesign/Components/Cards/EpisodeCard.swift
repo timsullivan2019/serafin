@@ -2,6 +2,7 @@ import SwiftUI
 
 /// An episode on its show's page, as the TV app lays them out: a 16:9 still with a play glyph and the time, "EPISODE 3",
 /// the title and the whole synopsis, with a progress bar while it's part way through and a check once it's watched.
+/// A downloaded episode has a mark beside its number, and one on its way a ring that fills as it arrives.
 ///
 /// Tapping the card plays the episode. Touching and holding it, or tapping the ellipsis beside its number, opens its
 /// menu. The card fills the width it is given, and is as tall as its synopsis needs, or as ``textHeight(of:measured:)``
@@ -12,6 +13,7 @@ public struct EpisodeCard<Menu: View>: View {
     private let zoomNamespace: Namespace.ID?
     private let playZoomNamespace: Namespace.ID?
     private let textHeight: CGFloat?
+    private let download: DownloadMark?
     private let play: () -> Void
     private let menu: Menu
     @State private var playCount = 0
@@ -27,6 +29,7 @@ public struct EpisodeCard<Menu: View>: View {
     ///     ``CardPlayZoom/id(for:)``, so the player grows out of it. Pass nil for no zoom.
     ///   - textHeight: The least height for the number, title and synopsis, so cards in a row are as tall as the one
     ///     with the longest synopsis, as ``textHeight(of:measured:)`` measures it; nil for the card's own height.
+    ///   - download: How far the episode's download has got, or nil when it isn't downloaded.
     ///   - play: Called when the card is tapped.
     ///   - menu: The items of the card's menu.
     public init(
@@ -35,6 +38,7 @@ public struct EpisodeCard<Menu: View>: View {
         zoomNamespace: Namespace.ID? = nil,
         playZoomNamespace: Namespace.ID? = nil,
         textHeight: CGFloat? = nil,
+        download: DownloadMark? = nil,
         play: @escaping () -> Void,
         @ViewBuilder menu: () -> Menu
     ) {
@@ -43,6 +47,7 @@ public struct EpisodeCard<Menu: View>: View {
         self.zoomNamespace = zoomNamespace
         self.playZoomNamespace = playZoomNamespace
         self.textHeight = textHeight
+        self.download = download
         self.play = play
         self.menu = menu()
     }
@@ -57,7 +62,7 @@ public struct EpisodeCard<Menu: View>: View {
                     .cardZoomSource(id: card.id, in: zoomNamespace)
                     .cardZoomSource(id: CardPlayZoom.id(for: card.id), in: playZoomNamespace)
                     .cardHoverEffect()
-                EpisodeText(card: card)
+                EpisodeText(card: card, download: download)
                     .frame(minHeight: textHeight, alignment: .top)
             }
             .contentShape(.rect)
@@ -65,6 +70,7 @@ public struct EpisodeCard<Menu: View>: View {
         .buttonStyle(.card)
         .sensoryFeedback(.impact(weight: .medium), trigger: playCount)
         .accessibilityLabel(card.episodeAccessibilityLabel)
+        .accessibilityValue(download?.accessibilityText ?? "")
         .accessibilityHint(
             String(
                 localized: "Plays the episode", bundle: .module, comment: "Hint on an episode card on a show's page.")
@@ -210,23 +216,29 @@ private struct EpisodeStill: View {
     }
 }
 
-/// "EPISODE 3", the title and two lines of synopsis.
+/// "EPISODE 3" with the download's mark, the title and the whole synopsis.
 private struct EpisodeText: View {
     let card: MediaCard
+    var download: DownloadMark?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let caption = card.episodeCaption {
-                Text(caption)
-                    .typography(.caption)
-                    .fontWeight(.semibold)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.textSecondary)
-                    .lineLimit(1)
-                    .alignmentGuide(.episodeCaption) { $0[VerticalAlignment.center] }
-                    // Clear of the menu button beside it.
-                    .padding(.trailing, Spacing.xLarge)
+                HStack(spacing: Spacing.xxSmall) {
+                    Text(caption)
+                        .typography(.caption)
+                        .fontWeight(.semibold)
+                        .textCase(.uppercase)
+                        .foregroundStyle(.textSecondary)
+                        .lineLimit(1)
+                    if let download {
+                        DownloadGlyph(mark: download)
+                    }
+                }
+                .alignmentGuide(.episodeCaption) { $0[VerticalAlignment.center] }
+                // Clear of the menu button beside it.
+                .padding(.trailing, Spacing.xLarge)
             }
             Text(card.title)
                 .typography(.cardTitle)
@@ -272,17 +284,33 @@ private struct Synopsis: ViewModifier {
 
 #if DEBUG
     private struct EpisodeCardSample: View {
-        /// A watched episode with a synopsis, one part way through, one with no synopsis and a special.
-        private let cards: [MediaCard] = {
+        /// An episode, and how far its download has got.
+        private struct Sample: Identifiable {
+            let card: MediaCard
+            let download: DownloadMark?
+            var id: String { card.id }
+        }
+
+        /// A watched episode with a synopsis, one part way through and on its way to the device, one with no synopsis
+        /// that's downloaded, and a special waiting to download.
+        private let samples: [Sample] = {
             let sherlock = MockMedia.seasons(of: MockMedia.series[1])
-            return [sherlock[0].episodes[0], sherlock[0].episodes[3], sherlock[1].episodes[1], sherlock[2].episodes[1]]
+            return [
+                Sample(card: sherlock[0].episodes[0], download: nil),
+                Sample(card: sherlock[0].episodes[3], download: .downloading(0.4)),
+                Sample(card: sherlock[1].episodes[1], download: .downloaded),
+                Sample(card: sherlock[2].episodes[1], download: .downloading(nil)),
+            ]
         }()
 
         var body: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.large) {
-                    ForEach(cards) { card in
-                        EpisodeCard(card: card, artwork: MockMedia.backdropImage(for: card)) {
+                    ForEach(samples) { sample in
+                        EpisodeCard(
+                            card: sample.card, artwork: MockMedia.backdropImage(for: sample.card),
+                            download: sample.download
+                        ) {
                         } menu: {
                             PreviewMenuItems()
                         }

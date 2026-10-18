@@ -40,4 +40,24 @@ import Testing
         #expect(lined > natural)
         #expect(lined >= 400)
     }
+
+    @Test func aDownloadsMarkKeepsTheCardAsTallAsItsMeasuredWords() throws {
+        // The mark sits beside the number, so a row's hidden measure, which has no marks, still fits every card.
+        let plain = try height(of: EpisodeCard(card: episode(short), artwork: nil) {})
+        for mark in [DownloadMark.downloaded, .downloading(0.4), .downloading(nil)] {
+            let marked = try height(
+                of: EpisodeCard(card: episode(short), artwork: nil, download: mark) {
+                } menu: {
+                    EmptyView()
+                })
+            #expect(marked == plain)
+        }
+    }
+
+    @Test func aDownloadsMarkIsSpoken() {
+        let english = Locale(identifier: "en_US")
+        #expect(DownloadMark.downloaded.accessibilityText(locale: english) == "Downloaded")
+        #expect(DownloadMark.downloading(0.4).accessibilityText(locale: english) == "Downloading, 40%")
+        #expect(DownloadMark.downloading(nil).accessibilityText(locale: english) == "Downloading")
+    }
 }

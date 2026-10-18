@@ -103,6 +103,11 @@ import SwiftUI
         if case .loaded(let details) = phase { details } else { nil }
     }
 
+    /// The season whose episodes the page lists, once the details have loaded.
+    var selectedSeason: ShowSeason? {
+        details?.seasons.first { $0.id == selectedSeasonID }
+    }
+
     /// The screen's accent: the followed season's picture's, otherwise the item's backdrop's, or nil until that loads.
     var tint: Color? {
         seasonArtwork?.tint ?? ownTint

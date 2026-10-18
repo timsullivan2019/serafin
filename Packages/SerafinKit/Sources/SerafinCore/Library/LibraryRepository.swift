@@ -246,6 +246,36 @@ public actor LibraryRepository {
         }.items ?? []
     }
 
+    /// A show's episodes that have a file on the server, in the server's order, with what their cards and downloads
+    /// need: one season's, or every season's from one episode on. Episodes the server knows only from their metadata,
+    /// as one missing or yet to air, are left out.
+    ///
+    /// - Parameters:
+    ///   - seriesID: The show.
+    ///   - seasonID: The season, or nil for every season, in the server's order, which puts Specials first.
+    ///   - startID: The episode to start at, or nil for the first.
+    ///   - limit: The most episodes to return, or nil for all of them.
+    public func availableEpisodes(
+        series seriesID: String,
+        season seasonID: String? = nil,
+        from startID: String? = nil,
+        limit: Int? = nil
+    ) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetEpisodesParameters(userID: userID)
+        parameters.seasonID = seasonID
+        parameters.startItemID = startID
+        parameters.isMissing = false
+        parameters.limit = limit
+        parameters.fields = Self.cardFields
+        parameters.imageTypeLimit = 1
+        parameters.enableImageTypes = Self.cardImages
+        parameters.enableUserData = true
+        let request = Paths.getEpisodes(seriesID: seriesID, parameters: parameters)
+        return try await cached(request.url, request.query, statuses: [404: .notFound]) {
+            try await self.client.send(request).value
+        }.items ?? []
+    }
+
     /// Titles like the item, for the row at the bottom of its detail screen.
     public func similar(to itemID: String, limit: Int = 12) async throws -> [BaseItemDto] {
         var parameters = Paths.GetSimilarItemsParameters(userID: userID, limit: limit)

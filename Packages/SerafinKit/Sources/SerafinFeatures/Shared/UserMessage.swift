@@ -328,6 +328,87 @@ struct UserMessage: Equatable, Identifiable, Sendable {
         }
     }
 
+    /// Why episodes asked to download together, as a season, didn't all start: the first reason one didn't.
+    enum UnstartedEpisodes {
+        /// The server can't offer a copy the account may have.
+        case refused(DownloadRefusal)
+        /// The device ran out of space, so the rest weren't tried.
+        case notEnoughSpace
+        /// Anything else, as the server being out of reach.
+        case failed(any Error)
+    }
+
+    /// The message for episodes asked to download together, as a season, that didn't all start, with why.
+    ///
+    /// - Parameters:
+    ///   - reason: Why the first that didn't start couldn't.
+    ///   - anyStarted: Whether some of them started, which are on their way.
+    static func episodesNotStarted(_ reason: UnstartedEpisodes, anyStarted: Bool) -> UserMessage {
+        let title: String
+        if anyStarted {
+            title = String(
+                localized: "Some Episodes Weren't Downloaded", bundle: .module,
+                comment: "Title when some of the episodes asked to download together, as a season, didn't start.")
+        } else {
+            title = String(
+                localized: "Can't Download These Episodes", bundle: .module,
+                comment: "Title when none of the episodes asked to download together, as a season, could start.")
+        }
+        switch reason {
+        case .refused(.notAllowed):
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Some of these episodes have to be converted to play on this device, and your server doesn't let your account have videos converted. Your server's administrator can allow it.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when episodes downloaded together need converting and the server's policy doesn't allow it."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .refused(.overQuality):
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Some of these episodes are above your download quality, and your server doesn't let your account have them converted to fit. Set Download Quality to Maximum in Settings to download them as they are.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when episodes downloaded together are above the download quality and the server's policy doesn't allow converting them."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .refused(.unavailable):
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Your server can't make a copy of some of these episodes that plays on this device. You can still stream them.",
+                    bundle: .module,
+                    comment: "Explanation when the server offers nothing a download can save for some episodes."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .notEnoughSpace:
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "There isn't enough space on this device for all of these episodes. Free up some space and try again.",
+                    bundle: .module,
+                    comment: "Explanation when episodes downloaded together wouldn't all fit on the device."
+                ),
+                systemImage: "externaldrive.badge.exclamationmark"
+            )
+        case .failed(let error):
+            let failure = UserMessage(error)
+            return UserMessage(
+                title: title, message: failure.message, systemImage: failure.systemImage,
+                needsSignIn: failure.needsSignIn)
+        }
+    }
+
     private static func download(_ error: DownloadError) -> UserMessage {
         switch error {
         case .notAllowed:

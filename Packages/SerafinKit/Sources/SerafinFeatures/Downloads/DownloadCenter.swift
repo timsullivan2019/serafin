@@ -56,6 +56,9 @@ import os
     private(set) var offlineItems: [MediaItem] = []
     /// The last download that couldn't start, shown as an alert.
     var failure: UserMessage?
+    /// The movies and episodes being asked of the server and started, which aren't among ``records`` yet, so asking
+    /// again meanwhile doesn't start them twice.
+    private var starting: Set<String> = []
 
     private static let logger = Logger(serafinCategory: "downloads")
     @ObservationIgnored private let downloads: Downloads
@@ -106,9 +109,33 @@ import os
         Self.state(of: records.first { $0.itemID == itemID }, progress: progress)
     }
 
-    /// Whether `item` can be downloaded: a movie or an episode from the server, for an account allowed to download.
+    /// The mark an episode's card shows for the download of `itemID`, or nil when there's none to show.
+    func mark(of itemID: String) -> DownloadMark? {
+        Self.mark(for: state(of: itemID))
+    }
+
+    /// Whether `item` can be downloaded: a movie or an episode with a file on the server, for an account allowed to
+    /// download. An episode the server knows only from its metadata, as one missing or yet to air, has none.
     func canDownload(_ item: MediaItem) -> Bool {
-        isAllowed && item.source != nil && !item.isSaved && (item.card.kind == .movie || item.card.kind == .episode)
+        guard isAllowed, let source = item.source, source.locationType != .virtual, !item.isSaved else { return false }
+        return item.card.kind == .movie || item.card.kind == .episode
+    }
+
+    /// Whether a menu offers `item`'s download item: for one the account may download, and for one downloaded or on
+    /// its way, which can be deleted even while the server, which says whether the account may download, is out of
+    /// reach.
+    func offersDownloadItem(for item: MediaItem) -> Bool {
+        canDownload(item) || state(of: item.id) != .notDownloaded
+    }
+
+    /// Whether `item` can start downloading now: one the account may download that isn't downloaded or on its way, or
+    /// that failed, and isn't being started already.
+    func canStart(_ item: MediaItem) -> Bool {
+        guard canDownload(item), !starting.contains(item.id) else { return false }
+        switch state(of: item.id) {
+        case .notDownloaded, .failed: return true
+        case .waiting, .downloading, .preparing, .finished: return false
+        }
     }
 
     /// Downloads `item`, or tries a download that failed again, and saves its poster and backdrop with it.
@@ -116,30 +143,127 @@ import os
     /// It downloads at the download quality, as the original file when the player opens it, and otherwise as the copy
     /// the server makes, when the server's policy lets the account have it converted.
     func download(_ item: MediaItem) async {
+        guard starting.insert(item.id).inserted else { return }
+        defer { starting.remove(item.id) }
         do {
             let permissions = try await library.conversionPermissions()
-            let maxBitrate = Self.quality(in: defaults).bitsPerSecond
-            switch try await planner.plan(for: item.id, maxBitrate: maxBitrate, permissions: permissions) {
-            case .original(let planned), .converted(let planned):
-                let request = Downloads.Request(
-                    itemID: item.id,
-                    mediaSourceID: planned.mediaSourceID,
-                    url: planned.url,
-                    fileExtension: planned.fileExtension,
-                    bytes: planned.bytes,
-                    metadata: DownloadMetadata(item.card),
-                    tracks: planned.tracks,
-                    playback: Self.serverPlayback(of: item),
-                    preparation: planned.preparation,
-                    allowsCellularAccess: defaults.bool(forKey: Self.cellularKey)
-                )
-                let record = try await downloads.start(request, for: key)
+            switch try await start(item, permissions: permissions) {
+            case .started(let record):
                 await saveArtwork(of: item, for: record)
             case .refused(let refusal):
                 failure = .refused(refusal)
             }
         } catch {
             failure = UserMessage(error)
+        }
+    }
+
+    /// Downloads the episodes of the season `seasonID` of the show `seriesID` that have a file on the server and
+    /// aren't downloaded or on their way, in order.
+    func downloadSeason(_ seasonID: String, of seriesID: String) async {
+        do {
+            let episodes = try await library.availableEpisodes(series: seriesID, season: seasonID)
+            await download(MediaItem.from(episodes))
+        } catch {
+            failure = UserMessage(error)
+        }
+    }
+
+    /// Downloads the next `count` episodes of the show `seriesID` not yet watched, leaving those downloaded or on
+    /// their way as they are. They start at the episode Next Up names, where the show's Play starts, or when it names
+    /// none, as when the last episode was watched before the others, at the first episode after the Specials.
+    func downloadNextUnwatched(_ count: Int, of seriesID: String) async {
+        do {
+            let episodes: [BaseItemDto]
+            if let next = try await library.nextUp(limit: 1, series: seriesID).first?.id {
+                episodes = try await library.availableEpisodes(
+                    series: seriesID, from: next, limit: count + Self.watchedAhead)
+            } else {
+                episodes = try await library.availableEpisodes(series: seriesID).filter { $0.parentIndexNumber != 0 }
+            }
+            await download(Self.unwatched(count, of: MediaItem.from(episodes)))
+        } catch {
+            failure = UserMessage(error)
+        }
+    }
+
+    /// The first `count` of `episodes` not yet watched, in order. One part way through counts.
+    nonisolated static func unwatched(_ count: Int, of episodes: [MediaItem]) -> [MediaItem] {
+        Array(episodes.filter { !$0.card.isPlayed }.prefix(count))
+    }
+
+    /// How many of the episodes after the next one to look through for the next not yet watched, beyond how many are
+    /// asked for, since some may have been watched out of order.
+    private static let watchedAhead = 20
+
+    /// Downloads each of `items` that can start, in order, then saves their pictures. When some can't, it says once
+    /// why the first of them couldn't, and once the device is full, the rest aren't tried.
+    private func download(_ items: [MediaItem]) async {
+        let pending = items.filter { canStart($0) }
+        guard !pending.isEmpty else { return }
+        let ids = Set(pending.map(\.id))
+        starting.formUnion(ids)
+        defer { starting.subtract(ids) }
+        var started: [(item: MediaItem, record: DownloadRecord)] = []
+        var unstarted: UserMessage.UnstartedEpisodes?
+        do {
+            let permissions = try await library.conversionPermissions()
+            episodes: for item in pending {
+                do {
+                    switch try await start(item, permissions: permissions) {
+                    case .started(let record):
+                        started.append((item, record))
+                    case .refused(let refusal):
+                        unstarted = unstarted ?? .refused(refusal)
+                    }
+                } catch DownloadError.notEnoughSpace {
+                    unstarted = .notEnoughSpace
+                    break episodes
+                } catch {
+                    unstarted = unstarted ?? .failed(error)
+                }
+            }
+        } catch {
+            unstarted = .failed(error)
+        }
+        for (item, record) in started {
+            await saveArtwork(of: item, for: record)
+        }
+        if let unstarted {
+            failure = .episodesNotStarted(unstarted, anyStarted: !started.isEmpty)
+        }
+    }
+
+    /// What became of a movie or an episode asked to download.
+    private enum Start {
+        /// It's on its way, or waiting its turn.
+        case started(DownloadRecord)
+        /// The server can't offer a copy the account may have, and why.
+        case refused(DownloadRefusal)
+    }
+
+    /// Asks the server how `item` downloads at the download quality, and starts it.
+    ///
+    /// - Throws: When the server can't be asked, or the download can't start.
+    private func start(_ item: MediaItem, permissions: ConversionPermissions) async throws -> Start {
+        let maxBitrate = Self.quality(in: defaults).bitsPerSecond
+        switch try await planner.plan(for: item.id, maxBitrate: maxBitrate, permissions: permissions) {
+        case .original(let planned), .converted(let planned):
+            let request = Downloads.Request(
+                itemID: item.id,
+                mediaSourceID: planned.mediaSourceID,
+                url: planned.url,
+                fileExtension: planned.fileExtension,
+                bytes: planned.bytes,
+                metadata: DownloadMetadata(item.card),
+                tracks: planned.tracks,
+                playback: Self.serverPlayback(of: item),
+                preparation: planned.preparation,
+                allowsCellularAccess: defaults.bool(forKey: Self.cellularKey)
+            )
+            return .started(try await downloads.start(request, for: key))
+        case .refused(let refusal):
+            return .refused(refusal)
         }
     }
 
@@ -310,6 +434,17 @@ import os
     /// played, so a later stop on this device wins.
     nonisolated static func serverPlayback(of item: MediaItem) -> DownloadPlayback? {
         item.source?.userData.flatMap { DownloadPlayback($0) }
+    }
+
+    /// The mark a card shows for a download in `state`: none before it's asked for or once it failed, which its menu
+    /// says, a ring while it's on its way, and a filled arrow once it's saved.
+    nonisolated static func mark(for state: ItemState) -> DownloadMark? {
+        switch state {
+        case .notDownloaded, .failed: nil
+        case .waiting, .preparing: .downloading(nil)
+        case .downloading(let fraction): .downloading(fraction)
+        case .finished: .downloaded
+        }
     }
 
     /// Where `record` is, given the progress of the running downloads.

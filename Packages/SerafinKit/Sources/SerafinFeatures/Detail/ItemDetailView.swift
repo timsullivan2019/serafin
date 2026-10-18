@@ -89,7 +89,9 @@ struct ItemDetailView: View {
                 DetailToolbar(
                     item: item,
                     canRefreshMetadata: model.canRefreshMetadata,
-                    shareURL: session?.account.flatMap { item.webLink(on: $0.server.url) }
+                    shareURL: session?.account.flatMap { item.webLink(on: $0.server.url) },
+                    season: model.selectedSeason,
+                    seasonEpisodes: model.selectedSeasonID.flatMap { model.episodes[$0] }
                 )
             }
         }
@@ -555,20 +557,24 @@ private struct ChapterLink: View {
 }
 
 /// Mark as Watched and Favourite as glass buttons in the navigation bar, then a More menu with Mark as Unwatched, the
-/// download item, Refresh Metadata for administrators, and Share. An item shown from what was saved with its download
-/// has Mark as Watched, Mark as Unwatched and the download item, since the rest needs the server; a mark made then
-/// reaches the server once it answers.
+/// download item, or for a show Download Season and Download Next Unwatched, Refresh Metadata for administrators, and
+/// Share. An item shown from what was saved with its download has Mark as Watched, Mark as Unwatched and the download
+/// item, since the rest needs the server; a mark made then reaches the server once it answers.
 private struct DetailToolbar: ToolbarContent {
     let item: MediaItem
     let canRefreshMetadata: Bool
     let shareURL: URL?
+    /// For a show, the season its page lists.
+    let season: ShowSeason?
+    /// The listed season's episodes, once they've loaded.
+    let seasonEpisodes: [MediaItem]?
     @Environment(\.media) private var media
     @Environment(MediaActions.self) private var actions
     @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some ToolbarContent {
         markButtons
-        if offersUnwatched || offersDownload || offersRefresh || shareURL != nil {
+        if offersUnwatched || offersDownload || offersShowDownloads || offersRefresh || shareURL != nil {
             moreMenu
         }
     }
@@ -618,6 +624,10 @@ private struct DetailToolbar: ToolbarContent {
                 if let downloads, offersDownload {
                     DownloadMenuItem(item: item, downloads: downloads)
                 }
+                if let downloads, offersShowDownloads {
+                    ShowDownloadMenuItems(
+                        show: item, season: season, seasonEpisodes: seasonEpisodes, downloads: downloads)
+                }
                 if offersRefresh {
                     Button {
                         Task { await actions.refreshMetadata(of: item, in: media) }
@@ -652,12 +662,16 @@ private struct DetailToolbar: ToolbarContent {
         item.card.isPlayed || item.card.isInProgress
     }
 
-    /// Whether the menu offers the download item: for an item the account may download, and for one downloaded or on
-    /// its way, which can be deleted even while the server, which says whether the account may download, is out of
-    /// reach.
+    /// Whether the menu offers the download item, for a movie or an episode.
     private var offersDownload: Bool {
-        guard let downloads else { return false }
-        return downloads.canDownload(item) || downloads.state(of: item.id) != .notDownloaded
+        downloads?.offersDownloadItem(for: item) ?? false
+    }
+
+    /// Whether the menu offers downloading a show's episodes: for a show from the server, for an account allowed to
+    /// download.
+    private var offersShowDownloads: Bool {
+        guard let downloads, item.card.kind == .series, item.source != nil else { return false }
+        return downloads.isAllowed
     }
 
     private var offersRefresh: Bool {

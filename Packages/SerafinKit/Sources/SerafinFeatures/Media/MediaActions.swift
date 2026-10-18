@@ -85,11 +85,12 @@ import SwiftUI
     }
 }
 
-/// The items in a card's context menu: Play, Go to Show for an episode, Mark as Watched and Favourite.
+/// The items in a card's context menu: Play, Go to Show for an episode, Mark as Watched, Favourite, and the download
+/// item for a movie or an episode.
 ///
 /// A card that plays when tapped, as an episode does on its show's page and in Continue Watching and Next Up, offers
-/// Episode Details in place of Play. An item shown from what was saved with its download offers Play and Mark as
-/// Watched, which reaches the server once it answers, since the rest needs the server.
+/// Episode Details in place of Play. An item shown from what was saved with its download offers Play, Mark as Watched,
+/// which reaches the server once it answers, and Delete Download, since the rest needs the server.
 struct CardMenuItems: View {
     let item: MediaItem
     /// Whether tapping the card plays the item, so the menu opens its page instead.
@@ -100,6 +101,7 @@ struct CardMenuItems: View {
     @Environment(MediaActions.self) private var actions
     @Environment(\.media) private var media
     @Environment(\.navigate) private var navigate
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some View {
         if tapPlays {
@@ -139,6 +141,10 @@ struct CardMenuItems: View {
         playedButton
         if !item.isSaved {
             favouriteButton
+        }
+        if let downloads, downloads.offersDownloadItem(for: item) {
+            Divider()
+            DownloadMenuItem(item: item, downloads: downloads)
         }
     }
 

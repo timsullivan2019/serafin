@@ -18,11 +18,22 @@ import Testing
     @Test func eachRecordShowsWhereItsDownloadIs() {
         let progress = ["download": Downloads.Progress(received: 25, expected: 100)]
         #expect(DownloadCenter.state(of: nil, progress: progress) == .notDownloaded)
+        #expect(DownloadCenter.state(of: record(.waiting), progress: progress) == .waiting)
         #expect(DownloadCenter.state(of: record(.downloading), progress: progress) == .downloading(0.25))
         #expect(DownloadCenter.state(of: record(.downloading), progress: [:]) == .downloading(nil))
         #expect(DownloadCenter.state(of: record(.finished), progress: progress) == .finished)
         #expect(
             DownloadCenter.state(of: record(.failed, failure: .notAllowed), progress: progress) == .failed(.notAllowed))
+    }
+
+    @Test func aCardMarksADownloadOnItsWayOrSaved() {
+        #expect(DownloadCenter.mark(for: .notDownloaded) == nil)
+        // A failed download says so in its menu instead.
+        #expect(DownloadCenter.mark(for: .failed(.network)) == nil)
+        #expect(DownloadCenter.mark(for: .waiting) == .downloading(nil))
+        #expect(DownloadCenter.mark(for: .downloading(0.25)) == .downloading(0.25))
+        #expect(DownloadCenter.mark(for: .preparing) == .downloading(nil))
+        #expect(DownloadCenter.mark(for: .finished) == .downloaded)
     }
 
     @Test func anEpisodeKeepsItsSeriesAndNumbers() throws {
@@ -65,5 +76,42 @@ import Testing
         let messages = [DownloadRefusal.notAllowed, .overQuality, .unavailable].map { UserMessage.refused($0) }
         #expect(Set(messages.map(\.message)).count == 3)
         #expect(Set(messages.map(\.title)).count == 1)
+    }
+
+    @Test func theNextUnwatchedEpisodesSkipThoseWatchedOutOfOrder() {
+        func episode(_ number: Int, played: Bool = false, progress: Double = 0) -> MediaItem {
+            let card = MediaCard(
+                id: "episode-\(number)", kind: .episode, title: "Episode \(number)", progress: progress,
+                isPlayed: played)
+            return MediaItem(card: card, source: nil)
+        }
+        let episodes = [
+            episode(4, progress: 0.3),
+            episode(5),
+            episode(6, played: true),
+            episode(7),
+            episode(8),
+        ]
+
+        // One part way through counts as not yet watched.
+        #expect(DownloadCenter.unwatched(3, of: episodes).map(\.id) == ["episode-4", "episode-5", "episode-7"])
+        #expect(DownloadCenter.unwatched(10, of: episodes).count == 4)
+        #expect(DownloadCenter.unwatched(3, of: []).isEmpty)
+    }
+
+    @Test func episodesThatDidntStartSayWhyAndWhetherOthersDid() {
+        let reasons: [UserMessage.UnstartedEpisodes] = [
+            .refused(.notAllowed), .refused(.overQuality), .refused(.unavailable), .notEnoughSpace,
+        ]
+        let messages = reasons.map { UserMessage.episodesNotStarted($0, anyStarted: true) }
+        #expect(Set(messages.map(\.message)).count == reasons.count)
+        #expect(Set(messages.map(\.title)).count == 1)
+        #expect(
+            UserMessage.episodesNotStarted(.notEnoughSpace, anyStarted: false).title
+                != UserMessage.episodesNotStarted(.notEnoughSpace, anyStarted: true).title)
+        // Anything else says what the error does.
+        let offline = UserMessage.episodesNotStarted(.failed(SerafinError.offline), anyStarted: false)
+        #expect(offline.message == UserMessage(SerafinError.offline).message)
+        #expect(ShowDownloadMenuItems.episodes(5).contains("5"))
     }
 }
