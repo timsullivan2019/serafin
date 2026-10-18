@@ -14,7 +14,7 @@ struct TranscodingQuery {
         "VideoCodecNotSupported", "VideoResolutionNotSupported", "AnamorphicVideoNotSupported",
         "InterlacedVideoNotSupported", "VideoBitDepthNotSupported", "VideoBitrateNotSupported",
         "VideoFramerateNotSupported", "VideoLevelNotSupported", "RefFramesNotSupported", "VideoRangeTypeNotSupported",
-        "VideoProfileNotSupported", "UnknownVideoStreamInfo",
+        "VideoProfileNotSupported", "VideoRotationNotSupported", "UnknownVideoStreamInfo",
     ]
 
     /// The reasons Jellyfin gives that mean converting the audio, as its `StreamBuilder` groups them.
