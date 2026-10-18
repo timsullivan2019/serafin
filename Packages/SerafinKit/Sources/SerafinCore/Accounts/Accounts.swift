@@ -97,7 +97,8 @@ public actor Accounts {
                 transfers: transfers,
                 identity: identity,
                 sessions: sessions,
-                preparer: downloads.preparer
+                preparer: downloads.preparer,
+                serverURL: { id in try? await serverStore.server(id: id)?.url }
             )
             self.downloads = created
             Task { await created.activate() }

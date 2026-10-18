@@ -18,6 +18,8 @@ import os
     enum ItemState: Equatable {
         /// Not downloaded.
         case notDownloaded
+        /// Waiting its turn while the server converts another download's video.
+        case waiting
         /// On its way, with the share that has arrived when the size is known.
         case downloading(Double?)
         /// Arrived, while Serafin writes the copy the player opens from it.
@@ -314,6 +316,7 @@ import os
     nonisolated static func state(of record: DownloadRecord?, progress: [String: Downloads.Progress]) -> ItemState {
         guard let record else { return .notDownloaded }
         switch record.state {
+        case .waiting: return .waiting
         case .downloading: return .downloading(progress[record.id]?.fraction)
         case .preparing: return .preparing
         case .finished: return .finished

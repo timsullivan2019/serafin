@@ -1047,6 +1047,9 @@
     "Waiting for approval" : {
       "comment" : "Quick Connect status."
     },
+    "Waiting…" : {
+      "comment" : "A download's status while it waits for the server to finish converting another download first."
+    },
     "Welcome to Serafin" : {
       "comment" : "Greeting on the first screen."
     },

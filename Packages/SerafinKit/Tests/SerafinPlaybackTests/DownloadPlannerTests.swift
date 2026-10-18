@@ -320,6 +320,8 @@ import Testing
         #expect(preparation.subtitles.map(\.index) == [2, 3])
         #expect(preparation.playsAsItArrives == false)
         #expect(preparation.dolbyVision == nil)
+        // Repackaging copies the video, so it needn't wait for the server's other conversions.
+        #expect(preparation.convertsVideo == false)
     }
 
     @Test func subtitlesAreFetchedWithTheTokenInTheHeader() async throws {
@@ -374,6 +376,8 @@ import Testing
         #expect(converted.tracks.burnedIn == 4)
         #expect(converted.tracks.defaultSubtitles == 4)
         #expect(converted.preparation?.subtitles.isEmpty == true)
+        // Burning subtitles in converts the video, so it takes its turn with the server's other conversions.
+        #expect(converted.preparation?.convertsVideo == true)
         #expect(StubURLProtocol.requests(to: "\(host):443", path: subtitlesPath(item: mkv, index: 2)).isEmpty)
     }
 

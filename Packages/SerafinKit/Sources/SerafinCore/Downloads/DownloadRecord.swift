@@ -7,6 +7,9 @@ import Foundation
 public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// Where the download is.
     public enum State: String, Codable, Sendable {
+        /// Waiting its turn: the server converts its video, and converts one download's at a time, so it starts once
+        /// the download before it from the same server has arrived. ``DownloadRecord/waiting`` says how.
+        case waiting
         /// The file is on its way.
         case downloading
         /// The file has arrived, and Serafin is writing the copy the player opens from it, as
@@ -50,6 +53,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// How the saved file is written once the file arrives, for a download that isn't saved as it arrives, until it's
     /// written. Nil for a file saved as it arrives, and once the copy is saved.
     public var preparation: DownloadPreparation?
+    /// Where the file comes from and how, while the download waits its turn. Nil once it starts.
+    public var waiting: DownloadWaiting?
 
     /// Creates a record.
     public init(
@@ -65,7 +70,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
         metadata: DownloadMetadata,
         tracks: DownloadTracks? = nil,
         playback: DownloadPlayback? = nil,
-        preparation: DownloadPreparation? = nil
+        preparation: DownloadPreparation? = nil,
+        waiting: DownloadWaiting? = nil
     ) {
         self.id = id
         self.serverID = key.serverID
@@ -81,11 +87,18 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
         self.tracks = tracks
         self.playback = playback
         self.preparation = preparation
+        self.waiting = waiting
     }
 
     /// The account the download belongs to.
     public var key: SessionKey {
         SessionKey(serverID: serverID, userID: userID)
+    }
+
+    /// Whether the server converts the video as it sends the file, so the download takes its turn with the others
+    /// the same server converts.
+    public var convertsVideo: Bool {
+        preparation?.convertsVideo == true
     }
 
     /// The saved file's name: the ID and the extension.
@@ -140,32 +153,55 @@ public struct DownloadPreparation: Codable, Hashable, Sendable {
     /// Whether the file that arrives plays as it is, as an original does, so it's kept without the added subtitles
     /// when its copy can't be written.
     public var playsAsItArrives: Bool
+    /// Whether the server converts the video as it sends the file, rather than copying it, which keeps the server
+    /// busy, so downloads from it whose video it converts take turns.
+    public var convertsVideo: Bool
 
     /// Creates a preparation.
     public init(
         arrivingExtension: String,
         subtitles: [Int] = [],
         dolbyVision: DolbyVisionConfiguration? = nil,
-        playsAsItArrives: Bool = false
+        playsAsItArrives: Bool = false,
+        convertsVideo: Bool = false
     ) {
         self.arrivingExtension = arrivingExtension
         self.subtitles = subtitles
         self.dolbyVision = dolbyVision
         self.playsAsItArrives = playsAsItArrives
+        self.convertsVideo = convertsVideo
     }
 
     private enum CodingKeys: String, CodingKey {
-        case arrivingExtension, subtitles, dolbyVision, playsAsItArrives
+        case arrivingExtension, subtitles, dolbyVision, playsAsItArrives, convertsVideo
     }
 
     /// Reads a preparation from the index. One saved before a field was added reads as one without it: no
-    /// subtitles to add, and a file that doesn't play as it arrives.
+    /// subtitles to add, a file that doesn't play as it arrives, and video the server copies.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         arrivingExtension = try container.decode(String.self, forKey: .arrivingExtension)
         subtitles = try container.decodeIfPresent([Int].self, forKey: .subtitles) ?? []
         dolbyVision = try container.decodeIfPresent(DolbyVisionConfiguration.self, forKey: .dolbyVision)
         playsAsItArrives = try container.decodeIfPresent(Bool.self, forKey: .playsAsItArrives) ?? false
+        convertsVideo = try container.decodeIfPresent(Bool.self, forKey: .convertsVideo) ?? false
+    }
+}
+
+/// What a download waiting its turn needs to start once it's next: where on the server its file comes from, and
+/// whether it may use cellular data, as when it was asked for.
+public struct DownloadWaiting: Codable, Hashable, Sendable {
+    /// The file's address after the server's own, with its query, such as `/videos/{id}/stream.mp4?…`. It names
+    /// neither the server nor the token, which travels in the `Authorization` header, and is read against the
+    /// server's address when the download starts.
+    public var path: String
+    /// Whether the transfer may use cellular data.
+    public var allowsCellularAccess: Bool
+
+    /// Creates what a waiting download needs.
+    public init(path: String, allowsCellularAccess: Bool) {
+        self.path = path
+        self.allowsCellularAccess = allowsCellularAccess
     }
 }
 

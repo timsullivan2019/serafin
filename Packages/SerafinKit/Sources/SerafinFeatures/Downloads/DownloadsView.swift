@@ -137,12 +137,14 @@ struct DownloadRow: View {
         if case .failed = state { true } else { false }
     }
 
-    /// The size when it's saved, the share that has arrived while it's on its way, that it's being prepared, or why
-    /// it failed.
+    /// The size when it's saved, that it's waiting its turn, the share that has arrived while it's on its way, that
+    /// it's being prepared, or why it failed.
     private var status: String {
         switch state {
         case .notDownloaded, .finished:
             return Self.size(record.bytes ?? 0)
+        case .waiting:
+            return Self.waiting
         case .preparing:
             return Self.preparing
         case .downloading(let fraction):
@@ -158,6 +160,13 @@ struct DownloadRow: View {
         case .failed(let failure):
             return Self.reason(failure)
         }
+    }
+
+    /// A download's status while it waits for the server to convert another download's video first.
+    static var waiting: String {
+        String(
+            localized: "Waiting…", bundle: .module,
+            comment: "A download's status while it waits for the server to finish converting another download first.")
     }
 
     /// A download's status while Serafin writes the copy the player opens from the file that arrived.
@@ -221,6 +230,12 @@ struct DownloadRow: View {
                 state: .preparing, bytes: 2_100_000_000,
                 metadata: DownloadMetadata(title: "Nosferatu", kind: .movie, year: 1922),
                 preparation: DownloadPreparation(arrivingExtension: "mp4")),
+            DownloadRecord(
+                id: "e", key: key, itemID: "movie-the-general", mediaSourceID: "movie-the-general",
+                fileExtension: "mov", state: .waiting, bytes: 1_800_000_000,
+                metadata: DownloadMetadata(title: "The General", kind: .movie, year: 1926),
+                preparation: DownloadPreparation(arrivingExtension: "mp4", convertsVideo: true),
+                waiting: DownloadWaiting(path: "/Videos/movie-the-general/stream.mp4", allowsCellularAccess: false)),
         ]
 
         static let progress = ["a": Downloads.Progress(received: 504_000_000, expected: 1_200_000_000)]

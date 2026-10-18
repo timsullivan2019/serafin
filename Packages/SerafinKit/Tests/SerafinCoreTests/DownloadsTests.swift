@@ -282,9 +282,28 @@ private func isSaved(_ url: URL) -> Bool {
         #expect(preparation == DownloadPreparation(arrivingExtension: "mp4", subtitles: [3]))
         #expect(!preparation.playsAsItArrives)
 
-        let written = try JSONEncoder().encode(DownloadPreparation(arrivingExtension: "mkv", playsAsItArrives: true))
+        #expect(!preparation.convertsVideo)
+
+        let written = try JSONEncoder().encode(
+            DownloadPreparation(arrivingExtension: "mkv", playsAsItArrives: true, convertsVideo: true))
         let read = try JSONDecoder().decode(DownloadPreparation.self, from: written)
-        #expect(read == DownloadPreparation(arrivingExtension: "mkv", playsAsItArrives: true))
+        #expect(read == DownloadPreparation(arrivingExtension: "mkv", playsAsItArrives: true, convertsVideo: true))
+    }
+
+    @Test func aDownloadWaitingItsTurnIsSavedWithWhereItsFileComesFrom() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = "/videos/item-1/stream.mp4?MediaSourceId=item-1"
+        let waiting = DownloadRecord(
+            key: SessionKey(serverID: "server-1", userID: "user-1"), itemID: "item-1", mediaSourceID: "item-1",
+            fileExtension: "mov", state: .waiting, bytes: 1_000,
+            metadata: DownloadMetadata(title: "Sintel", kind: .movie),
+            preparation: DownloadPreparation(arrivingExtension: "mp4", convertsVideo: true),
+            waiting: DownloadWaiting(path: path, allowsCellularAccess: false))
+        try await DownloadStore(directory: directory).save(waiting)
+
+        let read = try #require(try await DownloadStore(directory: directory).records().first)
+        #expect(read == waiting)
+        #expect(read.convertsVideo)
     }
 
     @Test func anUnreadableIndexIsAnError() async throws {
@@ -432,17 +451,30 @@ private struct DownloadsHarness {
     let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
     let key = SessionKey(serverID: "server-1", userID: "user-1")
     let store: DownloadStore
+    let sessions: SessionStore
     let downloads: Downloads
 
     /// Creates downloads whose copies `preparer` writes, while the test runs.
-    init(preparer: (any DownloadPreparing)? = nil) async throws {
+    ///
+    /// - Parameters:
+    ///   - host: The host every server is reached at, which downloads waiting their turn are kept against, or nil
+    ///     for servers whose address isn't known.
+    ///   - saved: Downloads left from an earlier launch, there before these downloads start.
+    init(
+        preparer: (any DownloadPreparing)? = nil,
+        serverHost host: String? = nil,
+        saved: [DownloadRecord] = []
+    ) async throws {
         let secrets = InMemorySecretStore()
-        let sessions = SessionStore(
+        sessions = SessionStore(
             secrets: secrets,
             defaults: try #require(UserDefaults(suiteName: "serafin-tests-\(UUID().uuidString)"))
         )
         try await sessions.setToken("token-1", for: key)
         store = DownloadStore(directory: directory)
+        for record in saved {
+            try await store.save(record)
+        }
         let transfers = DownloadTransfers(
             configuration: StubURLProtocol.configuration(),
             pinning: nil,
@@ -454,7 +486,8 @@ private struct DownloadsHarness {
             identity: DeviceIdentity(secrets: secrets, deviceName: "iPhone", version: "1.1.0"),
             sessions: sessions,
             preparer: preparer,
-            asksForBackgroundTime: false
+            asksForBackgroundTime: false,
+            serverURL: { _ in host.flatMap { URL(string: "https://\($0)") } }
         )
         await downloads.activate()
     }
@@ -471,6 +504,13 @@ private struct DownloadsHarness {
         )
     }
 
+    /// A request for a file whose video the server converts as it sends it, so the download takes its turn.
+    func converting(host: String, itemID: String) throws -> Downloads.Request {
+        var made = try request(host: host, itemID: itemID)
+        made.preparation = Downloads.Preparation(convertsVideo: true)
+        return made
+    }
+
     /// A request for a file whose copy is written once it arrives, with Spanish subtitles added to its English ones:
     /// one the server converts, or an original, which plays as it arrives.
     func withSubtitles(host: String, playsAsItArrives: Bool = false) throws -> Downloads.Request {
@@ -483,10 +523,12 @@ private struct DownloadsHarness {
         return made
     }
 
-    /// Waits until the download of `itemID` is no longer on its way.
+    /// Waits until the download of `itemID` is neither on its way nor waiting its turn.
     func settled(_ itemID: String = "item-1") async throws -> DownloadRecord {
         for _ in 0..<1000 {
-            if let record = try await downloads.record(forItem: itemID, key: key), record.state != .downloading {
+            if let record = try await downloads.record(forItem: itemID, key: key),
+                record.state != .downloading && record.state != .waiting
+            {
                 return record
             }
             try await Task.sleep(for: .milliseconds(5))
@@ -933,6 +975,183 @@ private struct DownloadsHarness {
             try await harness.downloads.start(request, for: harness.key)
         }
         #expect(try await harness.downloads.records(for: harness.key).isEmpty)
+    }
+}
+
+@Suite struct DownloadTurnsTests {
+    @Test func downloadsWhoseVideoTheServerConvertsTakeTurns() async throws {
+        let host = "downloads-turns.example.com"
+        let harness = try await DownloadsHarness(preparer: FakePreparer(), serverHost: host)
+        defer { harness.cleanUp() }
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items/item-1/Download", .held("downloads-turns", .json(200, "first")))
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-2/Download", .json(200, "second"))
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-3/Download", .json(200, "third"))
+
+        try await harness.downloads.start(try harness.converting(host: host, itemID: "item-1"), for: harness.key)
+        let second = try await harness.downloads.start(
+            try harness.converting(host: host, itemID: "item-2"), for: harness.key)
+        // A download whose video the server copies starts at once.
+        try await harness.downloads.start(try harness.request(host: host, itemID: "item-3"), for: harness.key)
+
+        #expect(second.state == .waiting)
+        #expect(second.waiting == DownloadWaiting(path: "/Items/item-2/Download", allowsCellularAccess: true))
+        #expect(try await harness.prepared("item-3").state == .finished)
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-2/Download").isEmpty)
+
+        StubURLProtocol.release("downloads-turns")
+
+        #expect(try await harness.prepared("item-1").state == .finished)
+        let started = try await harness.prepared("item-2")
+        #expect(started.state == .finished)
+        #expect(started.waiting == nil)
+        let sent = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-2/Download").first)
+        #expect(sent.authorization?.contains(#"Token="token-1""#) == true)
+        #expect(sent.request.url?.query == nil)
+    }
+
+    @Test func deletingTheDownloadWhoseVideoIsConvertedGivesTheNextItsTurn() async throws {
+        let host = "downloads-turns-delete.example.com"
+        let harness = try await DownloadsHarness(preparer: FakePreparer(), serverHost: host)
+        defer { harness.cleanUp() }
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .hang)
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-2/Download", .json(200, "second"))
+
+        let first = try await harness.downloads.start(
+            try harness.converting(host: host, itemID: "item-1"), for: harness.key)
+        let second = try await harness.downloads.start(
+            try harness.converting(host: host, itemID: "item-2"), for: harness.key)
+        #expect(second.state == .waiting)
+        try await harness.downloads.delete(first.id)
+
+        #expect(try await harness.prepared("item-2").state == .finished)
+        #expect(try await harness.downloads.records(for: harness.key).map(\.itemID) == ["item-2"])
+    }
+
+    @Test func aConversionThatFailsGivesTheNextItsTurn() async throws {
+        let host = "downloads-turns-fail.example.com"
+        let harness = try await DownloadsHarness(preparer: FakePreparer(), serverHost: host)
+        defer { harness.cleanUp() }
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items/item-1/Download", .held("downloads-turns-fail", .json(500, "{}")))
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-2/Download", .json(200, "second"))
+
+        try await harness.downloads.start(try harness.converting(host: host, itemID: "item-1"), for: harness.key)
+        let second = try await harness.downloads.start(
+            try harness.converting(host: host, itemID: "item-2"), for: harness.key)
+        #expect(second.state == .waiting)
+        StubURLProtocol.release("downloads-turns-fail")
+
+        #expect(try await harness.prepared("item-1").failure == .serverError)
+        #expect(try await harness.prepared("item-2").state == .finished)
+    }
+
+    @Test func eachServerConvertsOneDownloadAtATime() async throws {
+        let host = "downloads-turns-servers.example.com"
+        let harness = try await DownloadsHarness(preparer: FakePreparer(), serverHost: host)
+        defer { harness.cleanUp() }
+        let other = SessionKey(serverID: "server-2", userID: "user-2")
+        try await harness.sessions.setToken("token-2", for: other)
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .hang)
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-2/Download", .json(200, "second"))
+
+        try await harness.downloads.start(try harness.converting(host: host, itemID: "item-1"), for: harness.key)
+        let elsewhere = try await harness.downloads.start(
+            try harness.converting(host: host, itemID: "item-2"), for: other)
+
+        #expect(elsewhere.state == .downloading)
+        try await eventually {
+            try await harness.downloads.record(forItem: "item-2", key: other)?.state == .finished
+        }
+    }
+
+    @Test func aDownloadWaitingWhenSerafinStoppedStartsWhenItsNext() async throws {
+        let host = "downloads-turns-relaunch.example.com"
+        let key = SessionKey(serverID: "server-1", userID: "user-1")
+        let waiting = DownloadRecord(
+            key: key, itemID: "item-1", mediaSourceID: "item-1", fileExtension: "mov", state: .waiting, bytes: 5,
+            metadata: DownloadMetadata(title: "Sintel", kind: .movie),
+            preparation: DownloadPreparation(arrivingExtension: "mp4", convertsVideo: true),
+            waiting: DownloadWaiting(path: "/Items/item-1/Download?MediaSourceId=item-1", allowsCellularAccess: true))
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "first"))
+
+        let harness = try await DownloadsHarness(preparer: FakePreparer(), serverHost: host, saved: [waiting])
+        defer { harness.cleanUp() }
+
+        #expect(try await harness.prepared().state == .finished)
+        let sent = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-1/Download").first)
+        #expect(sent.query("MediaSourceId") == "item-1")
+        #expect(sent.authorization?.contains(#"Token="token-1""#) == true)
+    }
+
+    @Test func aWaitingDownloadKeepsItsAddressAfterTheServers() throws {
+        let server = try #require(URL(string: "https://example.com/jellyfin/"))
+        let address = "https://example.com/jellyfin/videos/item-1/stream.mp4?VideoCodec=h264,hevc"
+        let url = try #require(URL(string: address))
+
+        let path = try #require(Downloads.path(of: url, under: server))
+        #expect(path == "/videos/item-1/stream.mp4?VideoCodec=h264,hevc")
+        #expect(Downloads.url(of: path, under: server) == url)
+        // The server moved: the download starts from where it is now.
+        let moved = try #require(URL(string: "http://192.168.1.20:8096"))
+        #expect(
+            Downloads.url(of: path, under: moved)?.absoluteString
+                == "http://192.168.1.20:8096/videos/item-1/stream.mp4?VideoCodec=h264,hevc")
+    }
+
+    @Test func onlyAnAddressOnTheServerIsKept() throws {
+        let server = try #require(URL(string: "https://example.com/jellyfin"))
+        let others = [
+            "https://elsewhere.example.com/jellyfin/videos/item-1",
+            "http://example.com/jellyfin/videos/item-1",
+            "https://example.com:8920/jellyfin/videos/item-1",
+            "https://example.com/jellyfinx/videos/item-1",
+        ]
+        for other in others {
+            #expect(Downloads.path(of: try #require(URL(string: other)), under: server) == nil)
+        }
+        #expect(Downloads.url(of: "https://elsewhere.example.com/videos/item-1", under: server) == nil)
+        #expect(Downloads.url(of: "videos/item-1", under: server) == nil)
+    }
+}
+
+@Suite struct DownloadSpaceTests {
+    private let key = SessionKey(serverID: "server-1", userID: "user-1")
+
+    private func record(
+        _ id: String,
+        _ state: DownloadRecord.State,
+        bytes: Int64?,
+        prepared: Bool = false
+    ) -> DownloadRecord {
+        DownloadRecord(
+            id: id, key: key, itemID: id, mediaSourceID: id, fileExtension: "mp4", state: state, bytes: bytes,
+            metadata: DownloadMetadata(title: "Sintel", kind: .movie),
+            preparation: prepared ? DownloadPreparation(arrivingExtension: "mp4") : nil)
+    }
+
+    @Test func aDownloadFitsBesideWhatTheUnfinishedOnesStillNeed() {
+        let records = [
+            // 600 of 1,000 still to arrive.
+            record("arriving", .downloading, bytes: 1_000),
+            // A copy is written from it: 2,000 in all.
+            record("waiting", .waiting, bytes: 1_000, prepared: true),
+            // Its copy, as large again as the file that arrived.
+            record("preparing", .preparing, bytes: 500),
+            record("finished", .finished, bytes: 9_000),
+            record("failed", .failed, bytes: 9_000),
+            record("unknown", .downloading, bytes: nil),
+        ]
+        let progress = ["arriving": Downloads.Progress(received: 400, expected: 1_000)]
+
+        #expect(Downloads.fits(900, in: 4_000, besides: records, progress: progress))
+        #expect(!Downloads.fits(901, in: 4_000, besides: records, progress: progress))
+        #expect(Downloads.fits(4_000, in: 4_000, besides: [], progress: [:]))
+    }
+
+    @Test func sizesTooLargeToAddUpDontFit() {
+        let records = [record("huge", .downloading, bytes: .max)]
+        #expect(!Downloads.fits(1, in: .max, besides: records, progress: [:]))
     }
 }
 

@@ -429,7 +429,8 @@ public struct DownloadPlanner: Sendable {
             fileExtension: "mp4",
             bytes: Self.estimatedBytes(of: source, conversion: conversion),
             tracks: tracks,
-            preparation: Downloads.Preparation(subtitles: added.map(\.subtitles), dolbyVision: dolbyVision)
+            preparation: Downloads.Preparation(
+                subtitles: added.map(\.subtitles), dolbyVision: dolbyVision, convertsVideo: !conversion.copiesVideo)
         )
     }
 

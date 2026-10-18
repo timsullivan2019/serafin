@@ -12,6 +12,10 @@ import os
 /// saved beside it, one download at a time, for as long as iOS lets Serafin run in the background, and carries on
 /// when Serafin is next active.
 ///
+/// Converting video keeps a server busy, so downloads whose video the server converts take turns: each server
+/// converts one at a time, and the others wait, oldest first, keeping where on the server their file comes from. Every
+/// other download starts at once.
+///
 /// ``Accounts`` owns the one instance. It hands each transfer the account's `Authorization` header, so the token
 /// never appears in a URL. Resume data is kept in memory only, because it carries that header: a transfer that stops
 /// carries on from where it stopped during this launch, and starts again after a relaunch.
@@ -77,16 +81,21 @@ public actor Downloads {
         /// Whether the file plays as it arrives, as an original does, so it's kept without the added subtitles when
         /// its copy can't be written, and a transfer that stopped can carry on.
         public var playsAsItArrives: Bool
+        /// Whether the server converts the video as it sends the file, so the download takes its turn with the
+        /// others the server converts.
+        public var convertsVideo: Bool
 
         /// Creates a preparation.
         public init(
             subtitles: [Subtitles] = [],
             dolbyVision: DolbyVisionConfiguration? = nil,
-            playsAsItArrives: Bool = false
+            playsAsItArrives: Bool = false,
+            convertsVideo: Bool = false
         ) {
             self.subtitles = subtitles
             self.dolbyVision = dolbyVision
             self.playsAsItArrives = playsAsItArrives
+            self.convertsVideo = convertsVideo
         }
     }
 
@@ -140,6 +149,8 @@ public actor Downloads {
     private let sessions: SessionStore
     private let preparer: (any DownloadPreparing)?
     private let asksForBackgroundTime: Bool
+    /// Each server's address as Serafin reaches it now, by server ID, for the downloads waiting their turn.
+    private let serverURL: @Sendable (String) async -> URL?
     /// How the transfers that stopped this launch carry on, by file name.
     private var resumeData: [String: Data] = [:]
     /// How far each running download has got, by download ID.
@@ -153,6 +164,8 @@ public actor Downloads {
     private var needsPreparing = false
     /// The download whose copy is being written, and the task writing it, so deleting the download stops it.
     private var writing: (id: String, task: Task<Void, any Error>)?
+    /// The download whose video each server is converting, by server ID, while its file is on its way.
+    private var converting: [String: String] = [:]
 
     /// Creates the downloads.
     ///
@@ -164,13 +177,16 @@ public actor Downloads {
     ///   - preparer: Writes the copies of downloads that aren't saved as they arrive, or nil to take none.
     ///   - asksForBackgroundTime: Whether writing copies asks iOS to let Serafin finish them in the background, as the
     ///     app does. Tests, which run outside an app, write them only while they run.
+    ///   - serverURL: Each server's address as Serafin reaches it now, by server ID, or nil when it's not known. A
+    ///     download whose video the server converts waits its turn only when its server's address is known.
     init(
         store: DownloadStore,
         transfers: DownloadTransfers,
         identity: DeviceIdentity,
         sessions: SessionStore,
         preparer: (any DownloadPreparing)? = nil,
-        asksForBackgroundTime: Bool = true
+        asksForBackgroundTime: Bool = true,
+        serverURL: @escaping @Sendable (String) async -> URL? = { _ in nil }
     ) {
         self.store = store
         self.transfers = transfers
@@ -178,17 +194,22 @@ public actor Downloads {
         self.sessions = sessions
         self.preparer = preparer
         self.asksForBackgroundTime = asksForBackgroundTime
+        self.serverURL = serverURL
     }
 
     /// Checks the downloads left from the last launch, then starts reading what the transfers report, once.
     /// Downloads that were running when Serafin last stopped and have no transfer any more, as when it was closed from
-    /// the app switcher, are marked interrupted, and the copies left to write are written. Starting a download waits
-    /// for this, so a new download is never taken for one left over.
+    /// the app switcher, are marked interrupted, downloads waiting their turn at a server that's converting none start,
+    /// and the copies left to write are written. Starting a download waits for this, so a new download is never taken
+    /// for one left over.
     func activate() async {
         if let activation {
             return await activation.value
         }
-        let activation = Task { await self.markInterrupted() }
+        let activation = Task {
+            await self.markInterrupted()
+            await self.takeTurns()
+        }
         self.activation = activation
         await activation.value
         let events = transfers.events
@@ -258,12 +279,14 @@ public actor Downloads {
 
     // MARK: - Changing
 
-    /// Downloads `request` for the account `key`. An item already downloaded or downloading for the account is left
-    /// as it is; one that failed is tried again, afresh when the server converts its file, since it converts it anew,
-    /// or when its copy couldn't be written.
+    /// Downloads `request` for the account `key`. An item already downloaded, downloading or waiting for the account
+    /// is left as it is; one that failed is tried again, afresh when the server converts its file, since it converts
+    /// it anew, or when its copy couldn't be written. A download whose video the server converts waits its turn while
+    /// the server converts another's.
     ///
-    /// - Throws: ``DownloadError/notEnoughSpace`` when the file wouldn't fit, ``DownloadError/storeUnavailable`` when
-    ///   the list of downloads can't be saved, and ``SerafinError/notSignedIn`` when the account has no token.
+    /// - Throws: ``DownloadError/notEnoughSpace`` when the file wouldn't fit beside what the unfinished downloads still
+    ///   need, ``DownloadError/storeUnavailable`` when the list of downloads can't be saved, and
+    ///   ``SerafinError/notSignedIn`` when the account has no token.
     @discardableResult
     public func start(_ request: Request, for key: SessionKey) async throws -> DownloadRecord {
         await activate()
@@ -282,35 +305,57 @@ public actor Downloads {
             request.preparation == nil || preparer != nil
         else { throw DownloadError.storeUnavailable }
         // A copy needs room for the file that arrives and the copy written from it, until the first is deleted.
-        try checkSpace(for: request.bytes.map { request.preparation == nil ? $0 : Self.twice($0) })
+        try await checkSpace(for: request.bytes.map { request.preparation == nil ? $0 : Self.twice($0) })
+        let convertsVideo = request.preparation?.convertsVideo == true
+        var path: String?
+        if convertsVideo {
+            path = await waitingPath(for: request.url, on: key.serverID)
+        }
         let preparation = request.preparation.map { preparation in
             DownloadPreparation(
                 arrivingExtension: request.fileExtension,
                 subtitles: preparation.subtitles.map(\.index),
                 dolbyVision: preparation.dolbyVision,
-                playsAsItArrives: preparation.playsAsItArrives
+                playsAsItArrives: preparation.playsAsItArrives,
+                convertsVideo: preparation.convertsVideo
             )
+        }
+        // Whether it waits, and whether it takes the server's turn, are settled together, so no other start comes
+        // between them.
+        var waiting: DownloadWaiting?
+        if converting[key.serverID] != nil, let path {
+            waiting = DownloadWaiting(path: path, allowsCellularAccess: request.allowsCellularAccess)
         }
         let record = DownloadRecord(
             key: key,
             itemID: request.itemID,
             mediaSourceID: request.mediaSourceID,
             fileExtension: preparation == nil ? request.fileExtension : "mov",
+            state: waiting == nil ? .downloading : .waiting,
             bytes: request.bytes,
             metadata: request.metadata,
             tracks: request.tracks,
             playback: request.playback,
-            preparation: preparation
+            preparation: preparation,
+            waiting: waiting
         )
-        try await store.save(record)
+        if convertsVideo, converting[key.serverID] == nil {
+            converting[key.serverID] = record.id
+        }
         do {
+            try await store.save(record)
             try saveSubtitles(request.preparation?.subtitles ?? [], of: record)
-            try await transfer(record, from: request.url, allowsCellularAccess: request.allowsCellularAccess)
+            if waiting == nil {
+                try await transfer(record, from: request.url, allowsCellularAccess: request.allowsCellularAccess)
+            }
         } catch {
             try? await store.remove(ids: [record.id])
+            await endTurn(of: record)
             throw error
         }
-        progressByID[record.id] = Progress(received: 0, expected: request.bytes)
+        if waiting == nil {
+            progressByID[record.id] = Progress(received: 0, expected: request.bytes)
+        }
         notify()
         return record
     }
@@ -416,7 +461,7 @@ public actor Downloads {
     }
 
     /// Deletes a download, its file and its pictures, stopping its transfer, or the writing of its copy, if it's
-    /// running.
+    /// running. A download waiting its turn at the same server then takes it.
     public func delete(_ id: String) async throws {
         guard let record = try await store.record(id: id) else { return }
         stopWriting([id])
@@ -425,6 +470,7 @@ public actor Downloads {
         resumeData[record.transferName] = nil
         progressByID[id] = nil
         notify()
+        await endTurn(of: record)
     }
 
     /// Deletes every download of the account `key`, and the changes to its playback the server hasn't heard yet, as
@@ -452,6 +498,9 @@ public actor Downloads {
             progressByID[record.id] = nil
         }
         notify()
+        for record in records {
+            await endTurn(of: record)
+        }
     }
 
     /// Stops writing the copy of the download it's being written for, when that's one of `ids`.
@@ -656,6 +705,136 @@ public actor Downloads {
         await task.value
     }
 
+    // MARK: - Turns
+
+    /// Gives each server's turn back to the download whose video it's converting, and starts the next download waiting
+    /// at each server that's converting none, as after a relaunch.
+    private func takeTurns() async {
+        guard let records = try? await store.records() else { return }
+        for record in records where record.state == .downloading && record.convertsVideo {
+            converting[record.serverID] = record.id
+        }
+        let waiting = records.filter { $0.state == .waiting }
+        for serverID in Set(waiting.map(\.serverID)) {
+            await startNext(onServer: serverID)
+        }
+    }
+
+    /// Ends `record`'s turn at its server, when it has it, as when its file has arrived, and starts the next download
+    /// waiting there.
+    private func endTurn(of record: DownloadRecord) async {
+        guard converting[record.serverID] == record.id else { return }
+        converting[record.serverID] = nil
+        await startNext(onServer: record.serverID)
+    }
+
+    /// Starts the oldest download waiting its turn at the server `serverID`, unless the server is converting another's.
+    /// One that can't start fails, and the next one gets the turn.
+    private func startNext(onServer serverID: String) async {
+        while converting[serverID] == nil {
+            guard let records = try? await store.records() else { return }
+            let waiting = records.filter { $0.serverID == serverID && $0.state == .waiting }
+            // Another download may have taken the turn meanwhile.
+            guard let next = waiting.min(by: { $0.created < $1.created }), converting[serverID] == nil else { return }
+            converting[serverID] = next.id
+            if await startWaiting(next) {
+                return
+            }
+            if converting[serverID] == next.id {
+                converting[serverID] = nil
+            }
+        }
+    }
+
+    /// Starts the transfer of `record`, which waited its turn. Returns whether it's on its way: one deleted meanwhile
+    /// isn't, and one that can't start fails.
+    private func startWaiting(_ record: DownloadRecord) async -> Bool {
+        guard let waiting = record.waiting, let url = await address(of: waiting.path, on: record.serverID) else {
+            await failWaiting(record)
+            return false
+        }
+        do {
+            let started = try await store.update(id: record.id) { record in
+                guard record.state == .waiting else { return }
+                record.state = .downloading
+                record.waiting = nil
+            }
+            guard started?.state == .downloading else { return false }
+            try await transfer(record, from: url, allowsCellularAccess: waiting.allowsCellularAccess)
+        } catch {
+            Self.logger.error("Could not start a waiting download: \(error.localizedDescription, privacy: .private)")
+            await failWaiting(record)
+            return false
+        }
+        progressByID[record.id] = Progress(received: 0, expected: record.bytes)
+        notify()
+        return true
+    }
+
+    /// Fails `record`, which couldn't start when its turn came.
+    private func failWaiting(_ record: DownloadRecord) async {
+        do {
+            try await store.update(id: record.id) { record in
+                guard record.state == .waiting || record.state == .downloading else { return }
+                record.state = .failed
+                record.failure = .network
+                record.waiting = nil
+            }
+        } catch {
+            Self.logger.error("Could not update a download: \(error.localizedDescription, privacy: .private)")
+        }
+        notify()
+    }
+
+    /// `url`'s address after the server `serverID`'s own, for a download to keep while it waits its turn, or nil when
+    /// the server's address isn't known or `url` isn't on it.
+    private func waitingPath(for url: URL, on serverID: String) async -> String? {
+        guard let server = await serverURL(serverID) else { return nil }
+        return Self.path(of: url, under: server)
+    }
+
+    /// The address of `path`, kept by a waiting download, on the server `serverID` as Serafin reaches it now, or nil
+    /// when the server's address isn't known.
+    private func address(of path: String, on serverID: String) async -> URL? {
+        guard let server = await serverURL(serverID) else { return nil }
+        return Self.url(of: path, under: server)
+    }
+
+    /// `url`'s path and query after `server`'s address, starting with `/`, such as `/videos/{id}/stream.mp4?…`, or
+    /// nil when `url` isn't on `server`.
+    static func path(of url: URL, under server: URL) -> String? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+            let base = URLComponents(url: server, resolvingAgainstBaseURL: false),
+            components.scheme?.lowercased() == base.scheme?.lowercased(),
+            components.host?.lowercased() == base.host?.lowercased(),
+            components.port == base.port
+        else { return nil }
+        let prefix = trimmingSlash(base.percentEncodedPath)
+        let path = components.percentEncodedPath
+        guard path.hasPrefix(prefix + "/") else { return nil }
+        var relative = String(path.dropFirst(prefix.count))
+        if let query = components.percentEncodedQuery {
+            relative += "?" + query
+        }
+        return relative
+    }
+
+    /// `path`, as ``path(of:under:)`` makes it, on `server`, or nil when it isn't such a path.
+    static func url(of path: String, under server: URL) -> URL? {
+        guard var components = URLComponents(url: server, resolvingAgainstBaseURL: false),
+            let relative = URLComponents(string: path),
+            relative.scheme == nil, relative.host == nil, relative.percentEncodedPath.hasPrefix("/")
+        else { return nil }
+        components.percentEncodedPath = trimmingSlash(components.percentEncodedPath) + relative.percentEncodedPath
+        components.percentEncodedQuery = relative.percentEncodedQuery
+        return components.url
+    }
+
+    /// `path` without the slash it may end with.
+    private static func trimmingSlash(_ path: String) -> String {
+        path.hasSuffix("/") ? String(path.dropLast()) : path
+    }
+
     // MARK: - Transfers
 
     private func transfer(_ record: DownloadRecord, from url: URL, allowsCellularAccess: Bool) async throws {
@@ -692,16 +871,46 @@ public actor Downloads {
         return overflow ? .max : doubled
     }
 
-    /// Throws when a file of `bytes` wouldn't leave room on the device for anything else.
-    private func checkSpace(for bytes: Int64?) throws {
+    /// Throws when a file of `bytes` wouldn't fit on the device beside what the unfinished downloads still need.
+    private func checkSpace(for bytes: Int64?) async throws {
         guard let bytes else { return }
         let values = try? URL.applicationSupportDirectory.resourceValues(forKeys: [
             .volumeAvailableCapacityForImportantUsageKey
         ])
         guard let available = values?.volumeAvailableCapacityForImportantUsage else { return }
-        if bytes > available {
+        let records = (try? await store.records()) ?? []
+        if !Self.fits(bytes, in: available, besides: records, progress: progressByID) {
             throw DownloadError.notEnoughSpace
         }
+    }
+
+    /// Whether `bytes` fit in the `available` bytes once the unfinished downloads among `records` have what they still
+    /// need: what's yet to arrive of those on their way or waiting, with as much again for a copy written from the
+    /// file, and the copy of those being prepared. A size that isn't known counts as nothing.
+    static func fits(
+        _ bytes: Int64,
+        in available: Int64,
+        besides records: [DownloadRecord],
+        progress: [String: Progress]
+    ) -> Bool {
+        var needed = bytes
+        for record in records {
+            guard let size = record.bytes else { continue }
+            let still: Int64
+            switch record.state {
+            case .waiting, .downloading:
+                let whole = record.preparation == nil ? size : twice(size)
+                still = max(0, whole - (progress[record.id]?.received ?? 0))
+            case .preparing:
+                still = size
+            case .finished, .failed:
+                continue
+            }
+            let (sum, overflow) = needed.addingReportingOverflow(still)
+            guard !overflow else { return false }
+            needed = sum
+        }
+        return needed <= available
     }
 
     private func markInterrupted() async {
@@ -745,6 +954,7 @@ public actor Downloads {
                 if finished.state == .preparing {
                     startPreparing()
                 }
+                await endTurn(of: finished)
             case .failed(let fileName, let failure, let data):
                 let failed = try await update(named: fileName) { record in
                     guard record.state == .downloading || record.state == .failed else { return }
@@ -754,6 +964,7 @@ public actor Downloads {
                 guard let failed, failed.state == .failed else { return }
                 resumeData[fileName] = data
                 progressByID[failed.id] = nil
+                await endTurn(of: failed)
             }
         } catch {
             Self.logger.error("Could not update a download: \(error.localizedDescription, privacy: .private)")

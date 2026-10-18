@@ -1,9 +1,9 @@
 import SerafinCore
 import SwiftUI
 
-/// The detail screen's More menu item for downloading a movie or an episode: Download, Cancel Download while it's on
-/// its way or being prepared, Delete Download once it's saved, or Try Downloading Again after it failed, with how far
-/// it got or why.
+/// The detail screen's More menu item for downloading a movie or an episode: Download, Cancel Download while it waits,
+/// is on its way or is being prepared, Delete Download once it's saved, or Try Downloading Again after it failed, with
+/// how far it got or why.
 struct DownloadMenuItem: View {
     let item: MediaItem
     let downloads: DownloadCenter
@@ -26,6 +26,8 @@ struct DownloadMenuItem: View {
                         localized: "\(percent) downloaded", bundle: .module,
                         comment: "Under Cancel Download: how much has arrived, such as 42% downloaded.")
                 })
+        case .waiting:
+            cancel(detail: DownloadRow.waiting)
         case .preparing:
             cancel(detail: DownloadRow.preparing)
         case .finished:
