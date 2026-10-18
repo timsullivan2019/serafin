@@ -16,7 +16,7 @@ import Testing
 
     @Test func eachRecordShowsWhereItsDownloadIs() {
         let progress = ["download": Downloads.Progress(received: 25, expected: 100)]
-        #expect(DownloadCenter.state(of: nil, progress: progress) == .none)
+        #expect(DownloadCenter.state(of: nil, progress: progress) == .notDownloaded)
         #expect(DownloadCenter.state(of: record(.downloading), progress: progress) == .downloading(0.25))
         #expect(DownloadCenter.state(of: record(.downloading), progress: [:]) == .downloading(nil))
         #expect(DownloadCenter.state(of: record(.finished), progress: progress) == .finished)

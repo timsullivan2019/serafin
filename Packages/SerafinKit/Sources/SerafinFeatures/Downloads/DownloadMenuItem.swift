@@ -9,7 +9,7 @@ struct DownloadMenuItem: View {
 
     var body: some View {
         switch downloads.state(of: item.id) {
-        case .none:
+        case .notDownloaded:
             Button {
                 Task { await downloads.download(item) }
             } label: {

@@ -13,7 +13,7 @@ import os
     /// Where one movie's or episode's download is.
     enum ItemState: Equatable {
         /// Not downloaded.
-        case none
+        case notDownloaded
         /// On its way, with the share that has arrived when the size is known.
         case downloading(Double?)
         /// Saved on the device.
@@ -23,7 +23,7 @@ import os
     }
 
     /// The `UserDefaults` key of whether downloads may use cellular data. Off unless the user turns it on.
-    static let cellularKey = "downloads.cellular"
+    nonisolated static let cellularKey = "downloads.cellular"
 
     /// The account's downloads, newest first.
     private(set) var records: [DownloadRecord] = []
@@ -136,7 +136,7 @@ import os
 
     /// Where `record` is, given the progress of the running downloads.
     nonisolated static func state(of record: DownloadRecord?, progress: [String: Downloads.Progress]) -> ItemState {
-        guard let record else { return .none }
+        guard let record else { return .notDownloaded }
         switch record.state {
         case .downloading: return .downloading(progress[record.id]?.fraction)
         case .finished: return .finished

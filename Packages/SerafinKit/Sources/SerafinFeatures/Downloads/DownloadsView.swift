@@ -136,7 +136,7 @@ struct DownloadRow: View {
     /// The size when it's saved, the share that has arrived while it's on its way, or why it failed.
     private var status: String {
         switch state {
-        case .none, .finished:
+        case .notDownloaded, .finished:
             return Self.size(record.bytes ?? 0)
         case .downloading(let fraction):
             guard let fraction else {
@@ -202,7 +202,7 @@ struct DownloadRow: View {
 
         static let progress = ["a": Downloads.Progress(received: 504_000_000, expected: 1_200_000_000)]
 
-        static func list() -> some View {
+        @MainActor static func list() -> some View {
             NavigationStack {
                 DownloadsList(records: records, progress: progress, usedBytes: 640_000_000, delete: { _ in })
                     .navigationTitle(DownloadsView.title)

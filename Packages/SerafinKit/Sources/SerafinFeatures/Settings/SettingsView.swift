@@ -448,7 +448,6 @@ private struct DeliverySection: View {
     }
 }
 
-/// Clearing the cached artwork, saved Home and library answers.
 /// The downloads, as a row that opens them with the space they take, and whether they may use cellular data.
 private struct DownloadsSection: View {
     let downloads: DownloadCenter
@@ -475,6 +474,7 @@ private struct DownloadsSection: View {
     }
 }
 
+/// Clearing the cached artwork, saved Home and library answers.
 private struct StorageSection: View {
     @Environment(AppSession.self) private var session
     @State private var clearCount = 0
