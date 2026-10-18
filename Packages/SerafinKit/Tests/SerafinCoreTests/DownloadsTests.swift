@@ -276,6 +276,17 @@ private func isSaved(_ url: URL) -> Bool {
         #expect(try await store.changes().isEmpty)
     }
 
+    @Test func aPreparationSavedBeforeItsNewerFieldsStillReads() throws {
+        let saved = #"{"arrivingExtension": "mp4", "subtitles": [3]}"#
+        let preparation = try JSONDecoder().decode(DownloadPreparation.self, from: Data(saved.utf8))
+        #expect(preparation == DownloadPreparation(arrivingExtension: "mp4", subtitles: [3]))
+        #expect(!preparation.playsAsItArrives)
+
+        let written = try JSONEncoder().encode(DownloadPreparation(arrivingExtension: "mkv", playsAsItArrives: true))
+        let read = try JSONDecoder().decode(DownloadPreparation.self, from: written)
+        #expect(read == DownloadPreparation(arrivingExtension: "mkv", playsAsItArrives: true))
+    }
+
     @Test func anUnreadableIndexIsAnError() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

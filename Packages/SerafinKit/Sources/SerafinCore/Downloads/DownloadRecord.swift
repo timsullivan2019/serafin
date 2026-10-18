@@ -153,6 +153,20 @@ public struct DownloadPreparation: Codable, Hashable, Sendable {
         self.dolbyVision = dolbyVision
         self.playsAsItArrives = playsAsItArrives
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case arrivingExtension, subtitles, dolbyVision, playsAsItArrives
+    }
+
+    /// Reads a preparation from the index. One saved before a field was added reads as one without it: no
+    /// subtitles to add, and a file that doesn't play as it arrives.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        arrivingExtension = try container.decode(String.self, forKey: .arrivingExtension)
+        subtitles = try container.decodeIfPresent([Int].self, forKey: .subtitles) ?? []
+        dolbyVision = try container.decodeIfPresent(DolbyVisionConfiguration.self, forKey: .dolbyVision)
+        playsAsItArrives = try container.decodeIfPresent(Bool.self, forKey: .playsAsItArrives) ?? false
+    }
 }
 
 /// How a video is coded in Dolby Vision, as the server reads it from the original's own configuration: what a copy
