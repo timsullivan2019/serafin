@@ -103,6 +103,27 @@ Steps:
 
 Tests: default-choice logic with three fixtures (4K DV + 1080p on a device without DV; same on a device with DV; two 1080p sources with different audio).
 
+### 7.5 Adaptive quality (stretch goal for 1.1; otherwise first in 1.2)
+
+Goal: a playback mode that starts on the best option (direct play when possible) and, when the connection can't sustain it, re-negotiates to a lower server bitrate at the current position, then climbs back up when conditions recover, with no user action. This replaces the fixed Wi-Fi and cellular caps as the default behaviour.
+
+Steps:
+
+1. Settings › Playback › Quality mode: **Adaptive** (default), **Fixed** (today's behaviour with the existing Wi-Fi and cellular caps), **Direct Play Only** (never transcode; show the error if the file can't play). Under Adaptive, the existing caps become the ceiling per network, labelled "Maximum quality on Wi-Fi / Cellular." The setting stays per server, as today.
+2. Startup estimate: before the first PlaybackInfo on a remote address, run a 2-second bandwidth probe against `GET /Playback/BitrateTest?size=` (confirm the path and the size parameter in the SDK; about 3 MB, abort at 2 s) and cache the result for 10 minutes per network. The initial bitrate is 0.8 × measured, bounded by the ceiling; if the measurement exceeds the item's bitrate by 1.5×, start with direct play. On a local address, skip the probe and start with direct play.
+3. `AdaptiveQualityController` in Playback observes `AVPlayerItem` access-log events (`observedBitrate`, `indicatedBitrate`, `numberOfStalls`, `durationWatched`), `isPlaybackLikelyToKeepUp`, and the buffered-ahead duration from `loadedTimeRanges`.
+   - Downgrade when any of: two stalls within 60 s; buffered-ahead below 3 s for more than 5 s while playing; observed bitrate under 1.2× the current stream's bitrate for 20 s. The target is the next step down the ladder 40, 20, 12, 8, 4, 2 Mbps below 0.8 × observed, never above the ceiling.
+   - Upgrade when the observed bitrate has exceeded 1.5× the next step's bitrate for 90 s with no stalls, one step at a time; back to direct play only when it exceeds 1.5× the file's bitrate.
+   - Cooldowns: no change within 30 s of the previous one; after a second downgrade within 5 minutes, hold the level for 10 minutes.
+   - Never change quality during the last 2 minutes of an item, during Picture in Picture transitions, or while the user is scrubbing.
+   - Log every decision with its inputs at `.debug`.
+4. Switching reuses the existing track-switch path: report progress, negotiate with the new `maxStreamingBitrate`, swap the `AVPlayerItem` at the same position with the same audio and subtitle selection, resume, report start. A brief glass toast ("Adjusting quality for your connection") shows on a downgrade only, never on an upgrade; the play-method indicator in the Audio and Subtitles sheet updates.
+5. Downloads and Live TV are out of scope.
+
+Tests: the controller is a pure state machine over a stream of synthetic observations, with fixture sequences for a clean connection (no change), a sudden drop (one downgrade, then hold), a flaky connection (downgrade, cooldown respected, no flapping) and a recovery (stepwise upgrades back to direct play); plus the ladder-selection function and the probe result bounding.
+
+Acceptance: on cellular with the owner throttling the connection (Network Link Conditioner or a weak-signal spot), a 4K movie starts, downgrades within 30 s of the throttle, plays through without a stall, and returns to direct play within two minutes of the throttle lifting; the same movie on home Wi-Fi never leaves direct play. Screen recording with the play-method indicator visible.
+
 ### Gate 7
 
 On the owner's phone and iPad: trickplay thumbnails while scrubbing a movie and a downloaded episode; address switching between home Wi-Fi and cellular with no re-sign-in; a 12.0 instance passes the 7.3 checklist; a multi-version movie plays the expected version and the picker switches it. Then TestFlight for at least a week with the r/jellyfin group, screenshots unchanged (no new tab), App Store "What's New" in three lines, benefits first.
@@ -268,7 +289,7 @@ Each is one phase in a future plan document; listed here so the architecture kee
 
 ## Order of work
 
-1. 7.0 merge downloads → 7.1 trickplay → 7.2 address switching → 7.3 Jellyfin 12.0 compatibility → 7.4 version picker → Gate 7 → TestFlight → 1.1.
+1. 7.0 merge downloads → 7.1 trickplay → 7.2 address switching → 7.3 Jellyfin 12.0 compatibility → 7.4 version picker → 7.5 adaptive quality (stretch; else first in 1.2) → Gate 7 → TestFlight → 1.1.
 2. 8.1 Seerr Core → 8.2 components → 8.3 screens → 8.4 localization → Gate 8 → TestFlight → 1.2.
 3. PLAN-2 Phase 6 with the amendments above → Gate 6 → CarPlay gate → 1.3.
 4. PLAN-2 Phase 4 with the amendments above → Gate 4 → 1.4.
