@@ -64,17 +64,20 @@ final class ServerAtAddresses: URLProtocol, @unchecked Sendable {
 @Suite struct AddressSwitchingTests {
     /// A session on throwaway stores, whose requests reach only the servers ``ServerAtAddresses`` puts at addresses.
     private func session() throws -> AppSession {
+        AppSession(accounts: try Self.accounts())
+    }
+
+    /// The session's accounts, made off the main actor so the defaults they're handed belong to nothing else.
+    private nonisolated static func accounts() throws -> Accounts {
         let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
-        return AppSession(
-            accounts: Accounts(
-                secrets: InMemorySecretStore(),
-                deviceName: "iPhone",
-                serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
-                defaults: try #require(UserDefaults(suiteName: "serafin-tests-\(UUID().uuidString)")),
-                imageDiskCache: false,
-                homeSnapshots: HomeSnapshotStore(directory: directory.appending(path: "home")),
-                sessionConfiguration: { ServerAtAddresses.configuration() }
-            )
+        return Accounts(
+            secrets: InMemorySecretStore(),
+            deviceName: "iPhone",
+            serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
+            defaults: try #require(UserDefaults(suiteName: "serafin-tests-\(UUID().uuidString)")),
+            imageDiskCache: false,
+            homeSnapshots: HomeSnapshotStore(directory: directory.appending(path: "home")),
+            sessionConfiguration: { ServerAtAddresses.configuration() }
         )
     }
 
