@@ -61,6 +61,13 @@ import Testing
         #expect(!message.message.contains("NSURLError"))
     }
 
+    @Test func anOldServerHearsWhichReleasesSerafinIsTestedWith() {
+        let message = UserMessage(SerafinError.unsupportedServerVersion("10.9.11")).message
+        #expect(message.contains("10.10 or newer"))
+        #expect(message.contains("tested through \(PublicServerInfo.newestTestedVersion)."))
+        #expect(message.hasSuffix("This server runs 10.9.11."))
+    }
+
     @Test func everyCoreErrorHasAMessage() {
         let errors: [SerafinError] = [
             .keychain(status: -25300), .keychainDataCorrupt, .serverStoreUnavailable, .invalidAddress,

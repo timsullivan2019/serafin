@@ -10,3 +10,6 @@ build/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# Python, for the scripts in scripts/
+__pycache__/

@@ -906,8 +906,8 @@
     "Serafin uses whichever address answers best where you are: one at home on Wi-Fi, a remote one on cellular. Your sign-in works at all of them." : {
       "comment" : "Footer explaining how Serafin picks among a server's addresses."
     },
-    "Serafin works with Jellyfin 10.10 or newer. This server runs %@." : {
-      "comment" : "Explanation when the server is too old. The argument is its version, such as 10.9.11."
+    "Serafin works with Jellyfin 10.10 or newer and is tested through %@. This server runs %@." : {
+      "comment" : "Explanation when the server is too old. The first argument is the newest Jellyfin version Serafin is tested with, such as 12.4, and the second is the server's, such as 10.9.11."
     },
     "Server Address" : {
       "comment" : "Label of the server address field."

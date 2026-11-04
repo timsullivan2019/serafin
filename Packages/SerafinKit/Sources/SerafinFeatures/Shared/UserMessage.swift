@@ -139,9 +139,13 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                     localized: "This Server Needs an Update", bundle: .module,
                     comment: "Title when the server is too old."),
                 message: String(
-                    localized: "Serafin works with Jellyfin 10.10 or newer. This server runs \(version).",
+                    localized: """
+                        Serafin works with Jellyfin 10.10 or newer and is tested through \
+                        \(PublicServerInfo.newestTestedVersion). This server runs \(version).
+                        """,
                     bundle: .module,
-                    comment: "Explanation when the server is too old. The argument is its version, such as 10.9.11."
+                    comment:
+                        "Explanation when the server is too old. The first argument is the newest Jellyfin version Serafin is tested with, such as 12.4, and the second is the server's, such as 10.9.11."
                 ),
                 systemImage: "arrow.down.circle"
             )

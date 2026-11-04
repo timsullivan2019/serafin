@@ -33,9 +33,14 @@ private func publicInfoJSON(id: String = "c0ffee", version: String = "10.10.7", 
         }
     }
 
-    @Test(arguments: ["10.10.0", "10.11.2", "11.0.0", "10.11.0-rc1"])
+    /// 12.4.0 and 13.0.0 are what Jellyfin 12.4 and its unstable build report, checked in docs/COMPATIBILITY.md.
+    @Test(arguments: ["10.10.0", "10.11.2", "11.0.0", "10.11.0-rc1", "12.4.0", "13.0.0"])
     func acceptsNewerReleases(_ version: String) throws {
         #expect(try PublicServerInfo(validating: decode(publicInfoJSON(version: version))).version == version)
+    }
+
+    @Test func theNewestTestedReleaseIsOneSerafinAccepts() {
+        #expect(PublicServerInfo.isSupported(PublicServerInfo.newestTestedVersion))
     }
 
     @Test func refusesOtherProducts() throws {
