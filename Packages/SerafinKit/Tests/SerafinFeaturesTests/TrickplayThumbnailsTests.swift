@@ -185,7 +185,9 @@ private actor TileServer {
         let server = try TileServer()
         let thumbnails = TrickplayThumbnails(reader: server.reader(of: try smallLayout(), isRemote: false))
         let scrubber = thumbnails.scrubberThumbnails
-        #expect(scrubber.aspectRatio == 32.0 / 18.0)
+        // Both sides are CGFloat: with a Double on the right, the testing library compares the two as AnyHashable,
+        // which never finds a CGFloat equal to a Double.
+        #expect(scrubber.aspectRatio == CGFloat(32) / CGFloat(18))
 
         scrubber.prepare(.seconds(150))
 
