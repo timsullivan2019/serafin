@@ -36,6 +36,10 @@ enum Route: Hashable {
     case addServer
     /// Signing in to a saved server, from Settings or after adding one.
     case signIn(Server)
+    /// A saved server's addresses, from Settings.
+    case serverAddresses(serverID: String)
+    /// Adding another address to a saved server, from its addresses.
+    case addAddress(Server)
     /// The open-source licences, from Settings.
     case licences
     /// Audio and subtitle languages, and how subtitles look, from Settings.
@@ -48,13 +52,20 @@ enum Route: Hashable {
     case downloads
 }
 
-/// Pushes a route onto the current tab's navigation stack, for buttons that are not navigation links.
+/// Pushes a route onto the current tab's navigation stack, or shows one in place of the screen on top, for buttons
+/// that are not navigation links.
 struct NavigateAction: Sendable {
     fileprivate let push: @MainActor @Sendable (Route) -> Void
+    fileprivate let replace: @MainActor @Sendable (Route) -> Void
 
     /// Pushes `route`.
     @MainActor func callAsFunction(_ route: Route) {
         push(route)
+    }
+
+    /// Shows `route` in place of the screen on top, so going back skips that screen.
+    @MainActor func callAsFunction(replacingTopWith route: Route) {
+        replace(route)
     }
 }
 
@@ -70,7 +81,7 @@ extension EnvironmentValues {
     @Entry var searchRequest = SearchRequest()
 
     /// Pushes a route onto the current tab's navigation stack.
-    @Entry var navigate = NavigateAction { _ in }
+    @Entry var navigate = NavigateAction(push: { _ in }, replace: { _ in })
 }
 
 /// A request for the search tab.
@@ -111,7 +122,13 @@ struct TabStack<Root: View>: View {
                 }
         }
         .environment(\.zoomNamespace, zoom)
-        .environment(\.navigate, NavigateAction { [path] route in path.wrappedValue.append(route) })
+        .environment(
+            \.navigate,
+            NavigateAction(
+                push: { [path] route in path.wrappedValue.append(route) },
+                replace: { [path] route in path.wrappedValue = Array(path.wrappedValue.dropLast()) + [route] }
+            )
+        )
     }
 }
 
@@ -145,9 +162,18 @@ private struct RouteDestination: View {
         case .person(let person):
             LibraryView(scope: .person(person))
         case .addServer:
-            AddServerView { server in navigate(.signIn(server)) }
+            // A server someone is signed in to already takes the address, and its addresses show instead of sign-in.
+            AddServerView { server in
+                navigate(.signIn(server))
+            } onAddress: { serverID in
+                navigate(replacingTopWith: .serverAddresses(serverID: serverID))
+            }
         case .signIn(let server):
             SignInView(server: server)
+        case .serverAddresses(let serverID):
+            ServerAddressesView(serverID: serverID)
+        case .addAddress(let server):
+            AddAddressView(server: server)
         case .licences:
             LicencesView()
         case .audioAndSubtitles:

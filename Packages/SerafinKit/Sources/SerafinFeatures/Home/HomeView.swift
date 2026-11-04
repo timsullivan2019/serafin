@@ -28,6 +28,7 @@ struct HomeView: View {
     @Environment(\.artwork) private var artwork
     @Environment(MediaActions.self) private var actions
     @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
+    @Environment(AppSession.self) private var session: AppSession?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.displayScale) private var displayScale
     private let network = NetworkWatcher.shared
@@ -53,6 +54,7 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.2), value: isRefreshing)
             .task(id: Load(revision: actions.revision, attempt: attempt)) {
                 model.artwork = artwork
+                model.serverName = session?.account?.server.displayName
                 await model.load(from: media)
                 // The server answers, so progress made with downloads while it didn't can reach it now.
                 guard !Task.isCancelled, model.failure == nil, let downloads else { return }

@@ -24,6 +24,12 @@
     "%@ per episode" : {
       "comment" : "A show's run time: how long its episodes run on average, such as 45 min per episode."
     },
+    "%@ reports this as its own address, and answers there." : {
+      "comment" : "Under the offer to add the address a server gives for itself on its own network. The argument is the server's name."
+    },
+    "%@ reports this as its own address, and answers there. Serafin uses whichever address answers best where you are." : {
+      "comment" : "Message of the question offering to add the address a server gives for itself, once it's added. The argument is the server's name."
+    },
     "%@ uses HTTP, so your sign-in and what you watch cross your network unencrypted. Only connect on a network you trust, like your home Wi-Fi." : {
       "comment" : "Warning before connecting over plain HTTP. The argument is the server's name."
     },
@@ -155,6 +161,9 @@
         }
       }
     },
+    "A different Jellyfin server answers at that address. Add it as a server of its own." : {
+      "comment" : "Explanation when an address added to a server answers as a different Jellyfin server."
+    },
     "A to Z" : {
       "comment" : "Library sort direction for names."
     },
@@ -167,8 +176,14 @@
     "Accounts, playback, appearance and privacy" : {
       "comment" : "Hint on the profile button, which opens Settings."
     },
+    "Add" : {
+      "comment" : "Button that adds the typed address to a server."
+    },
     "Add Account" : {
       "comment" : "Settings row: sign in another user."
+    },
+    "Add Address" : {
+      "comment" : "Title of the screen that adds an address to a server, its row in Settings, and the button that adds an address a server gives for itself."
     },
     "Add Server" : {
       "comment" : "Title of the add server screen, and its row in Settings."
@@ -181,6 +196,9 @@
     },
     "Added to Favorites" : {
       "comment" : "Spoken once a favorite is added."
+    },
+    "Addresses" : {
+      "comment" : "Title of the screen listing a server's addresses in Settings, and of its row."
     },
     "Ads" : {
       "comment" : "Settings switch: skip adverts by themselves."
@@ -206,8 +224,26 @@
     "All Years" : {
       "comment" : "Year filter: no filter."
     },
+    "Also Use %@ at Home?" : {
+      "comment" : "Title of the question, once a server is added, offering to add its address on the user's own network. The argument is the address, such as 192.168.1.20:8096."
+    },
+    "Also Use %@ over Tailscale?" : {
+      "comment" : "Title of the question, once a server is added, offering to add its Tailscale address. The argument is the address, such as 100.101.102.103:8096."
+    },
+    "Also use %@ at home" : {
+      "comment" : "Offer to add a server's address on the user's own network. The argument is the address, such as 192.168.1.20:8096."
+    },
+    "Also use %@ over Tailscale" : {
+      "comment" : "Offer to add a server's Tailscale address. The argument is the address, such as 100.101.102.103:8096."
+    },
     "Always" : {
       "comment" : "Subtitle mode: always on."
+    },
+    "Another address %@ answers at, such as its address at home or on Tailscale." : {
+      "comment" : "Under the field for adding an address to a server. The argument is the server's name."
+    },
+    "Answers" : {
+      "comment" : "Spoken for an address that answered the test."
     },
     "Appearance" : {
       "comment" : "Settings section header."
@@ -241,6 +277,9 @@
     },
     "Can't Play This" : {
       "comment" : "Title when the server has no version of an item that can play."
+    },
+    "Can't Reach %@" : {
+      "comment" : "Title when a server doesn't answer at any of its addresses. The argument is its name."
     },
     "Can't Reach the Server" : {
       "comment" : "Title when the server doesn't answer."
@@ -323,6 +362,15 @@
     "Connect to your Jellyfin server to start watching." : {
       "comment" : "Explanation on the first screen."
     },
+    "Connected via Tailscale." : {
+      "comment" : "Under a server's addresses: Serafin is connected through its Tailscale address."
+    },
+    "Connected via home network." : {
+      "comment" : "Under a server's addresses: Serafin is connected through its address on the user's own network."
+    },
+    "Connected via remote address." : {
+      "comment" : "Under a server's addresses: Serafin is connected through its address on the internet."
+    },
     "Continue Watching" : {
       "comment" : "Started movies and episodes: the Home row, and the shortcut that plays the latest of them."
     },
@@ -364,6 +412,9 @@
     },
     "Director" : {
       "comment" : "A crew member's job on a detail screen."
+    },
+    "Doesn't answer" : {
+      "comment" : "Spoken for an address that didn't answer the test."
     },
     "Download" : {
       "comment" : "Menu item that downloads a video."
@@ -473,6 +524,9 @@
     "Home" : {
       "comment" : "Title of the home tab."
     },
+    "Home network" : {
+      "comment" : "Kind of a server address on the user's own network."
+    },
     "How Videos Play" : {
       "comment" : "Settings section header."
     },
@@ -481,6 +535,9 @@
     },
     "In Jellyfin's dashboard, open Networking and turn on remote connections, or add this network to LAN networks. For Tailscale, that's 100.64.0.0/10." : {
       "comment" : "Explanation when Jellyfin's network settings turn the device away. Networking and LAN networks are Jellyfin's own names."
+    },
+    "In use" : {
+      "comment" : "Spoken for the check by the address Serafin is connected through."
     },
     "Information" : {
       "comment" : "Detail screen column heading."
@@ -623,6 +680,9 @@
     "Not Enough Space" : {
       "comment" : "Title when a download wouldn't fit on the device."
     },
+    "Not Now" : {
+      "comment" : "Button that turns down an offered address."
+    },
     "Not enough space" : {
       "comment" : "A failed download's status."
     },
@@ -756,6 +816,12 @@
     "Released" : {
       "comment" : "Detail fact: release date."
     },
+    "Remote address" : {
+      "comment" : "Kind of a server address reached over the internet."
+    },
+    "Remove" : {
+      "comment" : "Button that removes one of a server's addresses."
+    },
     "Remove %@" : {
       "comment" : "Button that removes a server."
     },
@@ -764,6 +830,9 @@
     },
     "Remove from Favorites" : {
       "comment" : "Button and menu item that takes an item out of the favorites."
+    },
+    "Remove one in Settings before adding another." : {
+      "comment" : "Explanation when a server already has as many addresses as Serafin keeps."
     },
     "Remove this server?" : {
       "comment" : "Title of the remove server dialog."
@@ -833,6 +902,9 @@
     },
     "Serafin skips these when the server marks them, and says so briefly. Otherwise it offers to skip them. Credits offer the next episode, which plays by itself when your account plays the next episode automatically." : {
       "comment" : "Settings footer under the stretches the player skips without asking."
+    },
+    "Serafin uses whichever address answers best where you are: one at home on Wi-Fi, a remote one on cellular. Your sign-in works at all of them." : {
+      "comment" : "Footer explaining how Serafin picks among a server's addresses."
     },
     "Serafin works with Jellyfin 10.10 or newer. This server runs %@." : {
       "comment" : "Explanation when the server is too old. The argument is its version, such as 10.9.11."
@@ -966,6 +1038,15 @@
     "Support" : {
       "comment" : "Settings row that opens Serafin's support page on its website."
     },
+    "Tailscale" : {
+      "comment" : "Kind of a server address on the user's tailnet. Tailscale is a product name."
+    },
+    "Test Addresses" : {
+      "comment" : "Button that checks which of a server's addresses answer."
+    },
+    "That's Another Server" : {
+      "comment" : "Title when an address added to a server answers as a different Jellyfin server."
+    },
     "That's Not a Jellyfin Server" : {
       "comment" : "Title when the address isn't Jellyfin."
     },
@@ -1013,6 +1094,9 @@
     },
     "This Library Is Empty" : {
       "comment" : "Title for an empty library."
+    },
+    "This Server Has Four Addresses" : {
+      "comment" : "Title when a server already has as many addresses as Serafin keeps."
     },
     "This Server Needs HTTPS" : {
       "comment" : "Title when plain HTTP is refused."

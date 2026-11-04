@@ -16,7 +16,7 @@ public enum PrivateNetwork {
     public static func isPrivate(host: String) -> Bool {
         guard let name = normalized(host) else { return false }
 
-        if name == "localhost" || name.hasSuffix(".localhost") || name.hasSuffix(".local") || isTailscale(name) {
+        if name == "localhost" || name.hasSuffix(".localhost") || name.hasSuffix(".local") || isMagicDNSName(name) {
             return true
         }
         if let address = IPv4Address(name) {
@@ -32,10 +32,29 @@ public enum PrivateNetwork {
     /// Whether `host` is a Tailscale MagicDNS name, such as `nas.tailnet-1234.ts.net`. Tailscale can give these names
     /// real certificates, so Serafin tries HTTPS on them before plain HTTP.
     public static func isTailscaleName(_ host: String) -> Bool {
-        normalized(host).map(isTailscale) ?? false
+        normalized(host).map(isMagicDNSName) ?? false
     }
 
-    private static func isTailscale(_ name: String) -> Bool {
+    /// Whether `host` reaches its server through Tailscale: a MagicDNS name, an address in 100.64.0.0/10, or one in
+    /// Tailscale's IPv6 range, fd7a:115c:a1e0::/48. Such an address answers wherever Tailscale is on, not only at home.
+    public static func isTailscale(host: String) -> Bool {
+        guard let name = normalized(host) else { return false }
+        if isMagicDNSName(name) {
+            return true
+        }
+        if let address = IPv4Address(name) {
+            let bytes = Array(address.rawValue)
+            return bytes.count == 4 && bytes[0] == 100 && (64...127).contains(bytes[1])
+        }
+        let withoutZone = name.split(separator: "%", maxSplits: 1).first.map(String.init) ?? name
+        if let address = IPv6Address(withoutZone) {
+            return Array(address.rawValue).starts(with: [0xFD, 0x7A, 0x11, 0x5C, 0xA1, 0xE0])
+        }
+        return false
+    }
+
+    /// Whether the normalized `name` is a Tailscale MagicDNS name.
+    private static func isMagicDNSName(_ name: String) -> Bool {
         name.hasSuffix(".ts.net")
     }
 

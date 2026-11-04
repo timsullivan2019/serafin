@@ -11,6 +11,12 @@ import Observation
         var isOnline: Bool
         /// The kinds of network it can send on, such as Wi-Fi and cellular.
         var interfaces: Set<NWInterface.InterfaceType>
+
+        /// Whether a server's home addresses come before its remote ones: on Wi-Fi or a wired network, and whenever
+        /// the network isn't known to be cellular alone. A home network can't be reached over cellular.
+        var prefersLocalAddresses: Bool {
+            interfaces.contains(.wifi) || interfaces.contains(.wiredEthernet) || !interfaces.contains(.cellular)
+        }
     }
 
     /// The watcher the app shares, started when first used.

@@ -86,7 +86,8 @@ private func stubArtwork(on host: String) throws -> Artwork {
         urls: ImageURLs(serverURL: try #require(URL(string: "https://\(host)"))),
         pipeline: ImagePipeline.serafin(
             pinning: nil, diskCacheName: nil, sessionConfiguration: StubURLProtocol.configuration()),
-        authorization: #"MediaBrowser Token="secret""#
+        authorization: #"MediaBrowser Token="secret""#,
+        serverID: "server-1"
     )
 }
 

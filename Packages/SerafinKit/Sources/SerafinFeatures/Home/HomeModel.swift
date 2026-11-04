@@ -33,6 +33,8 @@ import SerafinDesign
     let hero = HomeHeroModel()
     /// Where artwork loads from, for skipping items the hero can't draw. Nil with the samples.
     var artwork: Artwork?
+    /// The name of the server the rows come from, which a failure to reach it names. Nil with the samples.
+    var serverName: String?
     /// Set when a load fails while rows are showing, and cleared when one succeeds.
     private(set) var notice: Notice?
     /// How many loads are running. Pull to refresh can run one beside another.
@@ -75,7 +77,7 @@ import SerafinDesign
             notice = nil
         } catch is CancellationError {
         } catch {
-            let message = UserMessage(error)
+            let message = UserMessage(error, serverName: serverName)
             if case .loaded(let home) = phase, !home.isEmpty {
                 notice = Notice(message: message, date: home.date)
             } else {

@@ -10,10 +10,16 @@ import os
 /// {
 ///   "version": 1,
 ///   "servers": [
-///     { "id": "…", "name": "…", "url": "https://…", "lastUserID": "…", "users": [ { "id": "…", "name": "…" } ] }
+///     {
+///       "id": "…", "name": "…", "url": "https://…", "addresses": [ "https://…", "http://…" ],
+///       "lastUserID": "…", "users": [ { "id": "…", "name": "…" } ]
+///     }
 ///   ]
 /// }
 /// ```
+///
+/// `url` is the address in use and `addresses` every address of the server. A file written before servers had
+/// several addresses has no `addresses`, which reads as `url` alone; a release that predates them ignores the field.
 public actor ServerStore {
     private struct File: Codable {
         var version: Int
@@ -60,6 +66,24 @@ public actor ServerStore {
             list.append(server)
         }
         try write(list)
+    }
+
+    /// Changes the saved server with `id` and saves it in one step, so a change saved meanwhile isn't lost. Changing a
+    /// server that is not saved does nothing.
+    ///
+    /// - Returns: The server as saved, or nil when there is no server with `id`.
+    /// - Throws: Whatever `change` throws, when nothing is saved, or ``SerafinError/serverStoreUnavailable``.
+    @discardableResult
+    public func update(id: String, _ change: @Sendable (inout Server) throws -> Void) throws -> Server? {
+        var list = try servers()
+        guard let index = list.firstIndex(where: { $0.id == id }) else { return nil }
+        var server = list[index]
+        try change(&server)
+        if server != list[index] {
+            list[index] = server
+            try write(list)
+        }
+        return server
     }
 
     /// Removes the server with `id`. Removing a server that is not saved is not an error.

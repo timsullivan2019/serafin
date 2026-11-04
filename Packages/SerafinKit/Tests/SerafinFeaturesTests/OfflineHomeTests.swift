@@ -56,6 +56,16 @@ extension HomeModel.Phase {
         #expect(model.isWorthRetrying)
     }
 
+    @Test func aServerThatAnswersAtNoneOfItsAddressesIsCalledByItsName() async {
+        let model = HomeModel()
+        model.serverName = "Living Room"
+        await model.load(from: TestMediaSource(saved: saved, homeFailure: .serverUnreachable))
+        #expect(model.notice?.message.title == "Can't Reach Living Room")
+        // Other failures read as they did.
+        await model.load(from: TestMediaSource(saved: saved, homeFailure: .offline))
+        #expect(model.notice?.message.title == "You're Offline")
+    }
+
     @Test func anEmptySavedHomeIsntPassedOffAsAnEmptyLibrary() async {
         let model = HomeModel()
         let empty = HomeContent(continueWatching: [], nextUp: [], latest: [], date: savedDate)

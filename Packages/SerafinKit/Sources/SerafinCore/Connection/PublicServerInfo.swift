@@ -12,6 +12,13 @@ public struct PublicServerInfo: Equatable, Sendable {
     public let name: String
     /// The server's version, such as "10.10.7".
     public let version: String
+    /// The address the server gives for itself on its own network, such as `http://192.168.1.20:8096`, or nil when it
+    /// gives none Serafin can use. It's only a lead: a server in a container often gives an address that only the
+    /// container can reach, so Serafin offers it only once the server has answered there.
+    public let localAddress: URL?
+
+    /// The longest local address Serafin reads. A real one is a few dozen characters.
+    static let maximumAddressLength = 512
 
     /// Checks the public system info a server returned.
     ///
@@ -27,6 +34,13 @@ public struct PublicServerInfo: Equatable, Sendable {
         self.id = id
         self.name = info.serverName.flatMap { $0.isEmpty ? nil : $0 } ?? "Jellyfin"
         self.version = version
+        self.localAddress = Self.address(info.localAddress)
+    }
+
+    /// The address in `text`, checked as an address the user typed would be, or nil when it isn't a usable one.
+    static func address(_ text: String?) -> URL? {
+        guard let text, text.utf8.count <= maximumAddressLength, text.contains("://") else { return nil }
+        return try? ServerAddress.parse(text).url
     }
 
     /// Whether `version` is at least ``minimumVersion``, comparing numeric parts.

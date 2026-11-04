@@ -129,6 +129,67 @@ import os
         }
     }
 
+    // MARK: - Addresses
+
+    /// Moves the current account's server to the address it answers best at on the network the device is on, when
+    /// that isn't the one in use, as when the device leaves home Wi-Fi. Screens carry on as they are, with a library,
+    /// artwork and player for the new address.
+    ///
+    /// Nothing moves while the player has something loaded, since a stream can't change address as it plays: the app
+    /// checks again once the player stops.
+    ///
+    /// - Parameter prefersLocal: Whether home addresses come first, as on Wi-Fi or a wired network, rather than
+    ///   remote ones, as on cellular.
+    public func checkAddress(prefersLocal: Bool) async {
+        guard let account, account.server.addresses.count > 1, isPlayerIdle else { return }
+        guard
+            let best = await accounts.bestAddress(ofServer: account.server.id, prefersLocal: prefersLocal),
+            best != account.server.url,
+            // Something may have started playing, or another account been chosen, while the addresses answered.
+            isPlayerIdle, self.account?.key == account.key
+        else { return }
+        do {
+            _ = try await changing { try await accounts.useAddress(best, forServer: account.server.id) }
+        } catch {
+            Self.logger.error("Could not move to another address: \(error.localizedDescription, privacy: .private)")
+        }
+    }
+
+    /// Whether the player has nothing loaded, so the current account's server may move to another address.
+    public var isPlayerIdle: Bool {
+        player.map { $0.state == .idle } ?? true
+    }
+
+    /// Which of `server`'s addresses answer as that server now, all asked at once.
+    public func answeringAddresses(of server: Server) async -> Set<URL> {
+        await accounts.answeringAddresses(ofServer: server.id)
+    }
+
+    /// Adds the address `connected` answered at to `server`, which carries on at the address in use until Serafin
+    /// finds the new one answers better.
+    ///
+    /// - Throws: ``SerafinError/differentServer`` when another server answered there, and
+    ///   ``SerafinError/tooManyAddresses`` when `server` has ``Server/maximumAddresses`` already.
+    public func addAddress(_ connected: ConnectedServer, to server: Server) async throws {
+        _ = try await changing { try await accounts.addAddress(connected, toServer: server.id) }
+    }
+
+    /// Forgets one of `server`'s addresses, with its certificate pin unless another saved address has the same host.
+    /// When it was the address in use, `server` moves to its first address left.
+    public func removeAddress(_ address: URL, from server: Server) async throws {
+        try await changing { try await accounts.removeAddress(address, fromServer: server.id) }
+    }
+
+    /// The address `server` gives for itself on its own network or tailnet, ready to add to it, when it isn't one of
+    /// `server`'s addresses yet and the server answers there. Nil otherwise, as when it's an address only a
+    /// container can reach.
+    ///
+    /// - Parameter info: What the server reported when it was just reached, or nil to ask it now.
+    public func suggestedAddress(for server: Server, reportedBy info: PublicServerInfo? = nil) async -> ConnectedServer?
+    {
+        await accounts.suggestedAddress(for: server, reportedBy: info)
+    }
+
     // MARK: - Signing in
 
     /// The users `server` lists on its sign-in screen, often none.
@@ -203,8 +264,8 @@ import os
         }
     }
 
-    /// Re-reads the servers and the current account, and hands screens a new library and artwork loader when the
-    /// account or its server's address has changed.
+    /// Re-reads the servers and the current account, and hands screens a new library, artwork loader and player when
+    /// the account, its sign-in or its server's address has changed.
     private func refresh() async {
         do {
             servers = try await accounts.servers()
@@ -212,37 +273,57 @@ import os
                 await signOutScreens()
                 return
             }
-            if current != account || library == nil || artwork == nil || player == nil {
-                let library = try await accounts.library(for: current)
-                self.library = library
-                let artwork = try await accounts.artwork(for: current)
-                self.artwork = artwork
-                let previous = player
-                let client = try await accounts.client(for: current)
-                downloads = accounts.downloads.map {
-                    DownloadCenter(
-                        downloads: $0,
-                        key: current.key,
-                        planner: DownloadPlanner(client: client, userID: current.user.id),
-                        library: library,
-                        artwork: artwork,
-                        sync: PlaybackSync(client: client, key: current.key, downloads: $0),
-                        trickplay: TrickplayRepository(client: client, userID: current.user.id)
-                    )
-                }
-                player = PlayerEngine(
-                    client: client,
-                    userID: current.user.id,
-                    pinning: accounts.pinning,
-                    playbackPreferences: { try await library.playbackPreferences() }
-                )
-                await previous?.stop()
+            let isSameAccount = current.key == account?.key && library != nil && artwork != nil && player != nil
+            // Accounts makes an account a new library whenever its sign-in or address changes. Signing in again as the
+            // account in use is such a change: the server ends the session the screens were using, since Jellyfin
+            // keeps one per user and device.
+            let hasNewLibrary = try await accounts.library(for: current) !== library
+            if !isSameAccount || hasNewLibrary || current.server.url != account?.server.url {
+                try await signInScreens(as: current, keepingDownloads: isSameAccount)
             }
             state = .signedIn(current)
         } catch {
             Self.logger.error("Could not read the saved accounts: \(error.localizedDescription, privacy: .private)")
             await signOutScreens()
         }
+    }
+
+    /// Makes the library, artwork loader and player for `current`, and stops the last player. The same account at
+    /// another address or signed in again keeps its downloads, which take the new library and client, so nothing that
+    /// shows them blinks.
+    private func signInScreens(as current: Account, keepingDownloads: Bool) async throws {
+        let library = try await accounts.library(for: current)
+        let artwork = try await accounts.artwork(for: current)
+        let client = try await accounts.client(for: current)
+        let previous = player
+        let planner = DownloadPlanner(client: client, userID: current.user.id)
+        let trickplay = TrickplayRepository(client: client, userID: current.user.id)
+        self.library = library
+        self.artwork = artwork
+        if keepingDownloads, let downloads, let saved = accounts.downloads {
+            downloads.reconnect(
+                planner: planner, library: library, artwork: artwork,
+                sync: PlaybackSync(client: client, key: current.key, downloads: saved), trickplay: trickplay)
+        } else {
+            downloads = accounts.downloads.map {
+                DownloadCenter(
+                    downloads: $0,
+                    key: current.key,
+                    planner: planner,
+                    library: library,
+                    artwork: artwork,
+                    sync: PlaybackSync(client: client, key: current.key, downloads: $0),
+                    trickplay: trickplay
+                )
+            }
+        }
+        player = PlayerEngine(
+            client: client,
+            userID: current.user.id,
+            pinning: accounts.pinning,
+            playbackPreferences: { try await library.playbackPreferences() }
+        )
+        await previous?.stop()
     }
 
     private func signOutScreens() async {
@@ -259,21 +340,42 @@ import os
 #if DEBUG
     extension AppSession {
         /// A session on throwaway, in-memory stores, signed out, for previews.
-        static func preview() -> AppSession {
-            AppSession(accounts: previewAccounts())
+        ///
+        /// - Parameter servers: Servers saved before the session starts, which it lists once ``load()`` has run.
+        static func preview(servers: [Server] = []) -> AppSession {
+            AppSession(accounts: previewAccounts(servers: servers))
         }
 
-        private nonisolated static func previewAccounts() -> Accounts {
+        private nonisolated static func previewAccounts(servers: [Server]) -> Accounts {
             let suite = "app.getserafin.serafin.preview.\(UUID().uuidString)"
             let directory = URL.temporaryDirectory.appending(path: suite)
+            let serversFile = directory.appending(path: "servers.json")
+            if !servers.isEmpty {
+                struct File: Encodable {
+                    let version = 1
+                    let servers: [Server]
+                }
+                try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try? JSONEncoder().encode(File(servers: servers)).write(to: serversFile)
+            }
             return Accounts(
                 secrets: InMemorySecretStore(),
                 deviceName: "iPhone",
-                serverStore: ServerStore(fileURL: directory.appending(path: "servers.json")),
+                serverStore: ServerStore(fileURL: serversFile),
                 defaults: UserDefaults(suiteName: suite) ?? UserDefaults(),
                 imageDiskCache: false,
                 homeSnapshots: HomeSnapshotStore(directory: directory.appending(path: "home"))
             )
+        }
+    }
+
+    extension Server {
+        /// A server with an address at home, one on Tailscale and one on the internet, connected at home, for
+        /// previews.
+        static var previewWithAddresses: Server {
+            let addresses = ["http://192.168.1.20:8096", "http://100.101.102.103:8096", "https://media.example.com"]
+                .map { URL(string: $0) ?? .temporaryDirectory }
+            return Server(id: "preview", name: "Living Room", url: addresses[0], addresses: addresses)
         }
     }
 #endif

@@ -37,7 +37,7 @@ import SerafinCore
     private(set) var isSigningIn = false
     private(set) var passwordFailure: UserMessage?
     /// Whether a sign-in has worked, so the screen can close even when it signed in as the account already in use,
-    /// which changes nothing else.
+    /// which keeps the tabs as they are.
     private(set) var didSignIn = false
 
     init(server: Server, defaults: UserDefaults = .standard) {

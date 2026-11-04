@@ -89,7 +89,7 @@ struct ItemDetailView: View {
                 DetailToolbar(
                     item: item,
                     canRefreshMetadata: model.canRefreshMetadata,
-                    shareURL: session?.account.flatMap { item.webLink(on: $0.server.url) },
+                    shareURL: session?.account.flatMap { item.webLink(on: $0.server.sharingAddress) },
                     season: model.selectedSeason,
                     seasonEpisodes: model.selectedSeasonID.flatMap { model.episodes[$0] }
                 )

@@ -19,6 +19,16 @@ struct UserMessage: Equatable, Identifiable, Sendable {
         self.needsSignIn = needsSignIn
     }
 
+    /// The message for an error from talking to the server named `serverName`, which names it when none of its
+    /// addresses answers, rather than an address the user may not know it by.
+    init(_ error: any Error, serverName: String?) {
+        if let serverName, let error = error as? SerafinError, error == .serverUnreachable {
+            self = Self.unreachable(serverName: serverName)
+        } else {
+            self.init(error)
+        }
+    }
+
     /// The message for an error from SerafinCore or SerafinPlayback. Anything else reads as an unexpected answer.
     init(_ error: any Error) {
         if let error = error as? PlaybackError {
@@ -83,17 +93,7 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                 systemImage: "wifi.slash"
             )
         case .serverUnreachable:
-            self.init(
-                title: String(
-                    localized: "Can't Reach the Server", bundle: .module,
-                    comment: "Title when the server doesn't answer."),
-                message: String(
-                    localized: "Check that the server is running and that you're connected to the internet.",
-                    bundle: .module,
-                    comment: "Explanation when the server doesn't answer."
-                ),
-                systemImage: "wifi.exclamationmark"
-            )
+            self = Self.unreachable(serverName: nil)
         case .plainHTTPBlocked:
             self.init(
                 title: String(
@@ -144,6 +144,30 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                     comment: "Explanation when the server is too old. The argument is its version, such as 10.9.11."
                 ),
                 systemImage: "arrow.down.circle"
+            )
+        case .differentServer:
+            self.init(
+                title: String(
+                    localized: "That's Another Server", bundle: .module,
+                    comment: "Title when an address added to a server answers as a different Jellyfin server."),
+                message: String(
+                    localized: "A different Jellyfin server answers at that address. Add it as a server of its own.",
+                    bundle: .module,
+                    comment: "Explanation when an address added to a server answers as a different Jellyfin server."
+                ),
+                systemImage: "server.rack"
+            )
+        case .tooManyAddresses:
+            self.init(
+                title: String(
+                    localized: "This Server Has Four Addresses", bundle: .module,
+                    comment: "Title when a server already has as many addresses as Serafin keeps."),
+                message: String(
+                    localized: "Remove one in Settings before adding another.",
+                    bundle: .module,
+                    comment: "Explanation when a server already has as many addresses as Serafin keeps."
+                ),
+                systemImage: "network"
             )
         case .invalidCredentials:
             self.init(
@@ -459,4 +483,27 @@ struct UserMessage: Equatable, Identifiable, Sendable {
             comment: "Explanation for an unexpected failure."
         )
     )
+
+    /// The message when the server doesn't answer, naming it when `serverName` is given.
+    private static func unreachable(serverName: String?) -> UserMessage {
+        let title =
+            if let serverName {
+                String(
+                    localized: "Can't Reach \(serverName)", bundle: .module,
+                    comment: "Title when a server doesn't answer at any of its addresses. The argument is its name.")
+            } else {
+                String(
+                    localized: "Can't Reach the Server", bundle: .module,
+                    comment: "Title when the server doesn't answer.")
+            }
+        return UserMessage(
+            title: title,
+            message: String(
+                localized: "Check that the server is running and that you're connected to the internet.",
+                bundle: .module,
+                comment: "Explanation when the server doesn't answer."
+            ),
+            systemImage: "wifi.exclamationmark"
+        )
+    }
 }
