@@ -260,7 +260,9 @@ public enum DownloadFailure: String, Codable, Sendable {
     case network
     /// The device ran out of space.
     case storageFull
-    /// The transfer stopped while Serafin wasn't running, as when it's closed from the app switcher.
+    /// The transfer stopped while Serafin wasn't running: iOS stopped it in the background, as it does when Background
+    /// App Refresh is off, or it was lost. One iOS stops because Serafin is closed from the app switcher carries on by
+    /// itself once Serafin runs again.
     case interrupted
     /// The file arrived, but Serafin couldn't write a copy the player opens from it.
     case preparationFailed

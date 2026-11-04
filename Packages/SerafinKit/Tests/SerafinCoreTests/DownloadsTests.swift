@@ -387,7 +387,63 @@ private func isSaved(_ url: URL) -> Bool {
         let full = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)
         #expect(DownloadTransfers.failure(for: full) == .storageFull)
         #expect(DownloadTransfers.failure(for: URLError(.networkConnectionLost)) == .network)
+        #expect(DownloadTransfers.failure(for: URLError(.cancelled)) == .network)
+        // iOS stopped it in the background, for whatever reason.
+        let reasons: [URLError.BackgroundTaskCancelledReason] = [
+            .userForceQuitApplication, .backgroundUpdatesDisabled, .insufficientSystemResources,
+        ]
+        for reason in reasons {
+            #expect(DownloadTransfers.failure(for: backgroundStop(reason)) == .interrupted)
+        }
     }
+
+    @Test func aTransferStoppedAsSerafinWasClosedCanCarryOn() throws {
+        let url = try #require(URL(string: "https://transfers-closed.example.com/Items/item-1/Download"))
+        var request = URLRequest(url: url)
+        request.allowsCellularAccess = true
+        let kept = Data("kept".utf8)
+
+        let closed = backgroundStop(.userForceQuitApplication, resumeData: kept)
+        let carriesOn = DownloadTransfers.Event.stoppedWhenClosed(
+            fileName: "a.mp4", resumeData: kept, url: url, allowsCellularAccess: true, task: 7)
+        #expect(DownloadTransfers.stop(of: 7, into: "a.mp4", request: request, error: closed) == carriesOn)
+        // Stopped as Background App Refresh is off, it waits to be tried again, from what arrived.
+        let refreshOff = backgroundStop(.backgroundUpdatesDisabled, resumeData: kept)
+        let waits = DownloadTransfers.Event.failed(fileName: "a.mp4", failure: .interrupted, resumeData: kept, task: 7)
+        #expect(DownloadTransfers.stop(of: 7, into: "a.mp4", request: request, error: refreshOff) == waits)
+        let lost = DownloadTransfers.stop(of: 7, into: "a.mp4", request: request, error: URLError(.timedOut))
+        #expect(lost == .failed(fileName: "a.mp4", failure: .network, resumeData: nil, task: 7))
+    }
+
+    @Test func onlyTheNewestTransferIntoAFileIsHeard() async throws {
+        let directory = URL.temporaryDirectory.appending(path: "serafin-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transfers = DownloadTransfers(
+            configuration: StubURLProtocol.configuration(), pinning: nil, mediaDirectory: directory)
+        let host = "transfers-replaced.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .hang)
+        let request = URLRequest(url: try #require(URL(string: "https://\(host)/Items/item-1/Download")))
+        // Before a transfer starts into the file, as for one left running by an earlier launch.
+        #expect(transfers.isCurrent(1, for: "a.mp4"))
+
+        let first = try #require(transfers.start(request, fileName: "a.mp4"))
+        let second = try #require(transfers.start(request, fileName: "a.mp4"))
+
+        #expect(!transfers.isCurrent(first, for: "a.mp4"))
+        #expect(transfers.isCurrent(second, for: "a.mp4"))
+        #expect(transfers.isCurrent(first, for: "b.mp4"))
+        await transfers.cancel(fileName: "a.mp4")
+    }
+}
+
+/// The error iOS reports for a background transfer it stopped for `reason`, with the resume data when it kept what
+/// had arrived.
+private func backgroundStop(_ reason: URLError.BackgroundTaskCancelledReason, resumeData: Data? = nil) -> URLError {
+    var userInfo: [String: Any] = [NSURLErrorBackgroundTaskCancelledReasonKey: reason.rawValue]
+    if let resumeData {
+        userInfo[NSURLSessionDownloadTaskResumeData] = resumeData
+    }
+    return URLError(.cancelled, userInfo: userInfo)
 }
 
 /// English subtitles inside a file, and Spanish ones the server sends as WebVTT to add to its copy.
@@ -674,6 +730,54 @@ private struct DownloadsHarness {
         }
         #expect(record?.state == .failed)
         #expect(record?.failure == .interrupted)
+    }
+
+    @Test func aDownloadStoppedWhenSerafinWasClosedCarriesOnByItself() async throws {
+        let host = "downloads-closed.example.com"
+        let key = SessionKey(serverID: "server-1", userID: "user-1")
+        let stopped = DownloadRecord(
+            key: key, itemID: "item-1", mediaSourceID: "item-1", fileExtension: "mp4", bytes: 5,
+            metadata: DownloadMetadata(title: "Sintel", kind: .movie))
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+        let harness = try await DownloadsHarness(saved: [stopped])
+        defer { harness.cleanUp() }
+        // Its transfer isn't in the session any more, so it's interrupted until iOS says why.
+        #expect(try await harness.downloads.record(forItem: "item-1", key: key)?.failure == .interrupted)
+
+        let url = try #require(URL(string: "https://\(host)/Items/item-1/Download"))
+        let event = DownloadTransfers.Event.stoppedWhenClosed(
+            fileName: stopped.transferName, resumeData: nil, url: url, allowsCellularAccess: true, task: 1)
+        await harness.downloads.handle(event)
+
+        let record = try await harness.settled()
+        #expect(record.state == .finished)
+        #expect(record.id == stopped.id)
+        let file = try #require(harness.downloads.fileURL(for: record))
+        #expect(try Data(contentsOf: file) == Data("movie".utf8))
+        let sent = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-1/Download").first)
+        #expect(sent.authorization?.contains(#"Token="token-1""#) == true)
+    }
+
+    @Test func whatAReplacedTransferReportsIsIgnored() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let host = "downloads-replaced.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .hang)
+        let record = try await harness.downloads.start(try harness.request(host: host), for: harness.key)
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Items/item-1/Download")
+
+        // A task from before this transfer, as one iOS reports late from the last launch, says it stopped.
+        let url = try #require(URL(string: "https://\(host)/Items/item-1/Download"))
+        let failed = DownloadTransfers.Event.failed(
+            fileName: record.transferName, failure: .network, resumeData: nil, task: -1)
+        let closed = DownloadTransfers.Event.stoppedWhenClosed(
+            fileName: record.transferName, resumeData: nil, url: url, allowsCellularAccess: true, task: -1)
+        await harness.downloads.handle(failed)
+        await harness.downloads.handle(closed)
+
+        #expect(try await harness.downloads.record(forItem: "item-1", key: harness.key)?.state == .downloading)
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-1/Download").count == 1)
+        try await harness.downloads.delete(record.id)
     }
 
     @Test func theTracksAskedForAreSavedWithTheDownload() async throws {
@@ -1082,6 +1186,42 @@ private struct DownloadsHarness {
         let sent = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-1/Download").first)
         #expect(sent.query("MediaSourceId") == "item-1")
         #expect(sent.authorization?.contains(#"Token="token-1""#) == true)
+    }
+
+    @Test func aConversionStoppedWhenSerafinWasClosedStartsAgainInItsTurn() async throws {
+        let host = "downloads-turns-closed.example.com"
+        let key = SessionKey(serverID: "server-1", userID: "user-1")
+        let preparation = DownloadPreparation(arrivingExtension: "mp4", convertsVideo: true)
+        let stopped = DownloadRecord(
+            key: key, itemID: "item-1", mediaSourceID: "item-1", fileExtension: "mov", bytes: 5,
+            metadata: DownloadMetadata(title: "Sintel", kind: .movie), preparation: preparation)
+        let next = DownloadRecord(
+            key: key, itemID: "item-2", mediaSourceID: "item-2", fileExtension: "mov", state: .waiting, bytes: 5,
+            metadata: DownloadMetadata(title: "Spring", kind: .movie), preparation: preparation,
+            waiting: DownloadWaiting(path: "/Items/item-2/Download", allowsCellularAccess: true))
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "first"))
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Items/item-2/Download", .held("downloads-turns-closed", .json(200, "second")))
+        // With no transfer left from the last launch, the first is interrupted and the next takes the server's turn.
+        let harness = try await DownloadsHarness(preparer: FakePreparer(), serverHost: host, saved: [stopped, next])
+        defer { harness.cleanUp() }
+
+        let url = try #require(URL(string: "https://\(host)/Items/item-1/Download"))
+        let kept = Data("kept".utf8)
+        let event = DownloadTransfers.Event.stoppedWhenClosed(
+            fileName: stopped.transferName, resumeData: kept, url: url, allowsCellularAccess: true, task: 1)
+        await harness.downloads.handle(event)
+
+        // The server converts it anew, so it starts from the beginning once the next has arrived.
+        let queued = try await harness.downloads.record(forItem: "item-1", key: key)
+        #expect(queued?.state == .waiting)
+        #expect(queued?.waiting == DownloadWaiting(path: "/Items/item-1/Download", allowsCellularAccess: true))
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Items/item-1/Download").isEmpty)
+        StubURLProtocol.release("downloads-turns-closed")
+        #expect(try await harness.prepared("item-2").state == .finished)
+        let started = try await harness.prepared("item-1")
+        #expect(started.state == .finished)
+        #expect(try Data(contentsOf: try #require(harness.downloads.fileURL(for: started))) == Data("first".utf8))
     }
 
     @Test func aWaitingDownloadKeepsItsAddressAfterTheServers() throws {

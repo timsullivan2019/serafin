@@ -18,7 +18,11 @@ import os
 ///
 /// ``Accounts`` owns the one instance. It hands each transfer the account's `Authorization` header, so the token
 /// never appears in a URL. Resume data is kept in memory only, because it carries that header: a transfer that stops
-/// carries on from where it stopped during this launch, and starts again after a relaunch.
+/// carries on from where it stopped when it's tried again during the same launch.
+///
+/// Closing Serafin from the app switcher stops its transfers, which iOS reports once Serafin runs again, with resume
+/// data when it kept what had arrived. Those downloads carry on by themselves: from where they stopped when they can,
+/// or else from the start, a download whose video the server converts once it's its turn again.
 public actor Downloads {
     /// What to download: an item's file as the server offers it.
     public struct Request: Sendable, Equatable {
@@ -198,10 +202,10 @@ public actor Downloads {
     }
 
     /// Checks the downloads left from the last launch, then starts reading what the transfers report, once.
-    /// Downloads that were running when Serafin last stopped and have no transfer any more, as when it was closed from
-    /// the app switcher, are marked interrupted, downloads waiting their turn at a server that's converting none start,
-    /// and the copies left to write are written. Starting a download waits for this, so a new download is never taken
-    /// for one left over.
+    /// Downloads that were running when Serafin last stopped and have no transfer any more are marked interrupted, and
+    /// carry on once iOS reports it stopped them because Serafin was closed. Downloads waiting their turn at a server
+    /// that's converting none start, and the copies left to write are written. Starting a download waits for this, so
+    /// a new download is never taken for one left over.
     func activate() async {
         if let activation {
             return await activation.value
@@ -373,11 +377,16 @@ public actor Downloads {
         } else {
             try await transfer(record, from: url, allowsCellularAccess: allowsCellularAccess)
         }
-        try await store.update(id: id) { record in
+        try await markDownloading(record)
+    }
+
+    /// Marks `record` on its way again, with nothing shown as arrived until its transfer says.
+    private func markDownloading(_ record: DownloadRecord) async throws {
+        try await store.update(id: record.id) { record in
             record.state = .downloading
             record.failure = nil
         }
-        progressByID[id] = Progress(received: 0, expected: record.bytes)
+        progressByID[record.id] = Progress(received: 0, expected: record.bytes)
         notify()
     }
 
@@ -955,7 +964,9 @@ public actor Downloads {
                     startPreparing()
                 }
                 await endTurn(of: finished)
-            case .failed(let fileName, let failure, let data):
+            case .failed(let fileName, let failure, let data, let task):
+                // A transfer started into the file since, as when it was tried again, has the say.
+                guard transfers.isCurrent(task, for: fileName) else { return }
                 let failed = try await update(named: fileName) { record in
                     guard record.state == .downloading || record.state == .failed else { return }
                     record.state = .failed
@@ -965,11 +976,90 @@ public actor Downloads {
                 resumeData[fileName] = data
                 progressByID[failed.id] = nil
                 await endTurn(of: failed)
+            case .stoppedWhenClosed(let fileName, let data, let url, let cellular, let task):
+                guard transfers.isCurrent(task, for: fileName) else { return }
+                await carryOn(fileName, task: task, resumeData: data, url: url, allowsCellularAccess: cellular)
             }
         } catch {
             Self.logger.error("Could not update a download: \(error.localizedDescription, privacy: .private)")
         }
         notify()
+    }
+
+    // MARK: - Carrying on
+
+    /// Carries on the download whose transfer into `fileName`, the session's task `task`, iOS stopped when Serafin was
+    /// closed, as Try Downloading Again would: from where it stopped, when iOS kept what had arrived of a file that
+    /// plays as it arrives, or else from the start at `url`, the address the transfer had, a download whose video the
+    /// server converts once it's its turn again. One that can't carry on, as when its server's address isn't known,
+    /// stays interrupted, to be tried again by hand.
+    private func carryOn(
+        _ fileName: String,
+        task: Int,
+        resumeData data: Data?,
+        url: URL?,
+        allowsCellularAccess: Bool
+    ) async {
+        // Unless it was tried again meanwhile. It's marked on its way before its transfer starts, so the file can't
+        // arrive first.
+        guard let record = try? await self.record(named: fileName),
+            record.state == .downloading || (record.state == .failed && record.failure == .interrupted),
+            transfers.isCurrent(task, for: fileName)
+        else { return }
+        do {
+            if let data, record.preparation?.playsAsItArrives ?? true {
+                try await markDownloading(record)
+                transfers.resume(data, fileName: fileName)
+                return
+            }
+            if let url, record.convertsVideo {
+                let path = await waitingPath(for: url, on: record.serverID)
+                // Or tried again while the server's address was read.
+                guard transfers.isCurrent(task, for: fileName) else { return }
+                if let path {
+                    try await requeue(record, from: path, allowsCellularAccess: allowsCellularAccess)
+                    return
+                }
+            } else if let url {
+                try await markDownloading(record)
+                try await transfer(record, from: url, allowsCellularAccess: allowsCellularAccess)
+                return
+            }
+        } catch {
+            Self.logger.error("Could not carry on a download: \(error.localizedDescription, privacy: .private)")
+        }
+        await interrupt(record)
+    }
+
+    /// Puts `record`, whose video the server converts, back in line at its server, to start again from `path` on it
+    /// once it's its turn, which may be at once.
+    private func requeue(_ record: DownloadRecord, from path: String, allowsCellularAccess: Bool) async throws {
+        try await store.update(id: record.id) { record in
+            record.state = .waiting
+            record.failure = nil
+            record.waiting = DownloadWaiting(path: path, allowsCellularAccess: allowsCellularAccess)
+        }
+        progressByID[record.id] = nil
+        if converting[record.serverID] == record.id {
+            converting[record.serverID] = nil
+        }
+        notify()
+        await startNext(onServer: record.serverID)
+    }
+
+    /// Leaves `record`, which couldn't carry on, interrupted, and gives up its turn at its server when it has it.
+    private func interrupt(_ record: DownloadRecord) async {
+        do {
+            try await store.update(id: record.id) { record in
+                guard record.state == .downloading else { return }
+                record.state = .failed
+                record.failure = .interrupted
+            }
+        } catch {
+            Self.logger.error("Could not update a download: \(error.localizedDescription, privacy: .private)")
+        }
+        progressByID[record.id] = nil
+        await endTurn(of: record)
     }
 
     /// The download whose transfer brings the file `fileName`.
