@@ -258,6 +258,12 @@ import SerafinPlayback
         versionMemory.version(of: itemID)
     }
 
+    /// The newest pick of one of a movie's or an episode's `versions` on this device, with when it was made, counting
+    /// picks made on each version's own page as well as on `itemID`'s, or nil when there's none.
+    func versionPick(for itemID: String, among versions: Set<String>) -> VersionMemory.Pick? {
+        versionMemory.latestPick(for: versions.union([itemID]), among: versions)
+    }
+
     /// The version of `itemID` its finished download saved, which Play starts from the device, or nil when it isn't
     /// downloaded.
     func downloadedVersion(of itemID: String) -> String? {

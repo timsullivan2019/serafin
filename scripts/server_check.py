@@ -349,6 +349,7 @@ class Live:
             ("latest", f"/Items/Latest?userId={user}"),
             ("continue watching", f"/UserItems/Resume?userId={user}"),
             ("item details", f"/Items/{item_id}?userId={user}"),
+            ("a version's progress", f"/UserItems/{source_id}/UserData?userId={user}"),
         ):
             status, _, _ = s.request("GET", path, headers=header)
             self.check(f"browse: {name}", status == 200, f"HTTP {status}")

@@ -8,10 +8,10 @@ Checked on 4 November 2026 with `scripts/server_check.py` and jellyfin-sdk-swift
 
 | Jellyfin | Image | Legacy authorization | API check | Live check |
 | --- | --- | --- | --- | --- |
-| 10.10.7 | `jellyfin/jellyfin:10.10.7` | no setting; every form accepted | passed | 31 of 31 |
-| 10.11.11 | `jellyfin/jellyfin:10.11.11` | turned off (10.11's default is on) | passed | 31 of 31 |
-| 12.4.0 | `jellyfin/jellyfin:12.4.20261026-211555`, `latest` | off, the default | passed | 31 of 31 |
-| 13.0.0, unstable | `jellyfin/jellyfin:unstable`, build 2026110213 | off, the default | passed | 31 of 31 |
+| 10.10.7 | `jellyfin/jellyfin:10.10.7` | no setting; every form accepted | passed | 32 of 32 |
+| 10.11.11 | `jellyfin/jellyfin:10.11.11` | turned off (10.11's default is on) | passed | 32 of 32 |
+| 12.4.0 | `jellyfin/jellyfin:12.4.20261026-211555`, `latest` | off, the default | passed | 32 of 32 |
+| 13.0.0, unstable | `jellyfin/jellyfin:unstable`, build 2026110213 | off, the default | passed | 32 of 32 |
 
 The demo server, which App Review and the App Store screenshots use, has run Jellyfin 12.2.0 since October. Legacy authorization is off there too, unless someone has turned it back on.
 
@@ -23,6 +23,7 @@ The "This Server Needs an Update" message names this range: 10.10 or newer, test
 - **Two token forms remain.** With the setting off, the server reads a token only from an `Authorization` header with the `MediaBrowser` scheme and a `Token` field, or from an `ApiKey` query parameter. It refuses the `X-Emby-Authorization`, `X-Emby-Token` and `X-MediaBrowser-Token` headers, the `api_key` query parameter, and the `Emby` scheme (`Jellyfin.Server.Implementations/Security/AuthorizationContext.cs`). The live check shows each of these refused with 401 on 10.11, 12.4 and unstable.
 - **The server's own addresses changed with it.** Jellyfin 10.10 writes `api_key` into the stream, subtitle and trickplay addresses it makes. From 10.11 it writes `ApiKey` (`MediaBrowser.Model/Dlna/StreamInfo.cs`, `Jellyfin.Api/Helpers/DynamicHlsHelper.cs`, `Jellyfin.Api/Controllers/SubtitleController.cs`).
 - **Some requests need no token at all.** The original file at `/Videos/{id}/stream` and the image endpoints answer without one. HLS streams, trickplay tiles and subtitle playlists need one; their controllers carry `[Authorize]`.
+- **Each version of a movie or an episode keeps its own progress.** When a client reports playing one version of an item, 12.0 and later record the position on that version (`GetProgressItem` in `Emby.Server.Implementations/Session/SessionManager.cs`), where 10.11 recorded it on the item, so every version shared one position. The item itself gets the played mark and the date of its version played most recently, but keeps its own position (`MediaBrowser.Controller/Library/VersionResumeData.cs`). Continue Watching lists the version left part way through rather than the item, and the item's page lists that version first (`SetAlternateVersionResumeStates` in `Emby.Server.Implementations/Library/MediaSourceManager.cs`). So Serafin reads each version's progress on a movie's or an episode's page and resumes from where it was left in whichever version that was (`ItemDetailModel`, `MediaVersions.resumePoint`). This is the same in 12.0, 12.2, 12.3, 12.4 and unstable, and a 12.4 and a 10.11 server here behaved as their sources say.
 
 ## How Serafin authenticates each request
 
@@ -43,7 +44,7 @@ Serafin sends no legacy form of its own, so nothing needed to change for 12.0.
 - **API check.** It reads the server's OpenAPI document (`/api-docs/openapi.json`) and finds every endpoint Serafin's code calls through the SDK (`Paths.…`). It confirms the server still has each one, with the same method and path, and isn't marking it deprecated. Then it follows those endpoints' responses to every enum they can carry and confirms the pinned SDK decodes every value. The SDK's enums are plain `String` enums, so a single value they don't know fails the whole response, such as a new `BaseItemKind` failing a whole library page. This check needs no account and changes nothing, so it can run against any server.
 - **Live check.** On a fresh server only, it finishes the setup wizard, adds a Movies library with trickplay on, creates a user who isn't an administrator, and turns legacy authorization off. Then it makes each request Serafin makes, in Serafin's form:
   - sign in with a password;
-  - browse the libraries, latest items, Continue Watching and an item;
+  - browse the libraries, latest items, Continue Watching, an item, and a version's progress;
   - load a poster and a trickplay tile;
   - fetch the original file with `ApiKey`;
   - fetch the converted HLS stream's playlists, segments and subtitles without a header;

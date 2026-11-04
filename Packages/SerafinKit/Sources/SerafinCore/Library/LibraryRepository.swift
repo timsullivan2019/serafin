@@ -219,6 +219,21 @@ public actor LibraryRepository {
         }
     }
 
+    /// The user's data for one item, such as where they stopped watching it and when, without the item's details.
+    ///
+    /// Jellyfin 12.0 and later keep where each version of a movie or an episode was left on that version, so the detail
+    /// screen asks for each version's.
+    ///
+    /// - Throws: ``SerafinError/notFound`` when the item is no longer on the server, or when `id` isn't an ID
+    ///   Jellyfin would issue.
+    public func userData(id: String) async throws -> UserItemDataDto {
+        guard ItemID.isPlain(id) else { throw SerafinError.notFound }
+        let request = Paths.getItemUserData(itemID: id, userID: userID)
+        return try await cached(request.url, request.query, statuses: [404: .notFound]) {
+            try await self.client.send(request).value
+        }
+    }
+
     /// A show's seasons, in the server's order, which puts Specials first, with how many episodes each has.
     public func seasons(series seriesID: String) async throws -> [BaseItemDto] {
         var parameters = Paths.GetSeasonsParameters(userID: userID)

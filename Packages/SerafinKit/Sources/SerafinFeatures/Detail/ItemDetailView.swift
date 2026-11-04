@@ -178,14 +178,14 @@ private struct DetailContent: View {
     }
 
     /// What the checked version depends on, for a movie or an episode with more than one. It's checked again when the
-    /// device moves to another network, whose streaming cap can change the version that plays, and when a download of
-    /// the item finishes or goes.
+    /// device moves to another network, whose streaming cap can change the version that plays, when a download of the
+    /// item finishes or goes, and when where it was left changes, as after watching it.
     private var versionCheck: VersionCheck? {
         let versions = model.versions.compactMap(\.id)
         guard versions.count > 1 else { return nil }
         return VersionCheck(
             versions: versions, maxBitrate: playback.maxBitrate, connection: network.connection,
-            downloaded: playback.downloadedVersion(of: model.id))
+            downloaded: playback.downloadedVersion(of: model.id), resumePoint: model.resumePoint)
     }
 
     private var isSeries: Bool {
@@ -242,12 +242,14 @@ private struct DetailContent: View {
     }
 
     /// The card the hero describes. A show's pill resumes or starts the episode Play opens, so it shows that
-    /// episode's progress.
+    /// episode's progress, and a movie's or an episode's shows where it was left in whichever version that was.
     private var playCard: MediaCard {
         var card = details.item.card
-        if isSeries, let next = model.playable?.card, next.kind == .episode {
-            card.progress = next.progress
-            card.runtime = next.runtime
+        guard let playing = model.playable?.card else { return card }
+        let showsPlaying = isSeries ? playing.kind == .episode : playing.id == card.id
+        if showsPlaying {
+            card.progress = playing.progress
+            card.runtime = playing.runtime
         }
         return card
     }
@@ -357,6 +359,7 @@ private struct VersionCheck: Equatable {
     let maxBitrate: Int?
     let connection: NetworkWatcher.Connection
     let downloaded: String?
+    let resumePoint: ResumePoint?
 }
 
 /// A show's episodes, one season at a time: the season menu, then a row of episode cards on a phone, with the next

@@ -38,6 +38,8 @@ struct TestMediaSource: MediaSource {
     var detailsFailure: SerafinError?
     /// How long details take to arrive, or nil for straight away.
     var detailsDelay: Duration?
+    /// The details every page loads, as a server's, or nil for the samples'.
+    var serverDetails: ItemDetails?
     /// The downloads, as shown from what was saved with them.
     var downloaded: [MediaItem] = []
     private let samples = SampleMediaSource()
@@ -96,6 +98,7 @@ struct TestMediaSource: MediaSource {
             try await Task.sleep(for: detailsDelay)
         }
         if let detailsFailure { throw detailsFailure }
+        if let serverDetails { return serverDetails }
         return try await samples.details(of: id)
     }
 

@@ -43,6 +43,21 @@ private enum Versions {
     }
 }
 
+/// What a server keeps for a movie's versions once some of them are watched.
+private enum Watched {
+    static let earlier = Date(timeIntervalSince1970: 1_790_000_000)
+    static let later = earlier.addingTimeInterval(3_600)
+
+    /// The user's data for a version left at `minutes`, last played at `date`.
+    static func record(minutes: Int, at date: Date?, percentage: Double? = nil, played: Bool = false)
+        -> UserItemDataDto
+    {
+        UserItemDataDto(
+            isPlayed: played, key: "key", lastPlayedDate: date, playbackPositionTicks: minutes * 600_000_000,
+            playedPercentage: percentage)
+    }
+}
+
 private func testDefaults() throws -> UserDefaults {
     try #require(UserDefaults(suiteName: "app.getserafin.serafin.tests.\(UUID().uuidString)"))
 }
@@ -98,6 +113,13 @@ private func testDefaults() throws -> UserDefaults {
         var anonymous = Versions.hd
         anonymous.id = nil
         #expect(MediaVersions.choices(for: [Versions.uhd, anonymous]).map(\.id) == ["uhd"])
+    }
+
+    @Test func aGreatManyVersionsAreListedUpToTheLimit() {
+        let many = (0..<1_000).map { MediaSourceInfo(id: "version\($0)") }
+        let choices = MediaVersions.choices(for: many)
+        #expect(choices.count == MediaVersions.maximumListed)
+        #expect(choices.first?.id == "version0")
     }
 
     @Test func eachVersionHasItsOwnBadges() {
@@ -197,6 +219,39 @@ private func testDefaults() throws -> UserDefaults {
         let memory = VersionMemory(account: nil, defaults: try testDefaults())
         memory.remember("hd", for: "movie")
         #expect(memory.version(of: "movie") == nil)
+    }
+
+    @Test func eachPickKeepsWhenItWasMade() throws {
+        let memory = VersionMemory(account: account, defaults: try testDefaults())
+        memory.remember("hd", for: "movie", at: Watched.earlier)
+        #expect(
+            memory.latestPick(for: ["movie"], among: ["uhd", "hd"])
+                == VersionMemory.Pick(itemID: "movie", versionID: "hd", date: Watched.earlier))
+    }
+
+    @Test func aPickOnAnotherVersionsPageCounts() throws {
+        // On Jellyfin 12.0 and later, Continue Watching opens the page of the version being watched, whose ID is
+        // that version's.
+        let memory = VersionMemory(account: account, defaults: try testDefaults())
+        memory.remember("hd", for: "uhd", at: Watched.earlier)
+        memory.remember("other", for: "another", at: Watched.later)
+        #expect(memory.latestPick(for: ["uhd", "hd"], among: ["uhd", "hd"])?.versionID == "hd")
+        // The newest pick on any of the versions' pages.
+        memory.remember("uhd", for: "hd", at: Watched.later)
+        #expect(memory.latestPick(for: ["uhd", "hd"], among: ["uhd", "hd"])?.versionID == "uhd")
+        // A pick of a version the item no longer has is passed over.
+        #expect(memory.latestPick(for: ["uhd", "hd"], among: ["hd"])?.versionID == "hd")
+        #expect(memory.latestPick(for: ["uhd", "hd"], among: ["sd"]) == nil)
+    }
+
+    @Test func aPickKeptWithoutItsTimeCountsAsOld() throws {
+        let defaults = try testDefaults()
+        defaults.set(
+            [["movie", "hd"], ["broken"], ["film", "uhd", "not a time"]], forKey: "versionPicks.server.user")
+        let memory = VersionMemory(account: account, defaults: defaults)
+        #expect(memory.version(of: "movie") == "hd")
+        #expect(memory.latestPick(for: ["movie"], among: ["hd"])?.date == .distantPast)
+        #expect(memory.latestPick(for: ["film"], among: ["uhd"])?.date == .distantPast)
     }
 }
 
@@ -309,5 +364,160 @@ private func testDefaults() throws -> UserDefaults {
         preview.rememberVersion("uhd", for: "movie")
         #expect(preview.pickedVersion(of: "movie") == nil)
         #expect(coordinator(defaults).pickedVersion(of: "movie") == "hd")
+    }
+}
+
+@Suite struct ResumePointTests {
+    @Test func theVersionPlayedMostRecentlyHoldsIt() throws {
+        let records = [
+            "uhd": Watched.record(minutes: 20, at: Watched.earlier),
+            "hd": Watched.record(minutes: 40, at: Watched.later),
+        ]
+        let point = try #require(
+            MediaVersions.resumePoint(of: "uhd", among: [Versions.uhd, Versions.hd], records: records))
+        #expect(point.itemID == "uhd")
+        #expect(point.versionID == "hd")
+        #expect(point.userData.playbackPositionTicks == 40 * 600_000_000)
+        #expect(point.isInAnotherVersion)
+    }
+
+    @Test func onATieTheVersionTheServerListsFirstHoldsIt() {
+        // Jellyfin 12 gives the item the date of its version played most recently, while the item keeps its own,
+        // older position, and lists that version first on the item's page.
+        let records = [
+            "uhd": Watched.record(minutes: 10, at: Watched.later),
+            "hd": Watched.record(minutes: 40, at: Watched.later),
+        ]
+        #expect(
+            MediaVersions.resumePoint(of: "uhd", among: [Versions.hd, Versions.uhd], records: records)?.versionID
+                == "hd")
+        // The version's own page, as Continue Watching opens, lists itself first.
+        let own = MediaVersions.resumePoint(of: "hd", among: [Versions.hd, Versions.uhd], records: records)
+        #expect(own?.versionID == "hd")
+        #expect(own?.isInAnotherVersion == false)
+    }
+
+    @Test func onJellyfin10TheItemPlayedHoldsIt() {
+        // Jellyfin 10.11 keeps one position, on the item played, whichever version played.
+        let records = ["uhd": Watched.record(minutes: 40, at: Watched.later), "hd": UserItemDataDto(key: "key")]
+        let point = MediaVersions.resumePoint(of: "uhd", among: [Versions.uhd, Versions.hd], records: records)
+        #expect(point?.versionID == "uhd")
+        #expect(point?.isInAnotherVersion == false)
+    }
+
+    @Test func versionsWithoutAPositionHoldNone() {
+        let watched = [
+            "uhd": Watched.record(minutes: 0, at: Watched.later, played: true),
+            "hd": Watched.record(minutes: 0, at: Watched.earlier),
+        ]
+        #expect(MediaVersions.resumePoint(of: "uhd", among: [Versions.uhd, Versions.hd], records: watched) == nil)
+        #expect(MediaVersions.resumePoint(of: "uhd", among: [Versions.uhd, Versions.hd], records: [:]) == nil)
+    }
+
+    @Test func aPositionWithoutADateStillCounts() {
+        let records = ["hd": Watched.record(minutes: 5, at: nil)]
+        #expect(
+            MediaVersions.resumePoint(of: "uhd", among: [Versions.uhd, Versions.hd], records: records)?.versionID
+                == "hd")
+    }
+}
+
+@MainActor @Suite struct DetailResumeTests {
+    private let account = SessionKey(serverID: "server", userID: "user")
+
+    private func coordinator(_ defaults: UserDefaults) -> PlaybackCoordinator {
+        PlaybackCoordinator(account: account, defaults: defaults, isOnExpensiveNetwork: { false })
+    }
+
+    /// The page of a two-hour movie whose 1080p version was left at 40 minutes at `date`, as Jellyfin 12 keeps it:
+    /// on the version, which it lists first, with the movie's own data given that date.
+    private func page(watchedAt date: Date = Watched.later) async throws -> ItemDetailModel {
+        var dto = Versions.dto([Versions.hd, Versions.uhd], id: "uhd")
+        dto.runTimeTicks = 120 * 600_000_000
+        dto.userData = UserItemDataDto(
+            isFavorite: true, key: "key", lastPlayedDate: date, playbackPositionTicks: 0)
+        let item = try #require(MediaItem(dto))
+        let point = ResumePoint(
+            itemID: "uhd", versionID: "hd", userData: Watched.record(minutes: 40, at: date, percentage: 33))
+        var source = TestMediaSource()
+        source.serverDetails = ItemDetails(item: item, playable: item, resumePoint: point)
+        let model = ItemDetailModel(id: "uhd")
+        await model.load(from: source)
+        return model
+    }
+
+    @Test func playResumesWhereTheMovieWasLeftInAnotherVersion() async throws {
+        let model = try await page()
+        let playable = try #require(model.playable)
+        #expect(playable.id == "uhd")
+        #expect(abs(playable.card.progress - 0.33) < 0.0001)
+        // What else the item's own data says stays.
+        #expect(playable.card.isFavourite)
+        #expect(playable.source?.userData?.lastPlayedDate == Watched.later)
+        #expect(PlaybackCoordinator.startPosition(of: playable, from: .resume) == .seconds(2_400))
+        #expect(PlaybackCoordinator.startPosition(of: playable, from: .beginning) == .zero)
+    }
+
+    @Test func theVersionLeftPartWayThroughIsChecked() async throws {
+        let model = try await page()
+        await model.checkVersion(using: coordinator(try testDefaults()), downloaded: nil)
+        #expect(model.checkedVersionID == "hd")
+        let playable = try #require(model.playable)
+        #expect(model.version(toPlay: playable) == "hd")
+    }
+
+    @Test func aPickMadeSinceWins() async throws {
+        let model = try await page(watchedAt: Watched.earlier)
+        let playback = coordinator(try testDefaults())
+        playback.rememberVersion("uhd", for: "uhd")
+        await model.checkVersion(using: playback, downloaded: nil)
+        #expect(model.checkedVersionID == "uhd")
+        // It plays from where the movie was left, as switching versions in the player does.
+        let playable = try #require(model.playable)
+        #expect(PlaybackCoordinator.startPosition(of: playable, from: .resume) == .seconds(2_400))
+    }
+
+    @Test func aPickMadeBeforeGivesWayToTheVersionWatchedSince() async throws {
+        let defaults = try testDefaults()
+        VersionMemory(account: account, defaults: defaults).remember("uhd", for: "uhd", at: Watched.earlier)
+        let model = try await page(watchedAt: Watched.later)
+        await model.checkVersion(using: coordinator(defaults), downloaded: nil)
+        #expect(model.checkedVersionID == "hd")
+    }
+
+    @Test func theDownloadedVersionStaysChecked() async throws {
+        let model = try await page()
+        await model.checkVersion(using: coordinator(try testDefaults()), downloaded: "uhd")
+        #expect(model.checkedVersionID == "uhd")
+    }
+
+    @Test func theItemsOwnFileLeftPartWayThroughLeavesThePickStanding() async throws {
+        // As on Jellyfin 10.11, which keeps the position on the item played, whichever version played.
+        let shared = Watched.record(minutes: 40, at: Watched.later)
+        var dto = Versions.dto([Versions.uhd, Versions.hd], id: "uhd")
+        dto.userData = shared
+        let item = try #require(MediaItem(dto))
+        var source = TestMediaSource()
+        source.serverDetails = ItemDetails(
+            item: item, playable: item, resumePoint: ResumePoint(itemID: "uhd", versionID: "uhd", userData: shared))
+        let defaults = try testDefaults()
+        VersionMemory(account: account, defaults: defaults).remember("hd", for: "uhd", at: Watched.earlier)
+        let model = ItemDetailModel(id: "uhd")
+        await model.load(from: source)
+
+        await model.checkVersion(using: coordinator(defaults), downloaded: nil)
+        #expect(model.checkedVersionID == "hd")
+        // The item's own position, which is every version's there.
+        let playable = try #require(model.playable)
+        #expect(PlaybackCoordinator.startPosition(of: playable, from: .resume) == .seconds(2_400))
+    }
+
+    @Test func aPickOnAnotherVersionsPageIsChecked() async throws {
+        // On Jellyfin 12.0 and later, Continue Watching opens the page of the version being watched.
+        let defaults = try testDefaults()
+        coordinator(defaults).rememberVersion("uhd", for: "hd")
+        let model = ItemDetailModel(showing: try Versions.movie([Versions.uhd, Versions.hd], id: "uhd"), playable: nil)
+        await model.checkVersion(using: coordinator(defaults), downloaded: nil)
+        #expect(model.checkedVersionID == "uhd")
     }
 }

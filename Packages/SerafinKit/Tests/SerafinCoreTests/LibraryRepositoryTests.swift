@@ -214,6 +214,30 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(StubURLProtocol.lastRequest(to: "\(host):443") == nil)
     }
 
+    @Test func userDataAsksForOneItemsDataAlone() async throws {
+        let host = "user-data.example.com"
+        let id = "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
+        StubURLProtocol.stub(
+            "\(host):443", path: "/UserItems/\(id)/UserData", .json(200, try Fixture.json("UserItemData")))
+        let data = try await library(on: host).userData(id: id)
+
+        #expect(data.isPlayed == true)
+        #expect(data.lastPlayedDate != nil)
+        let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/UserItems/\(id)/UserData").first)
+        #expect(request.request.httpMethod == "GET")
+        #expect(request.query("userId") == "user-1")
+        #expect(request.authorization?.hasPrefix("MediaBrowser ") == true)
+        #expect(request.authorization?.contains("Token=token-1") == true)
+    }
+
+    @Test func userDataForAnIDJellyfinWouldNotIssueIsNeverAsked() async throws {
+        let host = "odd-user-data.example.com"
+        await #expect(throws: SerafinError.notFound) {
+            try await library(on: host).userData(id: "../../System/Info")
+        }
+        #expect(StubURLProtocol.lastRequest(to: "\(host):443") == nil)
+    }
+
     @Test func seasonsAndTheirEpisodesComeInOrder() async throws {
         let host = "show.example.com"
         let series = "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"

@@ -19,9 +19,11 @@ import SwiftUI
 /// server's details replace it as soon as they arrive.
 ///
 /// A movie or an episode with more than one version, such as a 4K file and a 1080p one, lists them, with a check on
-/// the one Play starts: the downloaded one, the one last picked for it on this device, or else the one the server's
-/// answer for this device ranks first. The hero's badges and the languages under Information follow the checked
-/// version.
+/// the one Play starts: the downloaded one; otherwise the newer of the one last picked for it on this device and
+/// another version left part way through, as on another device; or else the one the server's answer for this device
+/// ranks first. The hero's badges and the languages under Information follow the checked version. Play resumes from
+/// where the item was left in whichever version that was, since Jellyfin 12.0 and later keep the position on the
+/// version played.
 @Observable @MainActor final class ItemDetailModel {
     enum Phase {
         case loading
@@ -124,13 +126,27 @@ import SwiftUI
     }
 
     /// What the hero's Play starts: for a show, the episode Next Up names, or the one the page was opened for, until the
-    /// user picks another season, then that season's first episode not yet watched; otherwise the item itself.
+    /// user picks another season, then that season's first episode not yet watched; otherwise the item itself, with
+    /// the position of the version left part way through when that's another version, which Play resumes from and
+    /// the hero shows.
     var playable: MediaItem? {
         guard let details else { return nil }
         guard let heroSeasonID, let season = episodes[heroSeasonID], let first = Self.firstToWatch(in: season) else {
-            return details.playable ?? details.item
+            return resuming(details.playable ?? details.item)
         }
         return first
+    }
+
+    /// Where the page's movie or episode was left part way through, when it has more than one version.
+    var resumePoint: ResumePoint? {
+        details?.resumePoint
+    }
+
+    /// `item` with the position of the version it was left part way through in, when that's another version than its
+    /// own file, whose own data doesn't have it on Jellyfin 12.0 and later; otherwise `item` as it is.
+    private func resuming(_ item: MediaItem) -> MediaItem {
+        guard let resumePoint, resumePoint.itemID == item.id, resumePoint.isInAnotherVersion else { return item }
+        return item.resumed(at: resumePoint.userData) ?? item
     }
 
     /// The media badges under the hero: those of the episode Play starts, for a show, and of the checked version, for
@@ -412,10 +428,10 @@ import SwiftUI
     }
 
     /// Checks the version Play starts, for a movie or an episode with more than one: the one its download saved, when
-    /// it's downloaded, since its copy plays; otherwise the one last picked for it on this device, while it still has
-    /// it, or else the one ``VersionRanking`` prefers from the server's answer for this device under the streaming
-    /// cap. Nothing is checked when the server doesn't answer, or no longer lists the downloaded version: Play then
-    /// leaves the choice to the player.
+    /// it's downloaded, since its copy plays; otherwise the newer of the one last picked for it on this device and
+    /// another version left part way through, as on another device; or else the one ``VersionRanking`` prefers from
+    /// the server's answer for this device under the streaming cap. Nothing is checked when the server doesn't answer,
+    /// or no longer lists the downloaded version: Play then leaves the choice to the player.
     ///
     /// - Parameter downloaded: The version the item's finished download saved, or nil when it isn't downloaded.
     func checkVersion(using playback: PlaybackCoordinator, downloaded: String?) async {
@@ -424,21 +440,34 @@ import SwiftUI
             checkedVersionID = nil
             return
         }
-        func listed(_ versionID: String?) -> String? {
-            guard let versionID, versions.contains(where: { $0.id == versionID }) else { return nil }
-            return versionID
-        }
+        let listed = Set(versions.compactMap(\.id))
         if let downloaded {
-            checkedVersionID = listed(downloaded)
+            checkedVersionID = listed.contains(downloaded) ? downloaded : nil
             return
         }
-        if let picked = listed(playback.pickedVersion(of: id)) {
-            checkedVersionID = picked
+        if let chosen = chosenVersion(among: listed, playback: playback) {
+            checkedVersionID = chosen
             return
         }
         guard let offers = try? await playback.versionOffers(of: id), !Task.isCancelled else { return }
         // A version picked while the server answered stands.
-        checkedVersionID = listed(playback.pickedVersion(of: id)) ?? listed(VersionRanking.preferred(among: offers)?.id)
+        let preferred = VersionRanking.preferred(among: offers)?.id
+        checkedVersionID =
+            chosenVersion(among: listed, playback: playback) ?? preferred.flatMap { listed.contains($0) ? $0 : nil }
+    }
+
+    /// The version chosen for the item without asking the server: the newer of the one last picked on this device and
+    /// another version left part way through, or nil when there's neither.
+    ///
+    /// The item's own file left part way through doesn't count. Jellyfin 10.11 keeps the position on the item played
+    /// whichever version played, so it doesn't say which version was watched; Jellyfin 12.0 and later keep it on the
+    /// version itself.
+    private func chosenVersion(among listed: Set<String>, playback: PlaybackCoordinator) -> String? {
+        let pick = playback.versionPick(for: id, among: listed)
+        let watched = resumePoint.flatMap { $0.isInAnotherVersion && listed.contains($0.versionID) ? $0 : nil }
+        guard let watched else { return pick?.versionID }
+        guard let pick, pick.date >= watched.userData.lastPlayedDate ?? .distantPast else { return watched.versionID }
+        return pick.versionID
     }
 
     /// Checks `versionID`, as picked in the version list, so Play starts it, streaming it when the download is of

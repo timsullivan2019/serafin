@@ -111,6 +111,8 @@ struct LiveMediaSource: MediaSource {
         if item.card.kind == .movie || item.card.kind == .episode {
             details.chapters = Chapter.chapters(of: source)
         }
+        // Where a movie or an episode with more than one version was left loads alongside the rest of the page.
+        async let resume = resumePoint(of: source)
         switch item.card.kind {
         case .series:
             async let seasons = library.seasons(series: id)
@@ -147,7 +149,33 @@ struct LiveMediaSource: MediaSource {
         case .collection:
             break
         }
+        details.resumePoint = await resume
         return details
+    }
+
+    /// Where a movie or an episode with more than one version was left part way through, from the user's data for each
+    /// version, or nil when it has one version, or none was left part way through.
+    ///
+    /// The item's own data comes with it. The other versions' are asked for, at most ``MediaVersions/maximumAsked``,
+    /// since Jellyfin 12.0 and later keep each version's position on that version. A version whose data doesn't load
+    /// is passed over.
+    private func resumePoint(of item: BaseItemDto) async -> ResumePoint? {
+        guard item.type == .movie || item.type == .episode, let id = item.id, let versions = item.mediaSources,
+            versions.count > 1
+        else { return nil }
+        var records: [String: UserItemDataDto] = [:]
+        records[id] = item.userData
+        var seen: Set<String> = [id]
+        let others = versions.compactMap(\.id).filter { seen.insert($0).inserted }.prefix(MediaVersions.maximumAsked)
+        await withTaskGroup(of: (String, UserItemDataDto?).self) { group in
+            for versionID in others {
+                group.addTask { [library] in (versionID, try? await library.userData(id: versionID)) }
+            }
+            for await (versionID, record) in group {
+                records[versionID] = record
+            }
+        }
+        return MediaVersions.resumePoint(of: id, among: versions, records: records)
     }
 
     func savedDetails(of id: String) async -> ItemDetails? {

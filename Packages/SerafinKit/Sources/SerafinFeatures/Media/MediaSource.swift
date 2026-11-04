@@ -231,6 +231,9 @@ struct ItemDetails: Sendable {
     var badges: [String] = []
     /// A movie's or an episode's chapters.
     var chapters: [Chapter] = []
+    /// Where the item Play starts was left part way through, when it has more than one version, which Play resumes
+    /// from; nil when it has one version, or none was left part way through.
+    var resumePoint: ResumePoint?
 }
 
 /// Search matches, grouped the way the results screen shows them.
