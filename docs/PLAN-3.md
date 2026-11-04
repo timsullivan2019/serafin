@@ -40,7 +40,7 @@ Downloads are built and tested; merge them first (task 7.0), then the four polis
 
 ### 7.0 Merge downloads
 
-Merge the downloads branch as planned in PLAN-2 Phase 5. Before merging, re-run Gate 5 on the current main (a movie as original, an MKV episode as remux, a season; Airplane Mode playback; progress sync when back online; kill-and-resume mid-download; storage numbers match iOS Settings within 5%). Update the demo server: enable "Allow media downloading" for the `reviewer` and `screenshots` accounts and add the download steps to the App Review notes (PLAN-2 section 7).
+Merge the downloads branch as planned in PLAN-2 Phase 5. Before merging, re-run Gate 5 on the current main (a movie as original, an MKV episode as remux, a season; Airplane Mode playback; progress sync when back online; kill-and-resume mid-download; storage numbers match iOS Settings within 5%). Demo server: App Review and the App Store screenshots both use the one `reviewer` account (there is no separate `screenshots` account), and "Allow media downloading" is already enabled for it. Add the download steps to the App Review notes (PLAN-2 section 7).
 
 ### 7.1 Trickplay thumbnails
 
