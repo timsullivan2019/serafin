@@ -355,7 +355,7 @@ class Live:
             self.check(f"browse: {name}", status == 200, f"HTTP {status}")
 
         # Images, with Artwork's header.
-        tag = ((detail or {}).get("ImageTags") or {}).get("Primary")
+        tag = self.wait_for_poster(item_id, user, header, detail)
         if tag:
             status, _, headers = s.request(
                 "GET", f"/Items/{item_id}/Images/Primary?maxWidth=300&quality=90&tag={tag}", headers=quoted)
@@ -382,6 +382,17 @@ class Live:
         self.check("sign out", status in (200, 204), f"HTTP {status}")
         status, _, _ = s.request("GET", "/Users/Me", headers=header)
         self.check("sign out: the token stops working", status == 401, f"HTTP {status}")
+
+    def wait_for_poster(self, item_id, user, header, detail):
+        """The test video's poster tag, once the scan has grabbed a frame for it. The film is listed, with its
+        subtitles, before its images are fetched, and a busy server can take a while to get to them."""
+        for _ in range(60):
+            tag = ((detail or {}).get("ImageTags") or {}).get("Primary")
+            if tag:
+                return tag
+            time.sleep(2)
+            _, detail = self.server.json("GET", f"/Items/{item_id}?userId={user}", headers=header)
+        return None
 
     def wait_for_item(self, user, header):
         """The first movie with subtitles, or after a minute any movie, once the library scan has found it."""
