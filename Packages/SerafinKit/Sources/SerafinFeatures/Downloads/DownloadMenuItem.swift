@@ -4,6 +4,9 @@ import SwiftUI
 /// The item for downloading a movie or an episode in its page's More menu and its card's menu: Download, Cancel
 /// Download while it waits, is on its way or is being prepared, Delete Download once it's saved, or Try Downloading
 /// Again after it failed, with how far it got or why.
+///
+/// For an item with more than one version, such as a 4K file and a 1080p one, Download asks which, with each one's
+/// size. A card knows only the item, not its versions, so its Download downloads the version that would play.
 struct DownloadMenuItem: View {
     let item: MediaItem
     let downloads: DownloadCenter
@@ -11,12 +14,28 @@ struct DownloadMenuItem: View {
     var body: some View {
         switch downloads.state(of: item.id) {
         case .notDownloaded:
-            Button {
-                Task { await downloads.download(item) }
-            } label: {
-                Label(
-                    String(localized: "Download", bundle: .module, comment: "Menu item that downloads a video."),
-                    systemImage: "arrow.down.circle")
+            let versions = MediaVersions.choices(for: item.source?.mediaSources ?? [])
+            if versions.count > 1 {
+                Menu {
+                    ForEach(versions) { version in
+                        Button {
+                            Task { await downloads.download(item, version: version.id) }
+                        } label: {
+                            Text(version.title)
+                            if let size = version.size {
+                                Text(size)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(Self.download, systemImage: "arrow.down.circle")
+                }
+            } else {
+                Button {
+                    Task { await downloads.download(item) }
+                } label: {
+                    Label(Self.download, systemImage: "arrow.down.circle")
+                }
             }
         case .downloading(let fraction):
             cancel(
@@ -52,6 +71,11 @@ struct DownloadMenuItem: View {
                 Text(DownloadRow.reason(failure))
             }
         }
+    }
+
+    /// Download, as the menu item or the menu of versions.
+    private static var download: String {
+        String(localized: "Download", bundle: .module, comment: "Menu item that downloads a video.")
     }
 
     /// Cancel Download, with `detail` under it, such as how much has arrived.

@@ -312,6 +312,12 @@
     "Try Again" : {
       "comment" : "Button that retries a failed load."
     },
+    "Version" : {
+      "comment" : "Heading of a video's versions."
+    },
+    "Versions" : {
+      "comment" : "Heading of a movie's or an episode's versions."
+    },
     "Violet" : {
       "comment" : "Accent colour."
     },

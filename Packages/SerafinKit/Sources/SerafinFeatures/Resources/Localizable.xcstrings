@@ -1167,6 +1167,9 @@
     "Version" : {
       "comment" : "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
     },
+    "Version %lld" : {
+      "comment" : "A video's version that has no name and no known format, such as Version 2."
+    },
     "Video" : {
       "comment" : "Detail fact: video format."
     },

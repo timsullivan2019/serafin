@@ -1,7 +1,9 @@
+import JellyfinAPI
 import Nuke
 import Observation
 import SerafinCore
 import SerafinDesign
+import SerafinPlayback
 import SwiftUI
 
 /// What a movie, show or episode detail screen shows.
@@ -15,6 +17,11 @@ import SwiftUI
 /// A downloaded movie or episode shows what was saved with its download while the server can't be reached: straight
 /// away when a download's card opened the page, otherwise once the server fails or hasn't answered for a moment. The
 /// server's details replace it as soon as they arrive.
+///
+/// A movie or an episode with more than one version, such as a 4K file and a 1080p one, lists them, with a check on
+/// the one Play starts: the downloaded one, the one last picked for it on this device, or else the one the server's
+/// answer for this device ranks first. The hero's badges and the languages under Information follow the checked
+/// version.
 @Observable @MainActor final class ItemDetailModel {
     enum Phase {
         case loading
@@ -69,6 +76,9 @@ import SwiftUI
     private var openedSeasonID: String?
     /// The episode a show's page was opened for, as from Home's hero, which Play starts until it's watched.
     private var pinnedEpisodeID: String?
+    /// The version Play starts and the version list checks, or nil while that isn't known, and for an item with one
+    /// version.
+    private(set) var checkedVersionID: String?
     private var seasonChange: Task<Void, Never>?
     private var prefetcher: ImagePrefetcher?
 
@@ -123,10 +133,22 @@ import SwiftUI
         return first
     }
 
-    /// The media badges under the hero: those of the episode Play starts, for a show.
+    /// The media badges under the hero: those of the episode Play starts, for a show, and of the checked version, for
+    /// a movie or an episode with more than one.
     var badges: [String] {
+        if let checkedVersion {
+            return MediaBadges.badges(for: checkedVersion)
+        }
         guard heroSeasonID != nil, let playable else { return details?.badges ?? [] }
         return Self.badges(of: playable)
+    }
+
+    /// The facts under Information, with the languages of the checked version, for a movie or an episode with more
+    /// than one.
+    var information: [InformationColumns.Column] {
+        guard let details else { return [] }
+        guard let checkedVersion, let source = details.item.source else { return details.information }
+        return ItemInformation.columns(for: source, card: details.item.card, version: checkedVersion)
     }
 
     /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the server's details
@@ -359,6 +381,72 @@ import SwiftUI
             return playable.id
         }
         return Self.firstToWatch(in: season)?.id
+    }
+
+    // MARK: - Versions
+
+    /// The versions of the page's movie or episode, such as its 4K file and its 1080p one, in the server's order, when
+    /// it has more than one; otherwise none.
+    var versions: [MediaSourceInfo] {
+        guard let item = details?.item, item.card.kind == .movie || item.card.kind == .episode,
+            let sources = item.source?.mediaSources, sources.count > 1
+        else { return [] }
+        return sources
+    }
+
+    /// The versions as the version list shows them.
+    var versionChoices: [VersionChoice] {
+        MediaVersions.choices(for: versions)
+    }
+
+    /// The checked version, while one is.
+    var checkedVersion: MediaSourceInfo? {
+        guard let checkedVersionID else { return nil }
+        return versions.first { $0.id == checkedVersionID }
+    }
+
+    /// The version to play `item` in: the checked one, when `item` is the page's own movie or episode, or nil to leave
+    /// the choice to the player.
+    func version(toPlay item: MediaItem) -> String? {
+        item.id == id ? checkedVersion?.id : nil
+    }
+
+    /// Checks the version Play starts, for a movie or an episode with more than one: the one its download saved, when
+    /// it's downloaded, since its copy plays; otherwise the one last picked for it on this device, while it still has
+    /// it, or else the one ``VersionRanking`` prefers from the server's answer for this device under the streaming
+    /// cap. Nothing is checked when the server doesn't answer, or no longer lists the downloaded version: Play then
+    /// leaves the choice to the player.
+    ///
+    /// - Parameter downloaded: The version the item's finished download saved, or nil when it isn't downloaded.
+    func checkVersion(using playback: PlaybackCoordinator, downloaded: String?) async {
+        let versions = versions
+        guard versions.count > 1 else {
+            checkedVersionID = nil
+            return
+        }
+        func listed(_ versionID: String?) -> String? {
+            guard let versionID, versions.contains(where: { $0.id == versionID }) else { return nil }
+            return versionID
+        }
+        if let downloaded {
+            checkedVersionID = listed(downloaded)
+            return
+        }
+        if let picked = listed(playback.pickedVersion(of: id)) {
+            checkedVersionID = picked
+            return
+        }
+        guard let offers = try? await playback.versionOffers(of: id), !Task.isCancelled else { return }
+        // A version picked while the server answered stands.
+        checkedVersionID = listed(playback.pickedVersion(of: id)) ?? listed(VersionRanking.preferred(among: offers)?.id)
+    }
+
+    /// Checks `versionID`, as picked in the version list, so Play starts it, streaming it when the download is of
+    /// another version, and remembers it for the item on this device.
+    func pickVersion(_ versionID: String, playback: PlaybackCoordinator) {
+        guard versions.contains(where: { $0.id == versionID }) else { return }
+        checkedVersionID = versionID
+        playback.rememberVersion(versionID, for: id)
     }
 
     // MARK: - Helpers

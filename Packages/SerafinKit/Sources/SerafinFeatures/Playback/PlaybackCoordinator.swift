@@ -13,9 +13,10 @@ import SerafinPlayback
 /// What is playing, shared by the full-screen player and Picture in Picture.
 ///
 /// It starts items on the account's ``PlayerEngine`` at their resume point, under the streaming cap Settings gives
-/// for the network the device is on, or from their downloaded copy when they're downloaded. Putting the player away
-/// hands a playing video to Picture in Picture, or stops it. When playback stops it has every screen reload, so
-/// progress and played marks show. Without an engine, as in previews, it only pretends to play.
+/// for the network the device is on, or from their downloaded copy when they're downloaded. An item with more than one
+/// version plays the one last picked for it on this device, or else the one ``VersionRanking`` prefers. Putting the
+/// player away hands a playing video to Picture in Picture, or stops it. When playback stops it has every screen
+/// reload, so progress and played marks show. Without an engine, as in previews, it only pretends to play.
 @Observable @MainActor final class PlaybackCoordinator {
     /// Where to start an item.
     enum Start: Equatable {
@@ -63,6 +64,8 @@ import SerafinPlayback
     @ObservationIgnored private var artwork: Artwork?
     @ObservationIgnored private var downloads: DownloadCenter?
     @ObservationIgnored private let serverID: String?
+    /// The versions the account picked on this device.
+    @ObservationIgnored private let versionMemory: VersionMemory
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isOnExpensiveNetwork: @MainActor () -> Bool
 
@@ -75,7 +78,8 @@ import SerafinPlayback
     ///   - artwork: Loads the artwork the Lock Screen shows.
     ///   - downloads: The account's downloads, whose copies play instead of streams. Nil in previews.
     ///   - serverID: The account's server, whose streaming caps apply. Nil in previews.
-    ///   - defaults: Where Settings keeps the streaming caps and the subtitle style.
+    ///   - account: The signed-in account, whose version picks apply. Nil in previews, which keep none.
+    ///   - defaults: Where Settings keeps the streaming caps and the subtitle style, and where version picks are kept.
     ///   - isOnExpensiveNetwork: Whether the device is on cellular or a personal hotspot right now. Nil asks the app's
     ///     network watcher.
     init(
@@ -85,6 +89,7 @@ import SerafinPlayback
         artwork: Artwork? = nil,
         downloads: DownloadCenter? = nil,
         serverID: String? = nil,
+        account: SessionKey? = nil,
         defaults: UserDefaults = .standard,
         isOnExpensiveNetwork: (@MainActor () -> Bool)? = nil
     ) {
@@ -94,6 +99,7 @@ import SerafinPlayback
         self.artwork = artwork
         self.downloads = downloads
         self.serverID = serverID
+        versionMemory = VersionMemory(account: account, defaults: defaults)
         self.defaults = defaults
         if let isOnExpensiveNetwork {
             self.isOnExpensiveNetwork = isOnExpensiveNetwork
@@ -153,9 +159,12 @@ import SerafinPlayback
     ///     stays there.
     ///   - continuing: Whether this carries on from what was playing, as the next episode or a retry, so subtitles
     ///     picked in the player stay as they were rather than going back to Settings' default.
+    ///   - version: The version to play, as the one its page checks, or nil for the one last picked for the item on
+    ///     this device, or else the one ``VersionRanking`` prefers. A downloaded item plays its copy unless this names
+    ///     another version than the copy's.
     func play(
         _ item: MediaItem, from start: Start = .resume, zoomSource: String? = nil, presentsPlayer: Bool = true,
-        continuing: Bool = false
+        continuing: Bool = false, version: String? = nil
     ) {
         guard item.card.kind == .movie || item.card.kind == .episode else { return }
         nowPlaying = item
@@ -171,10 +180,14 @@ import SerafinPlayback
             isPretending = true
             return
         }
-        let download = downloads?.playableDownload(of: item.id)
+        let download = downloads?.playableDownload(of: item.id).flatMap { download in
+            Self.playsCopy(of: download.record.mediaSourceID, for: version) ? download : nil
+        }
         let copy = download?.copy
         let startPosition = Self.startPosition(of: item, from: start, download: download?.record)
-        let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: startPosition)
+        let options = PlaybackOptions(
+            maxBitrate: maxBitrate, startPosition: startPosition,
+            mediaSourceID: version ?? versionMemory.version(of: item.id))
         #if canImport(UIKit)
             engine.pictureInPictureDidStart = { [weak self] in self?.pictureInPictureStarted() }
             engine.restoreFromPictureInPicture = { [weak self] in
@@ -223,10 +236,57 @@ import SerafinPlayback
         play(next, from: .beginning, continuing: true)
     }
 
-    /// Tries the item again from where playback was.
+    /// Whether a downloaded copy of the version `savedVersion` plays when Play asks for `version`: unless another
+    /// version is asked for, as one picked on the item's page, which streams instead.
+    nonisolated static func playsCopy(of savedVersion: String, for version: String?) -> Bool {
+        version == nil || version == savedVersion
+    }
+
+    /// Tries the item again from where playback was, in the version that was playing.
     func retry() {
         guard let nowPlaying else { return }
-        play(nowPlaying, from: engine.map { .position($0.elapsed) } ?? .resume, continuing: true)
+        let playing = engine?.plan.flatMap { $0.itemID == nowPlaying.id ? $0.mediaSourceID : nil }
+        play(
+            nowPlaying, from: engine.map { .position($0.elapsed) } ?? .resume, continuing: true, version: playing)
+    }
+
+    // MARK: - Versions
+
+    /// The version last picked for `itemID` on this device, which Play starts unless told another, or nil when none
+    /// was.
+    func pickedVersion(of itemID: String) -> String? {
+        versionMemory.version(of: itemID)
+    }
+
+    /// The version of `itemID` its finished download saved, which Play starts from the device, or nil when it isn't
+    /// downloaded.
+    func downloadedVersion(of itemID: String) -> String? {
+        downloads?.downloadedVersion(of: itemID)
+    }
+
+    /// Remembers `versionID` as picked for `itemID`, so Play starts it from now on.
+    func rememberVersion(_ versionID: String, for itemID: String) {
+        versionMemory.remember(versionID, for: itemID)
+    }
+
+    /// Every version of `itemID`, with how the server would send each to this device under the streaming cap for the
+    /// network it's on, for showing which plays. None without an engine, as in previews.
+    ///
+    /// - Throws: When the server can't be asked, or refuses.
+    func versionOffers(of itemID: String) async throws -> [VersionOffer] {
+        guard let engine else { return [] }
+        return try await engine.versionOffers(of: itemID, maxBitrate: maxBitrate)
+    }
+
+    /// Plays the version `versionID` of what's playing from where it is, as picked in the player's sheet, and
+    /// remembers it for the item once it plays.
+    func selectVersion(_ versionID: String) {
+        guard let engine, let itemID = engine.plan?.itemID else { return }
+        Task { [weak self] in
+            await engine.selectVersion(versionID)
+            guard let plan = engine.plan, plan.itemID == itemID, plan.mediaSourceID == versionID else { return }
+            self?.rememberVersion(versionID, for: itemID)
+        }
     }
 
     /// Pauses or resumes.

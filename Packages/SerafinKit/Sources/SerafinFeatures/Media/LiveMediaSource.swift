@@ -134,7 +134,7 @@ struct LiveMediaSource: MediaSource {
             } else {
                 details.playable = playable
             }
-            details.badges = details.playable?.source.map(MediaBadges.badges(for:)) ?? []
+            details.badges = details.playable?.source.map { MediaBadges.badges(for: $0) } ?? []
             // Similar titles load alongside, so the opening season's episodes don't wait for them.
             details.similar = MediaItem.from((try? await similar) ?? [])
         case .episode:

@@ -6,7 +6,8 @@ import SwiftUI
 /// A movie, show or episode: the hero header, the overview, then the rows below.
 ///
 /// A show's page follows the TV app: its episodes come first, one season at a time under a season menu, then cast and
-/// crew, similar titles and the information columns.
+/// crew, similar titles and the information columns. A movie or an episode with more than one version lists them
+/// above the information columns, with a check on the one Play starts.
 struct ItemDetailView: View {
     @State private var model: ItemDetailModel
     @Environment(\.media) private var media
@@ -120,6 +121,7 @@ private struct DetailContent: View {
     @Environment(\.artwork) private var artwork
     @Environment(\.displayScale) private var displayScale
     @Environment(\.horizontalSizeClass) private var sizeClass
+    private let network = NetworkWatcher.shared
 
     var body: some View {
         ScrollView {
@@ -135,8 +137,9 @@ private struct DetailContent: View {
                     cast
                     moreEpisodes
                     similar
+                    versions
                 }
-                InformationColumns(columns: details.information)
+                InformationColumns(columns: model.information)
                     .padding(.horizontal, Spacing.medium)
             }
             .padding(.bottom, Spacing.xLarge)
@@ -169,6 +172,20 @@ private struct DetailContent: View {
         .onChange(of: heroGeometry.isCompact) {
             model.heroChanged(to: heroGeometry, artwork: artwork)
         }
+        .task(id: versionCheck) {
+            await model.checkVersion(using: playback, downloaded: versionCheck?.downloaded)
+        }
+    }
+
+    /// What the checked version depends on, for a movie or an episode with more than one. It's checked again when the
+    /// device moves to another network, whose streaming cap can change the version that plays, and when a download of
+    /// the item finishes or goes.
+    private var versionCheck: VersionCheck? {
+        let versions = model.versions.compactMap(\.id)
+        guard versions.count > 1 else { return nil }
+        return VersionCheck(
+            versions: versions, maxBitrate: playback.maxBitrate, connection: network.connection,
+            downloaded: playback.downloadedVersion(of: model.id))
     }
 
     private var isSeries: Bool {
@@ -189,7 +206,8 @@ private struct DetailContent: View {
                     tint: model.tint ?? ArtworkTint.neutral,
                     playZoomNamespace: playerZoom,
                     startOver: {
-                        playback.play(playable, from: .beginning, zoomSource: pillZoom)
+                        playback.play(
+                            playable, from: .beginning, zoomSource: pillZoom, version: model.version(toPlay: playable))
                     },
                     arrivesFromHomeHero: arrivesFromHomeHero,
                     badges: model.badges,
@@ -197,7 +215,7 @@ private struct DetailContent: View {
                     artworkID: model.seasonArtwork?.seasonID ?? details.item.id,
                     artworkAnchor: model.seasonArtwork?.isPoster == true ? .top : .center
                 ) {
-                    playback.play(playable, zoomSource: pillZoom)
+                    playback.play(playable, zoomSource: pillZoom, version: model.version(toPlay: playable))
                 }
             }
         }
@@ -277,8 +295,19 @@ private struct DetailContent: View {
                 style: .landscape,
                 items: details.chapters
             ) { chapter in
-                ChapterLink(chapter: chapter, item: details.item)
+                ChapterLink(chapter: chapter, item: details.item, version: model.version(toPlay: details.item))
             }
+        }
+    }
+
+    /// A movie's or an episode's versions, when it has more than one, with a check on the one Play starts.
+    @ViewBuilder private var versions: some View {
+        let choices = model.versionChoices
+        if choices.count > 1 {
+            VersionList(versions: choices, selection: model.checkedVersionID) { versionID in
+                model.pickVersion(versionID, playback: playback)
+            }
+            .padding(.horizontal, Spacing.medium)
         }
     }
 
@@ -319,6 +348,15 @@ private struct DetailContent: View {
 private struct SeasonPrefetch: Equatable {
     let seasons: [String]
     let hero: ItemDetailModel.HeroGeometry
+}
+
+/// What the checked version was found for: the item's versions, under one streaming cap on one network, with the
+/// version downloaded, if any.
+private struct VersionCheck: Equatable {
+    let versions: [String]
+    let maxBitrate: Int?
+    let connection: NetworkWatcher.Connection
+    let downloaded: String?
 }
 
 /// A show's episodes, one season at a time: the season menu, then a row of episode cards on a phone, with the next
@@ -515,6 +553,8 @@ private struct SeasonFailure: View {
 private struct ChapterLink: View {
     let chapter: Chapter
     let item: MediaItem
+    /// The version to play, as the page checks it, or nil to leave the choice to the player.
+    let version: String?
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.artwork) private var artwork
     @Environment(\.displayScale) private var scale
@@ -522,7 +562,7 @@ private struct ChapterLink: View {
 
     var body: some View {
         Button {
-            playback.play(item, from: .position(chapter.start))
+            playback.play(item, from: .position(chapter.start), version: version)
         } label: {
             picture { image in
                 ThumbnailCard(
