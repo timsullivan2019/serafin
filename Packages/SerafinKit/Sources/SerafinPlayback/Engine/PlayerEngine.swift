@@ -59,6 +59,12 @@ public enum PlaybackState: Equatable, Sendable {
     /// The stretches the server marked in the item, such as its intro, in order and without overlaps. Empty when it
     /// marked none.
     public private(set) var segments: [PlaybackSegment] = []
+    /// The thumbnails the scrubber shows of the version playing: the ones saved with a downloaded copy, or else the
+    /// server's. Nil until playback has started, and when there are none.
+    public private(set) var trickplay: TrickplayTiles?
+    /// The item's chapters, as the server lists them or as they were saved with a downloaded copy, for the scrubber.
+    /// Empty until playback has started, and when it has none.
+    public private(set) var chapters: [ChapterInfo] = []
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
     /// The subtitles showing, which the player's sheet checks. Settings decide them as each video starts, from the
@@ -96,6 +102,7 @@ public enum PlaybackState: Equatable, Sendable {
     private let negotiator: PlaybackNegotiator
     private let nextEpisode: NextEpisode
     private let segmentRepository: SegmentRepository
+    private let trickplayRepository: TrickplayRepository
     private let streamLoader: StreamLoader
     /// Reads the account's playback preferences, for Settings' subtitle mode and autoplay, or nil to leave subtitles
     /// to the server and play next episodes by themselves.
@@ -202,6 +209,7 @@ public enum PlaybackState: Equatable, Sendable {
         self.negotiator = PlaybackNegotiator(client: client, userID: userID)
         self.nextEpisode = NextEpisode(client: client, userID: userID)
         self.segmentRepository = SegmentRepository(client: client)
+        self.trickplayRepository = TrickplayRepository(client: client, userID: userID)
         self.streamLoader = StreamLoader(pinning: pinning)
         self.playbackPreferences = playbackPreferences
         diagnosticsSession = URLSession(configuration: .ephemeral, delegate: pinning, delegateQueue: nil)
@@ -286,6 +294,8 @@ public enum PlaybackState: Equatable, Sendable {
         }
         nextItem = nil
         segments = []
+        trickplay = nil
+        chapters = []
         failure = nil
         elapsed = options.startPosition
         duration = item.runTimeTicks.map(Ticks.duration) ?? .zero
@@ -300,6 +310,9 @@ public enum PlaybackState: Equatable, Sendable {
             // Asked for alongside the plan, so an intro at the very start can be skipped from its first seconds, but
             // waited for only once playback has started, so a slow answer never holds the picture up.
             async let marked = segmentRepository.segments(of: itemID, isEpisode: item.type == .episode)
+            // Likewise the thumbnails and chapters the scrubber shows, unless a copy has both saved.
+            async let details = Self.details(
+                of: item, asking: copy?.hasScrubbingDetails == true ? nil : trickplayRepository)
             // A copy plays with no server, so it waits only a moment for the account's settings.
             let settingsWait = copy == nil ? nil : Self.settingsWaitForCopies
             async let preferences = Self.read(playbackPreferences, waitingAtMost: settingsWait)
@@ -347,6 +360,10 @@ public enum PlaybackState: Equatable, Sendable {
             let found = await marked
             guard load == generation else { return }
             segments = found
+            let known = await details
+            guard load == generation else { return }
+            trickplay = copy?.trickplay ?? Self.serverTrickplay(in: known, mediaSourceID: plan.mediaSourceID)
+            chapters = copy?.chapters ?? known.chapters ?? []
         } catch is CancellationError {
             if load == generation {
                 state = .idle
@@ -407,8 +424,24 @@ public enum PlaybackState: Equatable, Sendable {
         offeredGenerated = nil
         nextItem = nil
         segments = []
+        trickplay = nil
+        chapters = []
         state = .idle
         await PlaybackAudioSession.deactivate()
+    }
+
+    /// `item` with its trickplay thumbnails and chapters, as `repository` finds them, or `item` as it is with no
+    /// repository to ask.
+    private static func details(of item: BaseItemDto, asking repository: TrickplayRepository?) async -> BaseItemDto {
+        guard let repository else { return item }
+        return await repository.details(of: item)
+    }
+
+    /// The server's trickplay thumbnails of the version `mediaSourceID` in `item`'s `Trickplay` field, or nil when
+    /// it made none.
+    static func serverTrickplay(in item: BaseItemDto, mediaSourceID: String) -> TrickplayTiles? {
+        let layouts = Trickplay.layouts(in: item.trickplay, mediaSourceID: mediaSourceID)
+        return layouts.isEmpty ? nil : .server(mediaSourceID: mediaSourceID, layouts: layouts)
     }
 
     // MARK: - Lock Screen and Picture in Picture

@@ -226,7 +226,8 @@ import os
                         planner: DownloadPlanner(client: client, userID: current.user.id),
                         library: library,
                         artwork: artwork,
-                        sync: PlaybackSync(client: client, key: current.key, downloads: $0)
+                        sync: PlaybackSync(client: client, key: current.key, downloads: $0),
+                        trickplay: TrickplayRepository(client: client, userID: current.user.id)
                     )
                 }
                 player = PlayerEngine(

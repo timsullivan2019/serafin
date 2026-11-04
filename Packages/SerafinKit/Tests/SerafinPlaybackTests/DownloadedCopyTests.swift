@@ -145,6 +145,25 @@ import Testing
         #expect(PlayerEngine.withheldGenerated(among: translationOnly, in: plan) == nil)
     }
 
+    @Test func aCopyWithItsThumbnailsAndChaptersSavedNeedntAskTheServer() throws {
+        let layout = try #require(
+            Trickplay(width: 320, height: 180, columns: 10, rows: 10, count: 90, intervalMilliseconds: 10_000))
+        let tiles = TrickplayTiles.saved(layout, files: [file])
+        let chapters = [ChapterInfo(name: "Opening", startPositionTicks: 0)]
+        func copy(_ trickplay: TrickplayTiles?, _ chapters: [ChapterInfo]?) -> DownloadedCopy {
+            DownloadedCopy(file: file, mediaSourceID: movie, tracks: nil, trickplay: trickplay, chapters: chapters) {
+                _ in
+            }
+        }
+
+        #expect(copy(tiles, chapters).hasScrubbingDetails)
+        // Saved as having none.
+        #expect(copy(tiles, []).hasScrubbingDetails)
+        // Saved before Serafin kept them, or without thumbnails.
+        #expect(!copy(tiles, nil).hasScrubbingDetails)
+        #expect(!copy(nil, chapters).hasScrubbingDetails)
+    }
+
     @Test func aStreamIsntADownload() throws {
         let streamed = PlaybackPlan(
             itemID: movie, mediaSource: source, url: try #require(URL(string: "https://example.com/Videos/stream")),

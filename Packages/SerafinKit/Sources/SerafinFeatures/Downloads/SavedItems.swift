@@ -166,11 +166,15 @@ struct DownloadArtworkSizes: Equatable {
     let backdrop: CGFloat
     /// The screen's scale, which turns points into pixels.
     let scale: CGFloat
+    /// Whether the screen is an iPad's, as wide as a regular-width window held upright, where the player's scrubber
+    /// draws its thumbnails wider.
+    let isRegular: Bool
 
     /// The sizes for a screen `screen` points in size, at `scale`.
     init(screen: CGSize, scale: CGFloat) {
         let short = min(screen.width, screen.height)
         let long = max(screen.width, screen.height)
+        isRegular = short >= Self.regularWidth
         poster = min(max(short - Spacing.medium * 2, 0), Self.posterLimit)
         backdrop = max(
             Self.heroBackdrop(width: short, screenHeight: long),

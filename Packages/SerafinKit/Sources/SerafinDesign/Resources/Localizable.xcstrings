@@ -24,6 +24,9 @@
         }
       }
     },
+    "%@, in %@" : {
+      "comment" : "Spoken playback position and the chapter it's in, such as 12:34 of 1:39:00, in Opening Titles."
+    },
     "%@, see all" : {
       "comment" : "Spoken name of a row's title, which opens the whole row, such as Movies, see all."
     },

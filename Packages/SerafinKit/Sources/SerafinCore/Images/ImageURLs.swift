@@ -71,6 +71,20 @@ public struct ImageURLs: Hashable, Sendable {
         return components?.url
     }
 
+    /// The address of tile `index` of the trickplay thumbnails `width` pixels wide that the server made of the version
+    /// `mediaSourceID` of an item, or nil when the ID isn't a plain ID or `width` or `index` can't be a tile's.
+    ///
+    /// The version's ID goes in the path as well as in `mediaSourceId`. Jellyfin 10.10 serves the tiles of the item in
+    /// the path and ignores `mediaSourceId`, which later servers read first, and each version of an item is an item of
+    /// its own whose ID is the version's, the main version's being the item's.
+    public func trickplayTileURL(mediaSourceID: String, width: Int, index: Int) -> URL? {
+        guard ItemID.isPlain(mediaSourceID), width > 0, index >= 0 else { return nil }
+        let path = "Videos/\(mediaSourceID)/Trickplay/\(width)/\(index).jpg"
+        var components = URLComponents(url: serverURL.appending(path: path), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "mediaSourceId", value: mediaSourceID)]
+        return components?.url
+    }
+
     /// The address of a user's profile picture, or nil when `userID` is not a plain ID or the user has no picture.
     ///
     /// - Parameters:

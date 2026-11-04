@@ -6,8 +6,9 @@ import SerafinPlayback
 import SwiftUI
 
 /// The full-screen player: the video under glass controls, double-tap skipping, pinching to fill the screen or fit
-/// it, the audio and subtitle picker, skipping the stretches the server marked, and the next episode's card over the
-/// credits and as an episode ends. On iPhone it turns with the phone, upright or on either side.
+/// it, the audio and subtitle picker, skipping the stretches the server marked, the next episode's card over the
+/// credits and as an episode ends, and while scrubbing, a thumbnail of the frame under the finger and the chapter it's
+/// in. On iPhone it turns with the phone, upright or on either side.
 struct PlayerView: View {
     @Environment(PlaybackCoordinator.self) private var playback
 
@@ -46,10 +47,13 @@ struct PlayerView: View {
         @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
         @Environment(\.artwork) private var artwork
         @Environment(\.displayScale) private var displayScale
+        @Environment(\.horizontalSizeClass) private var sizeClass
         @State private var screen = PlayerScreenModel()
         @State private var showsTracks = false
         /// The next episode's thumbnail and the tint taken from it, once loaded.
         @State private var nextArtwork: NextEpisodeArtwork?
+        /// The thumbnails the scrubber's preview shows of what's playing, or nil when it has none.
+        @State private var thumbnails: TrickplayThumbnails?
 
         /// What restarts the wait before the controls hide: a touch, a change in playback, or the picker closing.
         private struct HideTrigger: Equatable {
@@ -64,6 +68,13 @@ struct PlayerView: View {
             let segments: [PlaybackSegment]
             let itemID: String?
             let hasNextEpisode: Bool
+        }
+
+        /// What decides which thumbnails the scrubber's preview shows.
+        private struct ThumbnailInputs: Equatable {
+            let tiles: TrickplayTiles?
+            let isRegular: Bool
+            let scale: CGFloat
         }
 
         /// What decides whether the next episode's card shows.
@@ -135,6 +146,13 @@ struct PlayerView: View {
             .task(id: engine.nextItem?.id) {
                 guard let next = playback.nextItem else { return }
                 nextArtwork = await NextEpisodeArtwork.load(next, artwork: artwork, scale: displayScale)
+            }
+            .task(
+                id: ThumbnailInputs(tiles: engine.trickplay, isRegular: sizeClass == .regular, scale: displayScale)
+            ) {
+                thumbnails = TrickplayThumbnails(
+                    engine.trickplay, isRegular: sizeClass == .regular, scale: displayScale, artwork: artwork)
+                thumbnails?.prefetch(around: engine.elapsed)
             }
             .task(id: screen.noticeCount) {
                 guard screen.skippedNotice != nil else { return }
@@ -229,6 +247,8 @@ struct PlayerView: View {
                 showsControls: screen.controlsVisible,
                 segmentPrompt: segmentPrompt,
                 nextEpisode: nextEpisode,
+                chapters: Chapter.scrubberChapters(engine.chapters),
+                thumbnails: thumbnails?.scrubberThumbnails,
                 actions: PlayerControlActions(
                     minimize: { playback.dismissPlayer() },
                     playPause: {

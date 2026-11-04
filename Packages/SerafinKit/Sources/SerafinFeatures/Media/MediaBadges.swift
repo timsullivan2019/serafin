@@ -82,7 +82,18 @@ struct Chapter: Identifiable, Hashable, Sendable {
 
     /// The chapters the server lists for `item`, in order.
     static func chapters(of item: BaseItemDto) -> [Chapter] {
-        (item.chapters ?? []).enumerated().map { index, chapter in
+        chapters(item.chapters ?? [])
+    }
+
+    /// The chapters the player's scrubber marks, from `list` as the server lists them: in order of where they start,
+    /// each named as on the detail screen.
+    static func scrubberChapters(_ list: [ChapterInfo]) -> [ScrubberChapter] {
+        chapters(list).map { ScrubberChapter(name: $0.name, start: $0.start) }.sorted { $0.start < $1.start }
+    }
+
+    /// `list`'s chapters, in the server's order, named "Chapter 3" where the file doesn't name them.
+    private static func chapters(_ list: [ChapterInfo]) -> [Chapter] {
+        list.enumerated().map { index, chapter in
             let name =
                 chapter.name.flatMap { $0.isEmpty ? nil : $0 }
                 ?? String(

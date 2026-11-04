@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 import Testing
 
 @testable import SerafinCore
@@ -273,6 +274,8 @@ private func isSaved(_ url: URL) -> Bool {
 
         #expect(saved.metadata == DownloadMetadata(title: "Sintel", kind: .movie, year: 2010))
         #expect(saved.playback == nil)
+        #expect(saved.trickplay == nil)
+        #expect(saved.chapters == nil)
         #expect(try await store.changes().isEmpty)
     }
 
@@ -306,12 +309,142 @@ private func isSaved(_ url: URL) -> Bool {
         #expect(read.convertsVideo)
     }
 
+    /// Thumbnails in three tiles, the last part full.
+    private let threeTiles = Trickplay(
+        width: 320, height: 180, columns: 10, rows: 10, count: 250, intervalMilliseconds: 10_000)
+
+    @Test func trickplayTilesAreSavedBesideTheirDownloadAndDeletedWithIt() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        var saved = record("item-1")
+        saved.trickplay = DownloadTrickplay(layout: try #require(threeTiles), isComplete: false)
+        try await store.save(saved)
+
+        #expect(try await store.saveTrickplayTile(png, 2, of: saved.id))
+
+        let tile = store.trickplayURL(2, of: saved.id)
+        #expect(tile.lastPathComponent == "\(saved.id)-trickplay-2.jpg")
+        #expect(tile.deletingLastPathComponent().lastPathComponent == store.mediaDirectory.lastPathComponent)
+        #expect(try Data(contentsOf: tile) == png)
+        try await store.remove(ids: [saved.id])
+        #expect(!isSaved(tile))
+    }
+
+    @Test func onlyATileOfTheThumbnailsADownloadIsSavingIsSaved() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        var saving = record("item-1")
+        saving.trickplay = DownloadTrickplay(layout: try #require(threeTiles), isComplete: false)
+        let without = record("item-2")
+        try await store.save(saving)
+        try await store.save(without)
+
+        // Past the last tile, for a download saving no thumbnails, and for one deleted.
+        #expect(try await store.saveTrickplayTile(png, 3, of: saving.id) == false)
+        #expect(try await store.saveTrickplayTile(png, -1, of: saving.id) == false)
+        #expect(try await store.saveTrickplayTile(png, 0, of: without.id) == false)
+        #expect(try await store.saveTrickplayTile(png, 0, of: "deleted") == false)
+        // An error page rather than a picture, and something larger than any tile.
+        let errorPage = Data(#"{"Message":"Not found"}"#.utf8)
+        #expect(try await store.saveTrickplayTile(errorPage, 0, of: saving.id) == false)
+        let huge = png + Data(count: Trickplay.maximumTileBytes)
+        #expect(try await store.saveTrickplayTile(huge, 0, of: saving.id) == false)
+
+        #expect(!(-1...3).contains { isSaved(store.trickplayURL($0, of: saving.id)) })
+        #expect(!isSaved(store.trickplayURL(0, of: without.id)))
+        #expect(!isSaved(store.trickplayURL(0, of: "deleted")))
+    }
+
+    @Test func trickplayTilesNoDownloadKeepsAreDeleted() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DownloadStore(directory: directory)
+        var kept = record("item-1")
+        kept.trickplay = DownloadTrickplay(layout: try #require(threeTiles), isComplete: true)
+        let without = record("item-2")
+        try await store.save(kept)
+        try await store.save(without)
+        let keptTiles = (0..<3).map { store.trickplayURL($0, of: kept.id) }
+        // Past the last tile, of a download keeping no thumbnails, and of one deleted.
+        let orphans = [
+            store.trickplayURL(3, of: kept.id), store.trickplayURL(0, of: without.id),
+            store.trickplayURL(0, of: "deleted"),
+        ]
+        for tile in keptTiles + orphans {
+            try png.write(to: tile)
+        }
+
+        try await store.removeOrphanedFiles()
+
+        #expect(keptTiles.allSatisfy(isSaved))
+        #expect(!orphans.contains(where: isSaved))
+    }
+
+    @Test func thumbnailsAndChaptersAreSavedWithTheDownload() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var saved = record("item-1")
+        saved.trickplay = DownloadTrickplay(layout: try #require(threeTiles), isComplete: true)
+        saved.chapters = [
+            DownloadChapter(name: "Opening", start: .zero), DownloadChapter(name: nil, start: .milliseconds(95_500)),
+        ]
+        try await DownloadStore(directory: directory).save(saved)
+        #expect(try await DownloadStore(directory: directory).records() == [saved])
+    }
+
     @Test func anUnreadableIndexIsAnError() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data("not json".utf8).write(to: directory.appending(path: "downloads.json"))
         await #expect(throws: DownloadError.storeUnavailable) {
             try await DownloadStore(directory: directory).records()
+        }
+    }
+}
+
+@Suite struct DownloadChapterTests {
+    @Test func chaptersAreKeptInOrderWithoutOnesThatDontSayWhereTheyStart() {
+        let kept = DownloadChapter.kept([
+            ChapterInfo(name: "The Village", startPositionTicks: 950_000_000),
+            ChapterInfo(name: "Opening", startPositionTicks: 0),
+            ChapterInfo(name: "Before the start", startPositionTicks: -10),
+            ChapterInfo(name: "Nowhere"),
+            ChapterInfo(startPositionTicks: 3_760 * 10_000_000 + 5),
+        ])
+        #expect(
+            kept == [
+                DownloadChapter(name: "Opening", start: .zero),
+                DownloadChapter(name: "The Village", start: .seconds(95)),
+                DownloadChapter(name: nil, start: .seconds(3_760) + .nanoseconds(500)),
+            ])
+    }
+
+    @Test func aFileWithEndlessChaptersOrNamesIsKeptWithinBounds() {
+        let name = String(repeating: "a", count: 1_000)
+        let kept = DownloadChapter.kept(
+            (0..<1_000).map { ChapterInfo(name: name, startPositionTicks: $0 * 10_000_000) })
+        #expect(kept.count == DownloadChapter.maximumCount)
+        #expect(kept.allSatisfy { $0.name?.count == DownloadChapter.maximumNameLength })
+        #expect(kept.last?.start == .seconds(DownloadChapter.maximumCount - 1))
+    }
+
+    @Test func anyTicksTheServerSendsBecomeTimesWithoutOverflowing() {
+        let kept = DownloadChapter.kept([ChapterInfo(startPositionTicks: .max)])
+        #expect(kept.first?.start == .seconds(922_337_203_685) + .nanoseconds(477_580_700))
+    }
+
+    @Test func aTilesFileNameSaysWhichDownloadAndTileItIs() {
+        let id = "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+        let name = DownloadRecord.trickplayName(12, of: id)
+        #expect(name == "\(id)-trickplay-12.jpg")
+        let tile = DownloadRecord.trickplayTile(named: name)
+        #expect(tile?.id == id)
+        #expect(tile?.index == 12)
+        #expect(DownloadRecord.trickplayTile(named: "A-trickplay-B-trickplay-0.jpg")?.id == "A-trickplay-B")
+        let others = [
+            "\(id).mp4", "\(id)-poster", "\(id)-trickplay-.jpg", "\(id)-trickplay--1.jpg", "\(id)-trickplay-+1.jpg",
+            "\(id)-trickplay-01.jpg", "\(id)-trickplay-1.png", "\(id)-trickplay-1a.jpg", "\(id)-trickplay-\u{663}.jpg",
+        ]
+        for other in others {
+            #expect(DownloadRecord.trickplayTile(named: other) == nil, "\(other)")
         }
     }
 }
@@ -500,6 +633,15 @@ private func eventually(_ condition: () async throws -> Bool) async throws {
         try await Task.sleep(for: .milliseconds(5))
     }
     throw CancellationError()
+}
+
+/// The tiles a test's reader was asked for, in order.
+private actor TileReads {
+    private(set) var indices: [Int] = []
+
+    func add(_ index: Int) {
+        indices.append(index)
+    }
 }
 
 /// Downloads on a throwaway folder, moving files from a stubbed server. Every test uses its own host.
@@ -1068,6 +1210,137 @@ private struct DownloadsHarness {
         try await eventually { await preparer.isCancelled }
         #expect(try await harness.downloads.records(for: harness.key).isEmpty)
         #expect(try harness.savedFiles().isEmpty)
+    }
+
+    /// Starts downloading `item-1` from `host`, and returns its download once it's saved.
+    private func finishedDownload(_ harness: DownloadsHarness, host: String) async throws -> DownloadRecord {
+        StubURLProtocol.stub("\(host):443", path: "/Items/item-1/Download", .json(200, "movie"))
+        try await harness.downloads.start(try harness.request(host: host), for: harness.key)
+        return try await harness.settled()
+    }
+
+    @Test func trickplayTilesAreSavedOneByOneThenShownAndDeletedWithTheDownload() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let record = try await finishedDownload(harness, host: "downloads-trickplay.example.com")
+        let layout = try #require(
+            Trickplay(width: 320, height: 180, columns: 10, rows: 10, count: 250, intervalMilliseconds: 10_000))
+        #expect(harness.downloads.trickplayFiles(for: record) == nil)
+        let reads = TileReads()
+
+        let saved = try await harness.downloads.saveTrickplay(layout, of: record.id) { index in
+            await reads.add(index)
+            return png
+        }
+
+        #expect(saved)
+        #expect(await reads.indices == [0, 1, 2])
+        let updated = try #require(try await harness.downloads.record(forItem: "item-1", key: harness.key))
+        #expect(updated.trickplay == DownloadTrickplay(layout: layout, isComplete: true))
+        let files = try #require(harness.downloads.trickplayFiles(for: updated))
+        #expect(files.count == 3)
+        #expect(try files.allSatisfy { try Data(contentsOf: $0) == png })
+        try await harness.downloads.delete(record.id)
+        #expect(!files.contains(where: isSaved))
+    }
+
+    @Test func thumbnailsThatDontAllSaveLeaveNoTiles() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let record = try await finishedDownload(harness, host: "downloads-trickplay-failing.example.com")
+        let layout = try #require(
+            Trickplay(width: 320, height: 180, columns: 10, rows: 10, count: 250, intervalMilliseconds: 10_000))
+
+        let saved = try await harness.downloads.saveTrickplay(layout, of: record.id) { index in
+            guard index < 2 else { throw URLError(.notConnectedToInternet) }
+            return png
+        }
+
+        #expect(!saved)
+        let updated = try #require(try await harness.downloads.record(forItem: "item-1", key: harness.key))
+        #expect(updated.trickplay == nil)
+        #expect(harness.downloads.trickplayFiles(for: updated) == nil)
+        #expect(try harness.savedFiles() == [record.fileName])
+    }
+
+    @Test func thumbnailsLargerThanADownloadKeepsArentSaved() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let record = try await finishedDownload(harness, host: "downloads-trickplay-large.example.com")
+        let reads = TileReads()
+        // The server says they come to 37.5 MB, so none is asked for.
+        let heavy = try #require(
+            Trickplay(
+                width: 320, height: 180, columns: 10, rows: 10, count: 250, intervalMilliseconds: 10_000,
+                bandwidth: 100_000))
+        let refused = try await harness.downloads.saveTrickplay(heavy, of: record.id) { index in
+            await reads.add(index)
+            return png
+        }
+        // The server doesn't say, and two tiles come to 22 MB.
+        let unknown = try #require(
+            Trickplay(width: 1280, height: 720, columns: 1, rows: 1, count: 2, intervalMilliseconds: 10_000))
+        let large = png + Data(count: 11 * 1024 * 1024)
+        let tooMany = try await harness.downloads.saveTrickplay(unknown, of: record.id) { _ in large }
+
+        #expect(!refused)
+        #expect(await reads.indices.isEmpty)
+        #expect(!tooMany)
+        #expect(try await harness.downloads.record(forItem: "item-1", key: harness.key)?.trickplay == nil)
+        #expect(try harness.savedFiles() == [record.fileName])
+    }
+
+    @Test func thumbnailsSavedInAnotherSizeReplaceTheEarlierOnes() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let record = try await finishedDownload(harness, host: "downloads-trickplay-again.example.com")
+        let first = try #require(
+            Trickplay(width: 320, height: 180, columns: 10, rows: 10, count: 250, intervalMilliseconds: 10_000))
+        let second = try #require(
+            Trickplay(width: 480, height: 270, columns: 5, rows: 5, count: 30, intervalMilliseconds: 10_000))
+
+        try await harness.downloads.saveTrickplay(first, of: record.id) { _ in png }
+        try await harness.downloads.saveTrickplay(second, of: record.id) { _ in png }
+
+        let updated = try #require(try await harness.downloads.record(forItem: "item-1", key: harness.key))
+        #expect(updated.trickplay == DownloadTrickplay(layout: second, isComplete: true))
+        let tiles = ["\(record.id)-trickplay-0.jpg", "\(record.id)-trickplay-1.jpg"]
+        #expect(try harness.savedFiles() == ([record.fileName] + tiles).sorted())
+    }
+
+    @Test func thumbnailsOfADownloadDeletedMeanwhileArentKept() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let record = try await finishedDownload(harness, host: "downloads-trickplay-deleted.example.com")
+        let layout = try #require(
+            Trickplay(width: 320, height: 180, columns: 10, rows: 10, count: 250, intervalMilliseconds: 10_000))
+        let downloads = harness.downloads
+
+        let saved = try await downloads.saveTrickplay(layout, of: record.id) { index in
+            if index == 1 {
+                try await downloads.delete(record.id)
+            }
+            return png
+        }
+
+        #expect(!saved)
+        #expect(try await downloads.records(for: harness.key).isEmpty)
+        #expect(try harness.savedFiles().isEmpty)
+    }
+
+    @Test func chaptersAreKeptWithTheDownload() async throws {
+        let harness = try await DownloadsHarness()
+        defer { harness.cleanUp() }
+        let record = try await finishedDownload(harness, host: "downloads-chapters.example.com")
+        let chapters = [
+            DownloadChapter(name: "Opening", start: .zero), DownloadChapter(name: "The Village", start: .seconds(95)),
+        ]
+
+        try await harness.downloads.saveChapters(chapters, of: record.id)
+        try await harness.downloads.saveChapters(chapters, of: "deleted")
+
+        #expect(try await harness.downloads.record(forItem: "item-1", key: harness.key)?.chapters == chapters)
+        #expect(try await harness.downloads.records(for: harness.key).count == 1)
     }
 
     @Test func aFileThatWouldNotFitIsRefused() async throws {
