@@ -106,6 +106,94 @@ final class ServerAtAddresses: URLProtocol, @unchecked Sendable {
         #expect(session.player !== player)
     }
 
+    @Test func addingASignedInServerFromSettingsAddsTheAddressWithoutSigningInAgain() async throws {
+        ServerAtAddresses.serve("settings-server", at: "settings.example.com:443")
+        ServerAtAddresses.serve("settings-server", at: "192.168.78.30:8096")
+        let session = try session()
+        let connected = try await session.connect(to: ServerAddress.parse("settings.example.com"))
+        let server = try await session.add(connected)
+        try await session.signIn(to: server, username: "Alice", password: "password")
+        let library = try #require(session.library)
+        let model = AddServerModel(addsToSignedInServers: true)
+        model.address = "http://192.168.78.30:8096"
+
+        // Plain HTTP at home: nothing is saved until the warning has been accepted and has closed.
+        #expect(await model.connect(with: session) == nil)
+        #expect(model.unencrypted != nil)
+        model.acceptUnencrypted()
+        #expect(model.unencrypted == nil)
+        #expect(model.isConnecting)
+        #expect(session.account?.server.addresses.count == 1)
+
+        #expect(await model.proceed(with: session) == .addresses(serverID: "settings-server"))
+        #expect(!model.isConnecting)
+        let saved = try #require(session.account?.server)
+        #expect(saved.addresses.count == 2)
+        // The address in use stays until Serafin finds the new one answers better, and so does the sign-in.
+        #expect(saved.url == server.url)
+        #expect(session.library === library)
+    }
+
+    @Test func addingAServerAgainGoesOnToSignInWhenNobodyIsSignedInOrOnTheWelcomeScreen() async throws {
+        ServerAtAddresses.serve("again-server", at: "again.example.com:443")
+        ServerAtAddresses.serve("again-server", at: "192.168.78.40:8096")
+        let session = try session()
+        let connected = try await session.connect(to: ServerAddress.parse("again.example.com"))
+        let server = try await session.add(connected)
+        try await session.signIn(to: server, username: "Alice", password: "password")
+
+        // The welcome screen is there to sign in, so a saved server goes on to sign-in at the address that answered.
+        let welcome = AddServerModel()
+        welcome.address = "http://192.168.78.40:8096"
+        _ = await welcome.connect(with: session)
+        welcome.acceptUnencrypted()
+        let fromWelcome = await welcome.proceed(with: session)
+        let atHome = try #require(session.servers.first)
+        #expect(fromWelcome == .signIn(atHome))
+        #expect(atHome.url.host() == "192.168.78.40")
+
+        // From Settings, a saved server nobody is signed in to goes on to sign-in too.
+        try await session.signOut(SessionKey(serverID: server.id, userID: "user-1"))
+        let settings = AddServerModel(addsToSignedInServers: true)
+        settings.address = "again.example.com"
+        let fromSettings = await settings.connect(with: session)
+        let signedOut = try #require(session.servers.first)
+        #expect(signedOut.users.isEmpty)
+        #expect(fromSettings == .signIn(signedOut))
+    }
+
+    @Test func cancellingTheWarningSavesNothing() async throws {
+        ServerAtAddresses.serve("cancelled-server", at: "192.168.78.50:8096")
+        let session = try session()
+        let model = AddServerModel(addsToSignedInServers: true)
+        model.address = "http://192.168.78.50:8096"
+
+        _ = await model.connect(with: session)
+        model.unencrypted = nil
+
+        #expect(await model.proceed(with: session) == nil)
+        #expect(session.servers.isEmpty)
+        #expect(!model.isConnecting)
+    }
+
+    @Test func signingInAgainAsTheAccountInUseHandsTheScreensTheNewSignIn() async throws {
+        ServerAtAddresses.serve("resigned-server", at: "resigned.example.com:443")
+        let session = try session()
+        let connected = try await session.connect(to: ServerAddress.parse("resigned.example.com"))
+        let server = try await session.add(connected)
+        try await session.signIn(to: server, username: "Alice", password: "password")
+        let account = try #require(session.account)
+        let library = try #require(session.library)
+        let player = try #require(session.player)
+
+        // Jellyfin ends the session the screens were using when the same user signs in again from this device.
+        try await session.signIn(to: server, username: "Alice", password: "password")
+
+        #expect(session.account == account)
+        #expect(session.library !== library)
+        #expect(session.player !== player)
+    }
+
     @Test func aServerWithOneAddressStaysWhereItIs() async throws {
         ServerAtAddresses.serve("single-server", at: "single.example.com:443")
         let session = try session()

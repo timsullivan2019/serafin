@@ -25,8 +25,8 @@ struct SignInView: View {
             }
         }
         .task { await model.loadServerDetails(with: session) }
-        // Signing in to a new account replaces the screens anyway; signing in as the current one changes nothing,
-        // so the screen closes itself.
+        // Signing in to another account starts on fresh tabs anyway; signing in again as the current one keeps the
+        // tabs, so the screen closes itself.
         .onChange(of: model.didSignIn) { _, didSignIn in
             if didSignIn { dismiss() }
         }

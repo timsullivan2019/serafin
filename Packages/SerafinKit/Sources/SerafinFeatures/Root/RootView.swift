@@ -243,8 +243,8 @@ struct MainTabs: View {
         }
         .modifier(DownloadFailureAlert(downloads: downloads))
         .modifier(DownloadProgressSync(downloads: downloads, actions: actions))
-        // The account's server moved to another address: playback goes through the new engine, and the screens ask
-        // the server again, which also brings back any that failed at the old address.
+        // The account's server moved to another address, or the account signed in again: playback goes through the
+        // new engine, and the screens ask the server again, which also brings back any that failed before.
         .onChange(of: engine.map { ObjectIdentifier($0) }) {
             playback.reconnect(engine: engine, media: media, artwork: artwork, downloads: downloads)
             actions.reload()

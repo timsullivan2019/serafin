@@ -265,7 +265,7 @@ import os
     }
 
     /// Re-reads the servers and the current account, and hands screens a new library, artwork loader and player when
-    /// the account or its server's address has changed.
+    /// the account, its sign-in or its server's address has changed.
     private func refresh() async {
         do {
             servers = try await accounts.servers()
@@ -274,7 +274,11 @@ import os
                 return
             }
             let isSameAccount = current.key == account?.key && library != nil && artwork != nil && player != nil
-            if !isSameAccount || current.server.url != account?.server.url {
+            // Accounts makes an account a new library whenever its sign-in or address changes. Signing in again as the
+            // account in use is such a change: the server ends the session the screens were using, since Jellyfin
+            // keeps one per user and device.
+            let hasNewLibrary = try await accounts.library(for: current) !== library
+            if !isSameAccount || hasNewLibrary || current.server.url != account?.server.url {
                 try await signInScreens(as: current, keepingDownloads: isSameAccount)
             }
             state = .signedIn(current)
@@ -285,7 +289,8 @@ import os
     }
 
     /// Makes the library, artwork loader and player for `current`, and stops the last player. The same account at
-    /// another address keeps its downloads, which take the new library and client, so nothing that shows them blinks.
+    /// another address or signed in again keeps its downloads, which take the new library and client, so nothing that
+    /// shows them blinks.
     private func signInScreens(as current: Account, keepingDownloads: Bool) async throws {
         let library = try await accounts.library(for: current)
         let artwork = try await accounts.artwork(for: current)

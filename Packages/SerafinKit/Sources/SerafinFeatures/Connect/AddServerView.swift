@@ -6,12 +6,31 @@ import SwiftUI
 /// welcomes the user, and servers already saved are listed, so signing back in is one tap.
 struct AddServerView: View {
     /// Whether this is the first screen of the app, which greets the user instead of showing a title.
-    var isWelcome = false
+    let isWelcome: Bool
     /// Called with a saved server once it is ready for sign-in.
     let onServer: (Server) -> Void
-    @State private var model = AddServerModel()
+    /// Called with the ID of a saved server someone on this device is signed in to, once the address that answered is
+    /// one of its addresses, or nil when such a server goes on to sign-in like any other, as on the welcome screen.
+    let onAddress: ((String) -> Void)?
+    @State private var model: AddServerModel
     @Environment(AppSession.self) private var session
     @FocusState private var addressFocused: Bool
+
+    /// Creates the screen.
+    ///
+    /// - Parameters:
+    ///   - isWelcome: Whether this is the first screen of the app, which greets the user instead of showing a title.
+    ///   - onServer: Called with a saved server once it is ready for sign-in.
+    ///   - onAddress: Called with the ID of a saved server someone on this device is signed in to, once the address
+    ///     that answered is one of its addresses. Without it, such a server goes on to sign-in like any other.
+    init(
+        isWelcome: Bool = false, onServer: @escaping (Server) -> Void, onAddress: ((String) -> Void)? = nil
+    ) {
+        self.isWelcome = isWelcome
+        self.onServer = onServer
+        self.onAddress = onAddress
+        _model = State(initialValue: AddServerModel(addsToSignedInServers: onAddress != nil))
+    }
 
     var body: some View {
         Form {
@@ -37,7 +56,7 @@ struct AddServerView: View {
                 Section(String(localized: "On This Network", bundle: .module, comment: "Servers found nearby.")) {
                     ForEach(model.discovered) { server in
                         Button {
-                            Task { if let saved = await model.connect(to: server, with: session) { onServer(saved) } }
+                            Task { go(await model.connect(to: server, with: session)) }
                         } label: {
                             LabeledContent(server.displayName, value: server.url.host() ?? "")
                         }
@@ -59,17 +78,18 @@ struct AddServerView: View {
         )
         .navigationBarTitleDisplayModeInline()
         .task { await model.discover() }
-        .sheet(item: $model.unencrypted) { connected in
+        // Each sheet's buttons only close it; what was said is carried out once it has gone.
+        .sheet(item: $model.unencrypted, onDismiss: proceed) { connected in
             UnencryptedConnectionSheet(server: connected.server) {
-                Task { if let saved = await model.acceptUnencrypted(with: session) { onServer(saved) } }
+                model.acceptUnencrypted()
             } cancel: {
                 model.unencrypted = nil
             }
             .scrollIndicators(.never)
         }
-        .sheet(item: $model.certificate) { check in
+        .sheet(item: $model.certificate, onDismiss: proceed) { check in
             CertificateSheet(fingerprint: check.fingerprint, host: check.address.url.host() ?? "") {
-                Task { if let saved = await model.trustCertificate(with: session) { onServer(saved) } }
+                model.trustCertificate()
             } cancel: {
                 model.certificate = nil
             }
@@ -81,22 +101,22 @@ struct AddServerView: View {
             presenting: model.offer
         ) { offer in
             Button(AddAddressView.title) {
-                Task { if let saved = await model.acceptOffer(offer, with: session) { onServer(saved) } }
+                Task { go(await model.acceptOffer(offer, with: session)) }
             }
             Button(
                 String(localized: "Not Now", bundle: .module, comment: "Button that turns down an offered address."),
                 role: .cancel
             ) {
-                onServer(model.declineOffer(offer))
+                go(model.declineOffer(offer))
             }
         } message: { offer in
             Text(AddressKindText.offerMessage(serverName: offer.server.displayName))
         }
-        .sheet(item: $model.unencryptedOffer) { offer in
+        .sheet(item: $model.unencryptedOffer, onDismiss: proceed) { offer in
             UnencryptedConnectionSheet(server: offer.connected.server) {
-                Task { if let saved = await model.acceptOffer(offer, with: session) { onServer(saved) } }
+                model.acceptUnencryptedOffer()
             } cancel: {
-                onServer(model.declineOffer(offer))
+                model.declineUnencryptedOffer()
             }
             .scrollIndicators(.never)
         }
@@ -105,7 +125,24 @@ struct AddServerView: View {
     private func connect() {
         guard model.canConnect else { return }
         addressFocused = false
-        Task { if let saved = await model.connect(with: session) { onServer(saved) } }
+        Task { go(await model.connect(with: session)) }
+    }
+
+    /// Carries out what was said on the sheet that has just closed.
+    private func proceed() {
+        Task { go(await model.proceed(with: session)) }
+    }
+
+    /// Moves on to where adding goes next, if anywhere yet.
+    private func go(_ next: AddServerModel.Next?) {
+        switch next {
+        case .signIn(let server):
+            onServer(server)
+        case .addresses(let serverID):
+            onAddress?(serverID)
+        case nil:
+            break
+        }
     }
 }
 

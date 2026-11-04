@@ -65,17 +65,18 @@ struct AddAddressView: View {
         .navigationTitle(Self.title)
         .navigationBarTitleDisplayModeInline()
         .task { await model.discover() }
-        .sheet(item: $model.unencrypted) { connected in
+        // Each sheet's buttons only close it, and the screen goes back once it has gone.
+        .sheet(item: $model.unencrypted, onDismiss: proceed) { connected in
             UnencryptedConnectionSheet(server: connected.server) {
-                Task { finish(await model.acceptUnencrypted(with: session)) }
+                model.acceptUnencrypted()
             } cancel: {
                 model.unencrypted = nil
             }
             .scrollIndicators(.never)
         }
-        .sheet(item: $model.certificate) { check in
+        .sheet(item: $model.certificate, onDismiss: proceed) { check in
             CertificateSheet(fingerprint: check.fingerprint, host: check.address.url.host() ?? "") {
-                Task { finish(await model.trustCertificate(with: session)) }
+                model.trustCertificate()
             } cancel: {
                 model.certificate = nil
             }
@@ -106,9 +107,14 @@ struct AddAddressView: View {
         Task { finish(await model.connect(with: session)) }
     }
 
+    /// Carries out what was said on the sheet that has just closed.
+    private func proceed() {
+        Task { finish(await model.proceed(with: session)) }
+    }
+
     /// Goes back to the addresses once the address is saved.
-    private func finish(_ saved: Server?) {
-        if saved != nil {
+    private func finish(_ next: AddServerModel.Next?) {
+        if next != nil {
             dismiss()
         }
     }
