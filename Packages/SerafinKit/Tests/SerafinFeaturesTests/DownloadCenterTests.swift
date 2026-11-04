@@ -99,6 +99,33 @@ import Testing
         #expect(DownloadCenter.unwatched(3, of: []).isEmpty)
     }
 
+    @Test func aDownloadSavesTheThumbnailsThePreviewLoadsOrNarrowerOnesThatFit() throws {
+        func size(_ width: Int, bandwidth: Int? = nil) throws -> Trickplay {
+            try #require(
+                Trickplay(
+                    width: width, height: width * 9 / 16, columns: 10, rows: 10, count: 540,
+                    intervalMilliseconds: 10_000, bandwidth: bandwidth))
+        }
+        // Six tiles of 300 KB, 1.2 MB and 2.4 MB each.
+        let layouts = [
+            try size(320, bandwidth: 2_400), try size(640, bandwidth: 9_600), try size(1280, bandwidth: 19_200),
+        ]
+
+        // An iPhone draws the preview at most 320 points wide, 960 pixels at 3×; an iPad 480, also 960 at 2×.
+        #expect(DownloadCenter.downloadLayout(of: layouts, isRegular: false, scale: 3)?.width == 640)
+        #expect(DownloadCenter.downloadLayout(of: layouts, isRegular: true, scale: 2)?.width == 640)
+        // A denser screen.
+        #expect(DownloadCenter.downloadLayout(of: layouts, isRegular: true, scale: 3)?.width == 1280)
+        // Nothing wider than the preview loads is saved, nor anything over 20 MB.
+        let heavy = [try size(320, bandwidth: 2_400), try size(640, bandwidth: 30_000)]
+        #expect(DownloadCenter.downloadLayout(of: heavy, isRegular: false, scale: 3)?.width == 320)
+        #expect(
+            DownloadCenter.downloadLayout(of: [try size(320, bandwidth: 30_000)], isRegular: false, scale: 3) == nil)
+        // A server that doesn't say how large they are.
+        #expect(DownloadCenter.downloadLayout(of: [try size(320)], isRegular: false, scale: 3)?.width == 320)
+        #expect(DownloadCenter.downloadLayout(of: [], isRegular: false, scale: 3) == nil)
+    }
+
     @Test func episodesThatDidntStartSayWhyAndWhetherOthersDid() {
         let reasons: [UserMessage.UnstartedEpisodes] = [
             .refused(.notAllowed), .refused(.overQuality), .refused(.unavailable), .notEnoughSpace,

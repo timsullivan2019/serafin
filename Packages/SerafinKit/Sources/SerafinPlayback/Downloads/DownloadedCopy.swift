@@ -3,7 +3,8 @@ import JellyfinAPI
 import SerafinCore
 
 /// A movie or episode saved on this device, which ``PlayerEngine`` plays with no server: the saved file, the tracks
-/// inside it, where to keep how far playback got, and for an episode, the one downloaded after it.
+/// inside it, the trickplay thumbnails and chapters for the scrubber, where to keep how far playback got, and for an
+/// episode, the one downloaded after it.
 public struct DownloadedCopy: Sendable {
     /// The saved file.
     public var file: URL
@@ -11,6 +12,11 @@ public struct DownloadedCopy: Sendable {
     public var mediaSourceID: String
     /// The audio and subtitle tracks inside the file, or nil when they weren't saved with it.
     public var tracks: DownloadTracks?
+    /// The trickplay thumbnails saved with the file, or nil when none were.
+    public var trickplay: TrickplayTiles?
+    /// The item's chapters, in order, or nil when they weren't saved with it, as with a download made before Serafin
+    /// kept them. The server's are shown instead when it answers.
+    public var chapters: [ChapterInfo]?
     /// For an episode, the episode after it in its show that's downloaded too, which plays next when the server can't
     /// say which does, as with no connection. Nil for a movie, or when none after it is downloaded.
     public var nextEpisode: BaseItemDto?
@@ -23,20 +29,33 @@ public struct DownloadedCopy: Sendable {
     ///   - file: The saved file.
     ///   - mediaSourceID: The server's ID for the version saved.
     ///   - tracks: The audio and subtitle tracks inside the file, or nil when they weren't saved with it.
+    ///   - trickplay: The trickplay thumbnails saved with the file, or nil.
+    ///   - chapters: The item's chapters, or nil when they weren't saved with it.
     ///   - nextEpisode: For an episode, the episode after it in its show that's downloaded too, or nil.
     ///   - keepPosition: Keeps where playback stopped, on this device.
     public init(
         file: URL,
         mediaSourceID: String,
         tracks: DownloadTracks?,
+        trickplay: TrickplayTiles? = nil,
+        chapters: [ChapterInfo]? = nil,
         nextEpisode: BaseItemDto? = nil,
         keepPosition: @escaping @Sendable (Duration) async -> Void
     ) {
         self.file = file
         self.mediaSourceID = mediaSourceID
         self.tracks = tracks
+        self.trickplay = trickplay
+        self.chapters = chapters
         self.nextEpisode = nextEpisode
         self.keepPosition = keepPosition
+    }
+}
+
+extension DownloadedCopy {
+    /// Whether the copy has both the trickplay thumbnails and the chapters saved, so the server needn't be asked.
+    var hasScrubbingDetails: Bool {
+        trickplay != nil && chapters != nil
     }
 }
 

@@ -23,6 +23,8 @@ import Testing
         #expect(engine.duration == .seconds(120))
         #expect(engine.nextItem == nil)
         #expect(engine.segments.isEmpty)
+        #expect(engine.trickplay == nil)
+        #expect(engine.chapters.isEmpty)
         load.cancel()
     }
 
@@ -45,6 +47,27 @@ import Testing
         #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Items/\(itemID)/PlaybackInfo").isEmpty)
         load.cancel()
         await engine.stop()
+    }
+
+    @Test func theScrubberShowsTheServersThumbnailsOfTheVersionPlaying() throws {
+        let version = "1f3d9c1e78e12aae4c078801aeccb6de"
+        let other = "2a4e0d2f89f23bbf5d189912bfddc7ef"
+        func size(_ width: Int) -> TrickplayInfoDto {
+            TrickplayInfoDto(
+                height: width * 9 / 16, interval: 10_000, thumbnailCount: 12, tileHeight: 10, tileWidth: 10,
+                width: width)
+        }
+        let item = BaseItemDto(
+            id: version, trickplay: [version: ["640": size(640), "320": size(320)], other: ["480": size(480)]])
+        let layouts = try [320, 640].map { try #require(Trickplay(size($0))) }
+
+        #expect(
+            PlayerEngine.serverTrickplay(in: item, mediaSourceID: version)
+                == .server(mediaSourceID: version, layouts: layouts))
+        #expect(PlayerEngine.serverTrickplay(in: item, mediaSourceID: "3b5f1e3a90a34cca6e29aa23c0eed8f0") == nil)
+        #expect(PlayerEngine.serverTrickplay(in: BaseItemDto(id: version), mediaSourceID: version) == nil)
+        #expect(
+            PlayerEngine.serverTrickplay(in: BaseItemDto(id: version, trickplay: [:]), mediaSourceID: version) == nil)
     }
 
     @Test func bitratesAreLoggedInMegabits() {

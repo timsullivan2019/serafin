@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 
 /// One movie or episode saved on this device for one account, as ``DownloadStore`` keeps it.
 ///
@@ -55,6 +56,12 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     public var preparation: DownloadPreparation?
     /// Where the file comes from and how, while the download waits its turn. Nil once it starts.
     public var waiting: DownloadWaiting?
+    /// The trickplay thumbnails saved with the download for the player's scrubber, in one size, or nil when none
+    /// are. Their tiles are saved beside the file, named by the ID: tile `n` is `<id>-trickplay-<n>.jpg`.
+    public var trickplay: DownloadTrickplay?
+    /// The item's chapters, for the player's scrubber with no server, or nil when they weren't saved, as with a
+    /// download made before Serafin kept them. Empty for an item without chapters.
+    public var chapters: [DownloadChapter]?
 
     /// Creates a record.
     public init(
@@ -71,7 +78,9 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
         tracks: DownloadTracks? = nil,
         playback: DownloadPlayback? = nil,
         preparation: DownloadPreparation? = nil,
-        waiting: DownloadWaiting? = nil
+        waiting: DownloadWaiting? = nil,
+        trickplay: DownloadTrickplay? = nil,
+        chapters: [DownloadChapter]? = nil
     ) {
         self.id = id
         self.serverID = key.serverID
@@ -88,6 +97,8 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
         self.playback = playback
         self.preparation = preparation
         self.waiting = waiting
+        self.trickplay = trickplay
+        self.chapters = chapters
     }
 
     /// The account the download belongs to.
@@ -121,6 +132,22 @@ public struct DownloadRecord: Codable, Hashable, Sendable, Identifiable {
     /// The name of the copy while it's written, which takes ``fileName`` once it's whole.
     var savingName: String {
         "\(id)-saving.mov"
+    }
+
+    /// The name of tile `index` of the trickplay thumbnails saved with the download `id`.
+    static func trickplayName(_ index: Int, of id: String) -> String {
+        "\(id)-trickplay-\(index).jpg"
+    }
+
+    /// The download ID and the tile a trickplay tile's file name holds, or nil for another file's name.
+    static func trickplayTile(named name: String) -> (id: String, index: Int)? {
+        guard name.hasSuffix(".jpg"), let marker = name.range(of: "-trickplay-", options: .backwards) else {
+            return nil
+        }
+        let number = name[marker.upperBound...].dropLast(".jpg".count)
+        // Only a number as Serafin writes it: no sign, and no zeros in front.
+        guard let index = Int(number), index >= 0, String(index) == number else { return nil }
+        return (String(name[..<marker.lowerBound]), index)
     }
 
     /// The names of every file the download may have beside the index: the saved file, and until the copy is written,
@@ -323,6 +350,56 @@ public struct DownloadMetadata: Codable, Hashable, Sendable {
         self.year = year
         self.rating = rating
         self.overview = overview
+    }
+}
+
+/// The trickplay thumbnails saved with a download, for the player's scrubber with no server: one size of them, its
+/// tiles saved beside the download's file.
+public struct DownloadTrickplay: Codable, Hashable, Sendable {
+    /// The size saved.
+    public var layout: Trickplay
+    /// Whether every tile is saved. Until then the player shows none, and the tiles are saved afresh when the item's
+    /// page next opens with the server in reach.
+    public var isComplete: Bool
+
+    /// Creates the thumbnails saved with a download.
+    public init(layout: Trickplay, isComplete: Bool) {
+        self.layout = layout
+        self.isComplete = isComplete
+    }
+}
+
+/// A chapter of a downloaded movie or episode, kept for the player's scrubber with no server.
+public struct DownloadChapter: Codable, Hashable, Sendable {
+    /// The most chapters kept of one item. Jellyfin lists a file's chapters as its tags have them, which a broken
+    /// or hostile file could make endless.
+    public static let maximumCount = 500
+    /// The longest chapter name kept, in characters.
+    public static let maximumNameLength = 200
+
+    /// The chapter's name, or nil when the file doesn't name it.
+    public var name: String?
+    /// Where it starts.
+    public var start: Duration
+
+    /// Creates a chapter.
+    public init(name: String?, start: Duration) {
+        self.name = name
+        self.start = start
+    }
+
+    /// What a download keeps of `chapters`, as the server lists them: in order, without ones that start before the
+    /// beginning or don't say where they start, and at most ``maximumCount``, each named in at most
+    /// ``maximumNameLength`` characters.
+    public static func kept(_ chapters: [ChapterInfo]) -> [DownloadChapter] {
+        let kept = chapters.compactMap { chapter -> DownloadChapter? in
+            guard let ticks = chapter.startPositionTicks, ticks >= 0 else { return nil }
+            let name = chapter.name.map { String($0.prefix(maximumNameLength)) }
+            // Whole seconds and the rest convert apart, so no count of ticks can overflow.
+            let start = Duration.seconds(ticks / 10_000_000) + .nanoseconds(ticks % 10_000_000 * 100)
+            return DownloadChapter(name: name, start: start)
+        }
+        return Array(kept.sorted { $0.start < $1.start }.prefix(maximumCount))
     }
 }
 

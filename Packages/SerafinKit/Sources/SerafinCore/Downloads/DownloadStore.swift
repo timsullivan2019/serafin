@@ -6,11 +6,12 @@ import os
 ///
 /// Everything is excluded from backup, since a restored phone can download again, and protected until the device is
 /// first unlocked after a restart, so a transfer that finishes while the phone is locked can still be saved. The
-/// index holds no address, token or pin, and files are named by each download's ID: the video in `Media`, and its
-/// poster and backdrop in `Artwork`. A download whose copy Serafin writes keeps the file that arrived and its
-/// subtitles in `Media` too until the copy is saved. The index also keeps the changes to playback made with downloads
-/// that the server hasn't heard yet, which stay when their download is deleted. Its format is versioned so later
-/// releases can migrate it:
+/// index holds no address, token or pin, and files are named by each download's ID: the video and the tiles of its
+/// trickplay thumbnails in `Media`, and its poster and backdrop in `Artwork`. A download whose copy Serafin writes
+/// keeps the file that arrived and its subtitles in `Media` too until the copy is saved. The index also keeps the
+/// changes to playback made with downloads that the server hasn't heard yet, which stay when their download is
+/// deleted. Its format is versioned so later releases can migrate it; fields added since version 1, such as
+/// `trickplay` and `chapters`, are optional, so an index saved before them reads as it was:
 ///
 /// ```json
 /// {
@@ -22,7 +23,10 @@ import os
 ///       "tracks": { "audio": [{ "index": 1, "codec": "aac", "language": "eng", "isDefault": true, … }],
 ///                   "subtitles": [], "defaultAudio": 1 },
 ///       "playback": { "position": […], "changed": …, "isPlayed": false },
-///       "preparation": { "arrivingExtension": "mp4", "subtitles": [3] } }
+///       "preparation": { "arrivingExtension": "mp4", "subtitles": [3] },
+///       "trickplay": { "layout": { "width": 320, "height": 180, "columns": 10, "rows": 10, "count": 540,
+///                                  "intervalMilliseconds": 10000 }, "isComplete": true },
+///       "chapters": [{ "name": "Opening", "start": […] }] }
 ///   ],
 ///   "changes": [
 ///     { "serverID": "…", "userID": "…", "itemID": "…", "position": […], "isPlayed": false, "changed": … }
@@ -113,6 +117,12 @@ public actor DownloadStore {
     /// by the download's ID alone.
     public nonisolated func artworkURL(_ kind: DownloadArtwork, of id: String) -> URL {
         artworkDirectory.appending(path: "\(id)-\(kind.rawValue)", directoryHint: .notDirectory)
+    }
+
+    /// Where tile `index` of the trickplay thumbnails saved with the download `id` is, whether or not it's there yet:
+    /// beside the download's file, named by its ID alone.
+    public nonisolated func trickplayURL(_ index: Int, of id: String) -> URL {
+        fileURL(named: DownloadRecord.trickplayName(index, of: id))
     }
 
     /// Every download, oldest first.
@@ -238,6 +248,40 @@ public actor DownloadStore {
         return true
     }
 
+    /// Saves `data` as tile `index` of the trickplay thumbnails being saved with the download `id`, in place of one
+    /// saved before, and returns whether it did. Nothing is saved when there's no such download, as when it was
+    /// deleted meanwhile, when it isn't saving thumbnails with a tile `index`, or when `data` isn't a picture or is
+    /// larger than any tile Serafin reads.
+    @discardableResult
+    public func saveTrickplayTile(_ data: Data, _ index: Int, of id: String) throws -> Bool {
+        guard let layout = try record(id: id)?.trickplay?.layout, (0..<layout.tileCount).contains(index) else {
+            return false
+        }
+        guard data.count <= Trickplay.maximumTileBytes, Self.isImage(data) else {
+            Self.logger.error("Did not save a trickplay tile the server sent, since it isn't a picture")
+            return false
+        }
+        try prepareDirectories()
+        do {
+            try data.write(
+                to: trickplayURL(index, of: id),
+                options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            Self.logger.error("Could not save a trickplay tile: \(error.localizedDescription, privacy: .private)")
+            throw DownloadError.storeUnavailable
+        }
+        return true
+    }
+
+    /// Deletes the tiles of the trickplay thumbnails of `layout` saved with the download `id`, however many were
+    /// saved.
+    nonisolated func removeTrickplayFiles(_ layout: Trickplay?, of id: String) {
+        guard let layout else { return }
+        for index in 0..<layout.tileCount {
+            deleteFile(at: trickplayURL(index, of: id))
+        }
+    }
+
     /// Removes the downloads with `ids` and deletes their files and pictures. IDs that aren't saved are ignored. The
     /// changes to their playback that the server hasn't heard yet stay.
     public func remove(ids: Set<String>) throws {
@@ -250,22 +294,31 @@ public actor DownloadStore {
             for name in record.fileNames {
                 deleteFile(at: fileURL(named: name))
             }
+            removeTrickplayFiles(record.trickplay?.layout, of: record.id)
             for kind in DownloadArtwork.allCases {
                 deleteFile(at: artworkURL(kind, of: record.id))
             }
         }
     }
 
-    /// Deletes files and pictures that no download names, such as a file that finished after its download was removed.
+    /// Deletes files and pictures that no download names, such as a file that finished after its download was removed,
+    /// or a trickplay tile of a download that no longer keeps thumbnails.
     public func removeOrphanedFiles() throws {
         let list = try records()
         let names = list.reduce(into: Set<String>()) { $0.formUnion($1.fileNames) }
+        let tiles = list.reduce(into: [String: Int]()) { $0[$1.id] = $1.trickplay?.layout.tileCount }
         let pictures = Set(
             list.flatMap { record in DownloadArtwork.allCases.map { artworkURL($0, of: record.id).lastPathComponent } })
-        for (folder, kept) in [(mediaDirectory, names), (artworkDirectory, pictures)] {
+        let isKeptInMedia: (String) -> Bool = { name in
+            if names.contains(name) { return true }
+            guard let tile = DownloadRecord.trickplayTile(named: name), let count = tiles[tile.id] else { return false }
+            return tile.index < count
+        }
+        let isKeptInArtwork: (String) -> Bool = { pictures.contains($0) }
+        for (folder, isKept) in [(mediaDirectory, isKeptInMedia), (artworkDirectory, isKeptInArtwork)] {
             let files =
                 (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-            for file in files where !kept.contains(file.lastPathComponent) {
+            for file in files where !isKept(file.lastPathComponent) {
                 deleteFile(at: file)
             }
         }

@@ -140,6 +140,11 @@ public enum PlaybackSpeed {
 /// With a hardware keyboard, Space plays and pauses, the left and right arrows skip 10 seconds, and F leaves the
 /// full-screen player, as in other video players.
 ///
+/// Dragging the scrubber floats a ``ScrubberPreview`` over the knob: a thumbnail of the frame under the finger when
+/// the video has thumbnails, the time, and the name of the chapter the knob is inside. Meanwhile everything but the
+/// bottom bar fades, as in the system player, so the preview floats over the video rather than over other glass.
+/// The track marks where each chapter starts with a narrow gap.
+///
 /// Play and pause give a light tap, and dragging the scrubber ticks at each tenth of the way through and where the
 /// drag began.
 public struct PlayerControls<RoutePicker: View>: View {
@@ -151,11 +156,20 @@ public struct PlayerControls<RoutePicker: View>: View {
     private let showsControls: Bool
     private let segmentPrompt: SegmentPrompt?
     private let nextEpisode: NextEpisodePrompt?
+    private let chapters: [ScrubberChapter]
+    private let thumbnails: ScrubberThumbnails?
     private let actions: PlayerControlActions
     private let routePicker: RoutePicker
     @State private var playPauseTaps = 0
     /// Where the transport and the next episode's card are, so the transport can make room for the card.
     @State private var layout = TransportLayout()
+    /// How far through the track the finger is while it drags the scrubber, or nil when none does. Only the scrubber
+    /// and the preview read it, so a drag redraws them alone.
+    @State private var scrubbedFraction: Double?
+    /// Whether a finger is dragging the scrubber, which changes only as a drag starts and ends.
+    @State private var isScrubbing = false
+    /// Where the scrubber and its track are, for placing the preview over the knob.
+    @State private var scrubberGeometry = ScrubberGeometry()
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -173,6 +187,9 @@ public struct PlayerControls<RoutePicker: View>: View {
     ///   - segmentPrompt: The skip pill or notice to show above the scrubber, or nil for none.
     ///   - nextEpisode: The next episode to offer on its card above the scrubber, in place of any skip pill, or nil for
     ///     none.
+    ///   - chapters: The video's chapters, in order, marked on the track and named in the scrubber's preview.
+    ///   - thumbnails: The thumbnails the scrubber's preview shows of the frame under the finger, or nil when the video
+    ///     has none, when the preview shows the time alone.
     ///   - actions: What each control does.
     ///   - routePicker: The AirPlay route picker, shown in a glass circle at the top trailing corner.
     public init(
@@ -184,6 +201,8 @@ public struct PlayerControls<RoutePicker: View>: View {
         showsControls: Bool = true,
         segmentPrompt: SegmentPrompt? = nil,
         nextEpisode: NextEpisodePrompt? = nil,
+        chapters: [ScrubberChapter] = [],
+        thumbnails: ScrubberThumbnails? = nil,
         actions: PlayerControlActions,
         @ViewBuilder routePicker: () -> RoutePicker
     ) {
@@ -195,8 +214,15 @@ public struct PlayerControls<RoutePicker: View>: View {
         self.showsControls = showsControls
         self.segmentPrompt = segmentPrompt
         self.nextEpisode = nextEpisode
+        self.chapters = chapters
+        self.thumbnails = thumbnails
         self.actions = actions
         self.routePicker = routePicker()
+    }
+
+    /// How the controls fade as a drag on the scrubber starts and ends.
+    private var scrubbingFade: Animation {
+        Motion.animation(.easeInOut(duration: 0.2), reduceMotion: reduceMotion)
     }
 
     public var body: some View {
@@ -211,6 +237,16 @@ public struct PlayerControls<RoutePicker: View>: View {
             .padding(.bottom, PlayerLayout.bottomBarClearance)
             .animation(Motion.animation(reduceMotion: reduceMotion), value: segmentPrompt)
             .animation(Motion.animation(reduceMotion: reduceMotion), value: nextEpisode?.card.id)
+            // Out of the preview's way while the scrubber is dragged, and back once it's let go.
+            .shown(!isScrubbing)
+            .animation(scrubbingFade, value: isScrubbing)
+            ScrubberPreviewLayer(
+                fraction: $scrubbedFraction,
+                duration: status.duration,
+                chapters: chapters,
+                thumbnails: thumbnails,
+                geometry: scrubberGeometry
+            )
         }
         .coordinateSpace(.named(TransportLayout.space))
         .environment(\.colorScheme, .dark)
@@ -221,18 +257,25 @@ public struct PlayerControls<RoutePicker: View>: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// The bars and the transport between them.
+    /// The bars and the transport between them. The bottom bar has a glass container of its own, so the rest can
+    /// fade while the scrubber is dragged: glass fades only when its whole container does.
     private var controls: some View {
-        GlassEffectContainer(spacing: Spacing.medium) {
-            VStack(spacing: 0) {
-                topBar
-                Spacer(minLength: Spacing.large)
-                transportRow
-                Spacer(minLength: Spacing.large)
+        VStack(spacing: 0) {
+            GlassEffectContainer(spacing: Spacing.medium) {
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer(minLength: Spacing.large)
+                    transportRow
+                    Spacer(minLength: Spacing.large)
+                }
+            }
+            .shown(!isScrubbing)
+            .animation(scrubbingFade, value: isScrubbing)
+            GlassEffectContainer(spacing: Spacing.medium) {
                 bottomBar
             }
-            .padding(Spacing.medium)
         }
+        .padding(Spacing.medium)
     }
 
     /// The next episode's card, or else the skip pill or its notice, materializing in their glass.
@@ -406,8 +449,15 @@ public struct PlayerControls<RoutePicker: View>: View {
                 elapsed: status.elapsed,
                 duration: status.duration,
                 buffered: status.buffered,
+                chapters: chapters,
+                thumbnails: thumbnails,
                 seek: actions.seek,
-                scrubbingChanged: actions.scrubbingChanged
+                scrubbingChanged: { scrubbing in
+                    isScrubbing = scrubbing
+                    actions.scrubbingChanged(scrubbing)
+                },
+                scrubbedFraction: $scrubbedFraction,
+                geometry: $scrubberGeometry
             )
             SpeedMenu(rate: status.rate, setRate: actions.setRate)
             GlassIconButton(
@@ -434,6 +484,8 @@ extension PlayerControls where RoutePicker == EmptyView {
         showsControls: Bool = true,
         segmentPrompt: SegmentPrompt? = nil,
         nextEpisode: NextEpisodePrompt? = nil,
+        chapters: [ScrubberChapter] = [],
+        thumbnails: ScrubberThumbnails? = nil,
         actions: PlayerControlActions
     ) {
         self.init(
@@ -445,9 +497,64 @@ extension PlayerControls where RoutePicker == EmptyView {
             showsControls: showsControls,
             segmentPrompt: segmentPrompt,
             nextEpisode: nextEpisode,
+            chapters: chapters,
+            thumbnails: thumbnails,
             actions: actions
         ) { EmptyView() }
     }
+}
+
+/// The preview over the knob while the scrubber is dragged, in a glass container of its own. It materializes and
+/// springs up from the knob as the drag starts, under Reduce Motion only materializing, follows the knob without
+/// animating, and dissolves as the finger lets go.
+private struct ScrubberPreviewLayer: View {
+    @Binding var fraction: Double?
+    let duration: Duration
+    let chapters: [ScrubberChapter]
+    let thumbnails: ScrubberThumbnails?
+    let geometry: ScrubberGeometry
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        GlassEffectContainer {
+            ScrubberPreviewPlacement(knob: knob, top: geometry.bar.minY, isRegular: sizeClass == .regular) {
+                preview
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(Motion.animation(reduceMotion: reduceMotion), value: fraction == nil)
+    }
+
+    /// The preview at the time under the finger, while a finger drags the scrubber.
+    @ViewBuilder private var preview: some View {
+        if let fraction {
+            let position = ScrubberMath.position(at: fraction, in: duration)
+            ScrubberPreview(
+                position: position,
+                chapter: ScrubberMath.chapter(at: position, in: chapters)?.name,
+                showsThumbnail: thumbnails != nil,
+                thumbnail: thumbnails?.image(position),
+                aspectRatio: thumbnails?.aspectRatio ?? 16 / 9
+            )
+            .glassEffectTransition(.materialize)
+            .transition(reduceMotion ? .identity : .scale(scale: 0.85, anchor: .bottom))
+        }
+    }
+
+    /// Where the knob is across the controls: the end of the track's fill under the finger.
+    private var knob: CGFloat {
+        geometry.track.minX + geometry.track.width * (fraction ?? 0)
+    }
+}
+
+/// Where the scrubber and its track sit among the player's controls, in ``TransportLayout/space``, so the preview can
+/// float over the knob.
+struct ScrubberGeometry: Equatable {
+    /// The scrubber's glass capsule.
+    var bar = CGRect.zero
+    /// The track inside it.
+    var track = CGRect.zero
 }
 
 /// Where the transport and the next episode's card sit among the player's controls, so the transport can make room
@@ -567,21 +674,28 @@ private struct SpeedMenu: View {
 }
 
 /// The playback position: elapsed time, a track and time remaining, on one glass capsule. Dragging along the track
-/// shows the time under the finger and seeks there on release.
+/// shows the time under the finger and seeks there on release; the controls float the preview over the knob
+/// meanwhile, and the thumbnails around the finger load as it moves. Chapter starts are gaps in the track.
 private struct Scrubber: View {
     let elapsed: Duration
     let duration: Duration
     let buffered: Duration
+    let chapters: [ScrubberChapter]
+    let thumbnails: ScrubberThumbnails?
     let seek: (Duration) -> Void
     let scrubbingChanged: (Bool) -> Void
-    @State private var scrubbedFraction: Double?
+    /// How far through the track the finger is while it drags, or nil when none does.
+    @Binding var scrubbedFraction: Double?
+    /// Where the scrubber and its track are, which it keeps up to date.
+    @Binding var geometry: ScrubberGeometry
     /// Where a drag let go, held until the playback position gets there, so the track never jumps back to where
     /// playback was while the seek is under way.
     @State private var releasedFraction: Double?
     @State private var scrubStart: Double = 0
     @State private var detentsPassed = 0
-    @State private var trackWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var trackWidth: CGFloat { geometry.track.width }
 
     private var isScrubbing: Bool { scrubbedFraction != nil }
 
@@ -608,17 +722,16 @@ private struct Scrubber: View {
         .padding(.horizontal, Spacing.medium)
         .frame(minHeight: 44)
         .glassEffect(.regular, in: .capsule)
+        .onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .named(TransportLayout.space))
+        } action: {
+            geometry.bar = $0
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             String(localized: "Playback position", bundle: .module, comment: "Spoken name of the player scrubber.")
         )
-        .accessibilityValue(
-            String(
-                localized: "\(ScrubberMath.timecode(elapsed)) of \(ScrubberMath.timecode(duration))",
-                bundle: .module,
-                comment: "Spoken playback position, such as 12:34 of 1:39:00."
-            )
-        )
+        .accessibilityValue(spokenPosition)
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: seek(elapsed + .seconds(10))
@@ -628,9 +741,25 @@ private struct Scrubber: View {
         }
     }
 
+    /// The position VoiceOver speaks, with the chapter when playback is inside one.
+    private var spokenPosition: String {
+        let position = String(
+            localized: "\(ScrubberMath.timecode(elapsed)) of \(ScrubberMath.timecode(duration))",
+            bundle: .module,
+            comment: "Spoken playback position, such as 12:34 of 1:39:00."
+        )
+        guard let chapter = ScrubberMath.chapter(at: elapsed, in: chapters) else { return position }
+        return String(
+            localized: "\(position), in \(chapter.name)",
+            bundle: .module,
+            comment: "Spoken playback position and the chapter it's in, such as 12:34 of 1:39:00, in Opening Titles."
+        )
+    }
+
     private var track: some View {
         let fraction = shownFraction
         let loaded = ScrubberMath.fraction(of: buffered, in: duration)
+        let ticks = ScrubberMath.tickFractions(for: chapters, in: duration, trackWidth: trackWidth)
         return Capsule()
             .fill(.white.opacity(0.25))
             .overlay(alignment: .leading) {
@@ -646,6 +775,13 @@ private struct Scrubber: View {
                     }
                 }
             }
+            .overlay {
+                if !ticks.isEmpty {
+                    ChapterTicks(fractions: ticks)
+                }
+            }
+            // The ticks cut through the track and its fill alone.
+            .compositingGroup()
             // Only the track's thickness springs as a drag starts and ends; the fill follows the finger and playback
             // without animating, so it never overshoots.
             .animation(Motion.animation(reduceMotion: reduceMotion)) { track in
@@ -653,10 +789,10 @@ private struct Scrubber: View {
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(.rect)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width
+            .onGeometryChange(for: CGRect.self) {
+                $0.frame(in: .named(TransportLayout.space))
             } action: {
-                trackWidth = $0
+                geometry.track = $0
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -672,6 +808,7 @@ private struct Scrubber: View {
                             detentsPassed += 1
                         }
                         scrubbedFraction = fraction
+                        thumbnails?.prepare(ScrubberMath.position(at: fraction, in: duration))
                     }
                     .onEnded { _ in
                         if let scrubbedFraction {
@@ -752,8 +889,28 @@ enum ScrubberMath {
         var showsControls = true
         var segmentPrompt: SegmentPrompt?
         var offersNextEpisode = false
+        /// Whether the video has chapters and thumbnails, which show as ticks on the track and in the scrubber's
+        /// preview while it's dragged.
+        var hasChapters = false
         private let card = MockMedia.movies[1]
         private let next = MockMedia.episodes[1]
+
+        private var chapters: [ScrubberChapter] {
+            guard hasChapters else { return [] }
+            return [
+                ScrubberChapter(name: "Opening Titles", start: .zero),
+                ScrubberChapter(name: "The Village", start: .seconds(95)),
+                ScrubberChapter(name: "The Mountain", start: .seconds(310)),
+                ScrubberChapter(name: "The Cave", start: .seconds(540)),
+                ScrubberChapter(name: "Closing Credits", start: .seconds(780)),
+            ]
+        }
+
+        private var thumbnails: ScrubberThumbnails? {
+            guard hasChapters else { return nil }
+            let image = MockMedia.backdropImage(for: card)
+            return ScrubberThumbnails(aspectRatio: 16 / 9) { _ in image }
+        }
 
         /// The next episode, seven seconds from playing by itself.
         private var nextEpisode: NextEpisodePrompt? {
@@ -784,6 +941,8 @@ enum ScrubberMath {
                 showsControls: showsControls,
                 segmentPrompt: segmentPrompt,
                 nextEpisode: nextEpisode,
+                chapters: chapters,
+                thumbnails: thumbnails,
                 actions: PlayerControlActions(
                     playPause: { isPlaying.toggle() },
                     seek: { elapsed = $0 },
@@ -818,6 +977,20 @@ enum ScrubberMath {
 
     #Preview("Largest text") {
         PlayerControlsSample()
+            .dynamicTypeSize(.accessibility5)
+    }
+
+    #Preview("Chapters, light", traits: .landscapeLeft) {
+        PlayerControlsSample(hasChapters: true)
+    }
+
+    #Preview("Chapters, dark", traits: .landscapeLeft) {
+        PlayerControlsSample(hasChapters: true)
+            .preferredColorScheme(.dark)
+    }
+
+    #Preview("Chapters, largest text") {
+        PlayerControlsSample(hasChapters: true)
             .dynamicTypeSize(.accessibility5)
     }
 

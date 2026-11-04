@@ -11,8 +11,9 @@ import os
 ///
 /// It reads the account's downloads again each time one starts, moves on, finishes, fails, is deleted, saves a picture
 /// or keeps where playback stopped, and whether the server lets the account download at all. Each download keeps what
-/// its card and page show, with its poster and backdrop, so they show with no server. Where playback of a download
-/// stops, and a download marked watched with no server, reach the server once it answers.
+/// its card and page show, with its poster and backdrop, so they show with no server, and the trickplay thumbnails
+/// and chapters the player's scrubber shows. Where playback of a download stops, and a download marked watched with no
+/// server, reach the server once it answers.
 @Observable @MainActor final class DownloadCenter {
     /// Where one movie's or episode's download is.
     enum ItemState: Equatable {
@@ -68,15 +69,21 @@ import os
     @ObservationIgnored private let library: LibraryRepository
     @ObservationIgnored private let artwork: Artwork?
     @ObservationIgnored private let sync: PlaybackSync?
+    @ObservationIgnored private let trickplay: TrickplayRepository?
     @ObservationIgnored private let defaults: UserDefaults
     /// Whether the server has said if the account may download, which it can't while it's out of reach.
     @ObservationIgnored private var knowsPermission = false
+    /// The downloads whose trickplay thumbnails have been tried this launch, so ones that couldn't be saved, as when
+    /// they come to more than downloads keep, aren't fetched again each time their page opens.
+    @ObservationIgnored private var triedTrickplay: Set<String> = []
 
     /// Creates the downloads of the account `key`, and starts following them.
     ///
     /// - Parameters:
-    ///   - artwork: Loads the pictures each download saves, or nil to save none.
+    ///   - artwork: Loads the pictures and trickplay tiles each download saves, or nil to save none.
     ///   - sync: Sends the server the changes to playback made with the downloads, or nil to send none.
+    ///   - trickplay: Finds each item's trickplay thumbnails and chapters to save with its download, or nil to save
+    ///     none.
     init(
         downloads: Downloads,
         key: SessionKey,
@@ -84,6 +91,7 @@ import os
         library: LibraryRepository,
         artwork: Artwork? = nil,
         sync: PlaybackSync? = nil,
+        trickplay: TrickplayRepository? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.downloads = downloads
@@ -92,6 +100,7 @@ import os
         self.library = library
         self.artwork = artwork
         self.sync = sync
+        self.trickplay = trickplay
         self.defaults = defaults
         Task { [weak self, downloads] in
             let changes = await downloads.changes()
@@ -139,7 +148,8 @@ import os
         }
     }
 
-    /// Downloads `item`, or tries a download that failed again, and saves its poster and backdrop with it.
+    /// Downloads `item`, or tries a download that failed again, and saves its poster and backdrop with it, and the
+    /// trickplay thumbnails and chapters the player's scrubber shows.
     ///
     /// It downloads at the download quality, as the original file when the player opens it, and otherwise as the copy
     /// the server makes, when the server's policy lets the account have it converted.
@@ -151,6 +161,7 @@ import os
             switch try await start(item, permissions: permissions) {
             case .started(let record):
                 await saveArtwork(of: item, for: record)
+                await saveScrubbing(of: item, for: record)
             case .refused(let refusal):
                 failure = .refused(refusal)
             }
@@ -230,6 +241,9 @@ import os
         for (item, record) in started {
             await saveArtwork(of: item, for: record)
         }
+        for (item, record) in started {
+            await saveScrubbing(of: item, for: record)
+        }
         if let unstarted {
             failure = .episodesNotStarted(unstarted, anyStarted: !started.isEmpty)
         }
@@ -286,13 +300,15 @@ import os
         }
     }
 
-    /// Saves the pictures missing from `item`'s download, as when they couldn't load when it started. Does nothing
-    /// for an item that isn't downloaded, or one shown from what was saved with it, which has no server to ask.
+    /// Saves the pictures missing from `item`'s download, as when they couldn't load when it started, and its
+    /// trickplay thumbnails and chapters when they aren't saved, once a launch. Does nothing for an item that isn't
+    /// downloaded, or one shown from what was saved with it, which has no server to ask.
     func saveMissingArtwork(of item: MediaItem) async {
-        guard !item.isSaved, let record = records.first(where: { $0.itemID == item.id }),
-            DownloadArtwork.allCases.contains(where: { downloads.artworkURL($0, for: record) == nil })
-        else { return }
-        await saveArtwork(of: item, for: record)
+        guard !item.isSaved, let record = records.first(where: { $0.itemID == item.id }) else { return }
+        if DownloadArtwork.allCases.contains(where: { downloads.artworkURL($0, for: record) == nil }) {
+            await saveArtwork(of: item, for: record)
+        }
+        await saveScrubbing(of: item, for: record)
     }
 
     /// Asks the server whether the account may download, when it hasn't said yet, as when Serafin started with no
@@ -318,9 +334,15 @@ import os
             }
         }
         let next = offlineItems.first { $0.id == itemID }?.nextEpisode(among: offlineItems)
+        let trickplay = record.trickplay.flatMap { saved in
+            downloads.trickplayFiles(for: record).map { TrickplayTiles.saved(saved.layout, files: $0) }
+        }
+        let chapters = record.chapters?.map {
+            ChapterInfo(name: $0.name, startPositionTicks: Ticks.from($0.start))
+        }
         let copy = DownloadedCopy(
-            file: file, mediaSourceID: record.mediaSourceID, tracks: record.tracks, nextEpisode: next?.source,
-            keepPosition: keep)
+            file: file, mediaSourceID: record.mediaSourceID, tracks: record.tracks, trickplay: trickplay,
+            chapters: chapters, nextEpisode: next?.source, keepPosition: keep)
         return PlayableDownload(record: record, copy: copy)
     }
 
@@ -438,6 +460,48 @@ import os
                     "Could not save a download's picture: \(error.localizedDescription, privacy: .private)")
             }
         }
+    }
+
+    /// Saves `item`'s chapters and trickplay thumbnails with its download `record`, so the player's scrubber shows them
+    /// with no server, unless they're saved already or were tried this launch. The thumbnails are the size the
+    /// scrubber's preview loads on this device, or a narrower one when that would come to more than
+    /// ``Downloads/maximumTrickplayBytes``; ones that don't all save are tried again when the item's page next opens
+    /// after Serafin starts again.
+    private func saveScrubbing(of item: MediaItem, for record: DownloadRecord) async {
+        let needsTrickplay = record.trickplay?.isComplete != true && !triedTrickplay.contains(record.id)
+        guard let trickplay, let source = item.source, needsTrickplay || record.chapters == nil else { return }
+        let details = await trickplay.details(of: source)
+        do {
+            if record.chapters == nil, let chapters = details.chapters {
+                try await downloads.saveChapters(DownloadChapter.kept(chapters), of: record.id)
+            }
+            let sizes = DownloadArtworkSizes.current
+            let layouts = Trickplay.layouts(in: details.trickplay, mediaSourceID: record.mediaSourceID)
+            guard needsTrickplay, let artwork,
+                let layout = Self.downloadLayout(of: layouts, isRegular: sizes.isRegular, scale: sizes.scale)
+            else { return }
+            triedTrickplay.insert(record.id)
+            let mediaSourceID = record.mediaSourceID
+            try await downloads.saveTrickplay(layout, of: record.id) { index in
+                try await artwork.data(trickplayTile: index, width: layout.width, mediaSourceID: mediaSourceID)
+            }
+        } catch {
+            Self.logger.error(
+                "Could not save a download's trickplay or chapters: \(error.localizedDescription, privacy: .private)")
+        }
+    }
+
+    /// The size of `layouts` a download saves: the one the player's preview loads on a screen of `scale`, regular
+    /// width or not, or when its tiles would come to more than ``Downloads/maximumTrickplayBytes``, the widest narrower
+    /// one that fits. Nil when there's none, or none fits.
+    nonisolated static func downloadLayout(of layouts: [Trickplay], isRegular: Bool, scale: CGFloat) -> Trickplay? {
+        let points = TrickplayThumbnails.previewBudget(isRegular: isRegular)
+        guard let preferred = Trickplay.best(of: layouts, points: points, scale: scale) else { return nil }
+        return
+            layouts
+            .filter { $0.width <= preferred.width }
+            .sorted { $0.width > $1.width }
+            .first { ($0.estimatedBytes ?? 0) <= Downloads.maximumTrickplayBytes }
     }
 
     /// Where the server says playback of `item` last stopped, and whether it's been watched, for showing and resuming

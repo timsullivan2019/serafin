@@ -170,6 +170,8 @@ public actor Downloads {
     private var writing: (id: String, task: Task<Void, any Error>)?
     /// The download whose video each server is converting, by server ID, while its file is on its way.
     private var converting: [String: String] = [:]
+    /// The downloads whose trickplay tiles are being saved, so they aren't saved twice at once.
+    private var savingTrickplay: Set<String> = []
 
     /// Creates the downloads.
     ///
@@ -253,6 +255,15 @@ public actor Downloads {
     public nonisolated func artworkURL(_ kind: DownloadArtwork, for record: DownloadRecord) -> URL? {
         let url = store.artworkURL(kind, of: record.id)
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
+    }
+
+    /// The tiles of the trickplay thumbnails saved with `record`, tile `n` at `n`, or nil when they aren't all saved
+    /// or one has gone.
+    public nonisolated func trickplayFiles(for record: DownloadRecord) -> [URL]? {
+        guard let trickplay = record.trickplay, trickplay.isComplete else { return nil }
+        let files = (0..<trickplay.layout.tileCount).map { store.trickplayURL($0, of: record.id) }
+        let allThere = files.allSatisfy { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
+        return allThere ? files : nil
     }
 
     /// The bytes the account's finished downloads take up.
@@ -465,6 +476,84 @@ public actor Downloads {
     /// screen show it with no server. Does nothing when the download has been deleted, or when `data` isn't a picture.
     public func saveArtwork(_ data: Data, _ kind: DownloadArtwork, of id: String) async throws {
         if try await store.saveArtwork(data, kind, of: id) {
+            notify()
+        }
+    }
+
+    /// The most bytes of trickplay tiles saved with one download.
+    public static let maximumTrickplayBytes = 20 * 1024 * 1024
+
+    /// Saves the trickplay thumbnails of `layout` with the download `id`, reading tile `n` with `tile`, so the
+    /// player's scrubber shows them with no server, and returns whether they're all saved.
+    ///
+    /// The tiles are saved beside the download's file one at a time, and only once every one is saved does the player
+    /// show them. Thumbnails saved before in another size, or left part saved, are deleted first. When the download is
+    /// deleted meanwhile, a tile can't be read or isn't a picture, or the tiles come to more than
+    /// ``maximumTrickplayBytes``, none are kept.
+    ///
+    /// - Throws: ``DownloadError/storeUnavailable`` when the list of downloads can't be saved.
+    @discardableResult
+    public func saveTrickplay(
+        _ layout: Trickplay,
+        of id: String,
+        reading tile: @Sendable (Int) async throws -> Data?
+    ) async throws -> Bool {
+        if let estimate = layout.estimatedBytes, estimate > Self.maximumTrickplayBytes {
+            return false
+        }
+        guard savingTrickplay.insert(id).inserted else { return false }
+        defer { savingTrickplay.remove(id) }
+        guard let record = try await store.record(id: id) else { return false }
+        store.removeTrickplayFiles(record.trickplay?.layout, of: id)
+        let started = try await store.update(id: id) { record in
+            record.trickplay = DownloadTrickplay(layout: layout, isComplete: false)
+        }
+        guard started != nil else { return false }
+        var total = 0
+        var saved = true
+        for index in 0..<layout.tileCount {
+            let data: Data?
+            do {
+                data = try await tile(index)
+            } catch {
+                if !(error is CancellationError) {
+                    Self.logger.error(
+                        "Could not load a trickplay tile: \(error.localizedDescription, privacy: .private)")
+                }
+                data = nil
+            }
+            guard let data else {
+                saved = false
+                break
+            }
+            total += data.count
+            guard total <= Self.maximumTrickplayBytes else {
+                saved = false
+                break
+            }
+            // The store says why a tile couldn't be written; the tiles are let go either way.
+            let stored = try? await store.saveTrickplayTile(data, index, of: id)
+            guard stored == true else {
+                saved = false
+                break
+            }
+        }
+        let finished = try await store.update(id: id) { [saved] record in
+            guard record.trickplay?.layout == layout else { return }
+            record.trickplay = saved ? DownloadTrickplay(layout: layout, isComplete: true) : nil
+        }
+        if !saved || finished == nil {
+            store.removeTrickplayFiles(layout, of: id)
+        }
+        notify()
+        return saved && finished != nil
+    }
+
+    /// Keeps `chapters` with the download `id`, for the player's scrubber with no server. Does nothing when the
+    /// download has been deleted.
+    public func saveChapters(_ chapters: [DownloadChapter], of id: String) async throws {
+        let kept = Array(chapters.prefix(DownloadChapter.maximumCount))
+        if try await store.update(id: id, { $0.chapters = kept }) != nil {
             notify()
         }
     }

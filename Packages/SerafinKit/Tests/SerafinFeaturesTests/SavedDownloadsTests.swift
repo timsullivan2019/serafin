@@ -238,6 +238,8 @@ private func sintel(at position: Duration? = nil, isPlayed: Bool? = nil) throws 
         #expect(sizes.width(of: .poster) == sizes.poster)
         #expect(sizes.width(of: .backdrop) == sizes.backdrop)
         #expect(sizes.scale == 3)
+        // The player draws its scrubber's thumbnails as on any iPhone.
+        #expect(!sizes.isRegular)
     }
 
     @Test func aTabletsPosterStopsAtTheWidestCard() {
@@ -245,6 +247,8 @@ private func sintel(at position: Duration? = nil, isPlayed: Bool? = nil) throws 
         #expect(sizes.poster == DownloadArtworkSizes.posterLimit)
         // A regular width's hero is 62% of the screen's height at the largest text sizes, tallest held upright.
         #expect(abs(sizes.backdrop - 1376 * 0.62 * 16 / 9) < 0.01)
+        // The player draws its scrubber's thumbnails wider.
+        #expect(sizes.isRegular)
     }
 }
 
