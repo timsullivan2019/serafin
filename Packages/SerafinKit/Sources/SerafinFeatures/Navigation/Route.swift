@@ -6,6 +6,10 @@ import SwiftUI
 enum Route: Hashable {
     /// A movie, series or episode.
     case item(id: String)
+    /// A movie, series or episode opened from a card showing it: the same screen as ``item(id:)``, carrying the card's
+    /// item so the navigation bar's buttons show with the screen rather than once its details load. The screen zooms
+    /// in from the card, whose zoom is keyed by `zoomID`, or by the item's ID when that's nil.
+    case card(MediaItem, zoomID: String? = nil)
     /// A movie or series featured at the top of Home: the same screen as ``item(id:)``, zooming in from the artwork
     /// of the hero's page `heroID` rather than from a card showing the same item. It carries the item, and for a show
     /// the episode Play starts, so the screen shows its hero at once while the rest loads. A featured episode opens its
@@ -40,6 +44,8 @@ enum Route: Hashable {
     case skipSegments
     /// The accent colour, from Settings.
     case accentColour
+    /// The account's downloads, from Settings.
+    case downloads
 }
 
 /// Pushes a route onto the current tab's navigation stack, for buttons that are not navigation links.
@@ -118,6 +124,8 @@ private struct RouteDestination: View {
         switch route {
         case .item(let id):
             ItemDetailView(id: id)
+        case .card(let item, let zoomID):
+            ItemDetailView(id: item.id, preview: item, zoomSource: zoomID)
         case .featured(let item, let playable, let heroID):
             ItemDetailView(featured: item, playable: playable, heroID: heroID)
         case .library(let library):
@@ -148,6 +156,8 @@ private struct RouteDestination: View {
             SkipSegmentsView()
         case .accentColour:
             AccentColourView()
+        case .downloads:
+            DownloadsView()
         }
     }
 }

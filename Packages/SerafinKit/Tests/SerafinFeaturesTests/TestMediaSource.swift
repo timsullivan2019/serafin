@@ -1,15 +1,21 @@
 import Foundation
 import SerafinCore
 import SerafinDesign
+import Synchronization
 
 @testable import SerafinFeatures
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
-/// the server does, a server that refuses every change, Home saved on the device and a server that can't be reached,
-/// libraries with pictures of their own, or seasons whose episodes don't load.
+/// the server does, or the way a broken server does, a server that refuses every change, Home saved on the device and
+/// a server that can't be reached, grids or genres that don't load, seasons whose episodes don't load, or details that
+/// are slow or don't load, with downloads to show instead.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
+    /// The length the grids of ``titles`` claim instead of their own, as a broken server's might, or nil for their own.
+    var claimedTotal: Int?
+    /// Whether the grids of ``titles`` send their first page whichever page is asked for, as a broken server might.
+    var ignoresStart = false
     /// Whether marking played or favourite fails.
     var refusesChanges = false
     /// What Continue Watching and Next Up hold instead of the samples, or nil for the samples.
@@ -18,10 +24,22 @@ struct TestMediaSource: MediaSource {
     var saved: HomeContent?
     /// Why Home fails to load, or nil when it loads the samples.
     var homeFailure: SerafinError?
-    /// The libraries that have a picture of their own on the server.
-    var covers: Set<String> = []
+    /// The grids whose pages fail to load.
+    var failingGrids: Set<GridScope> = []
+    /// How long each page takes to arrive, or nil for straight away.
+    var pageDelay: Duration?
+    /// Page loads that fail before they get through, as over a dropped connection.
+    var flakyPages: FlakyPages?
+    /// Whether the genres fail to load.
+    var failsGenres = false
     /// The seasons whose episodes fail to load.
     var failingSeasons: Set<String> = []
+    /// Why details fail to load, or nil when they load the samples'.
+    var detailsFailure: SerafinError?
+    /// How long details take to arrive, or nil for straight away.
+    var detailsDelay: Duration?
+    /// The downloads, as shown from what was saved with them.
+    var downloaded: [MediaItem] = []
     private let samples = SampleMediaSource()
 
     func home() async throws -> HomeContent {
@@ -42,21 +60,21 @@ struct TestMediaSource: MediaSource {
 
     func libraries() async throws -> [MediaLibrary] { try await samples.libraries() }
 
-    func cover(of library: MediaLibrary) async -> MediaItem? {
-        guard covers.contains(library.id) else { return await samples.cover(of: library) }
-        return MediaItem(card: MediaCard(id: library.id, kind: .collection, title: library.name), source: nil)
-    }
-
     func canRefreshMetadata() async -> Bool { false }
 
     func refreshMetadata(of item: MediaItem) async throws {}
 
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage {
+        if failingGrids.contains(scope) { throw URLError(.timedOut) }
+        if let pageDelay {
+            try await Task.sleep(for: pageDelay)
+        }
+        if flakyPages?.nextFails() == true { throw URLError(.networkConnectionLost) }
         guard let cards = cards(options) else {
             return try await samples.page(of: scope, options: options, start: start, limit: limit)
         }
-        let page = cards.dropFirst(start).prefix(limit).map { MediaItem(card: $0, source: nil) }
-        return MediaPage(items: page, total: cards.count)
+        let page = cards.dropFirst(ignoresStart ? 0 : start).prefix(limit).map { MediaItem(card: $0, source: nil) }
+        return MediaPage(items: page, total: claimedTotal ?? cards.count)
     }
 
     func filters(in scope: GridScope) async throws -> LibraryFilters { try await samples.filters(in: scope) }
@@ -68,11 +86,22 @@ struct TestMediaSource: MediaSource {
         return cards.count { SampleMediaSource.sortName($0.title) < name }
     }
 
-    func genres() async throws -> [Genre] { try await samples.genres() }
+    func genres() async throws -> [Genre] {
+        if failsGenres { throw URLError(.timedOut) }
+        return try await samples.genres()
+    }
 
-    func hasCollections() async throws -> Bool { try await samples.hasCollections() }
+    func details(of id: String) async throws -> ItemDetails {
+        if let detailsDelay {
+            try await Task.sleep(for: detailsDelay)
+        }
+        if let detailsFailure { throw detailsFailure }
+        return try await samples.details(of: id)
+    }
 
-    func details(of id: String) async throws -> ItemDetails { try await samples.details(of: id) }
+    func savedDetails(of id: String) async -> ItemDetails? {
+        ItemDetails.saved(id, among: downloaded)
+    }
 
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {
         if failingSeasons.contains(seasonID) { throw URLError(.timedOut) }
@@ -98,6 +127,24 @@ struct TestMediaSource: MediaSource {
         let sorted = titles.sorted { SampleMediaSource.sortName($0) < SampleMediaSource.sortName($1) }
         return (options.ascending ? sorted : sorted.reversed()).map {
             MediaCard(id: "test-\($0)", kind: .movie, title: $0)
+        }
+    }
+}
+
+/// Fails the next few page loads, then lets them through.
+final class FlakyPages: Sendable {
+    private let failures: Mutex<Int>
+
+    init(failing count: Int) {
+        failures = Mutex(count)
+    }
+
+    /// Whether the next page load fails.
+    func nextFails() -> Bool {
+        failures.withLock { count -> Bool in
+            guard count > 0 else { return false }
+            count -= 1
+            return true
         }
     }
 }

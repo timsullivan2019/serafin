@@ -16,23 +16,11 @@ struct SettingsView: View {
                 .id(session.account?.server.id)
             DeliverySection()
             LockSection()
-            StorageSection()
-            Section(String(localized: "About", bundle: .module, comment: "Settings section header.")) {
-                NavigationLink(value: Route.licences) {
-                    Text(
-                        String(
-                            localized: "Licenses", bundle: .module,
-                            comment: "Title of the licenses screen, and its row in Settings."))
-                }
-                LabeledContent(
-                    String(
-                        localized: "Version", bundle: .module,
-                        comment:
-                            "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
-                    ),
-                    value: Self.version
-                )
+            if let downloads = session.downloads {
+                DownloadsSection(downloads: downloads)
             }
+            StorageSection()
+            AboutSection()
             #if DEBUG
                 DesignSection()
             #endif
@@ -43,6 +31,44 @@ struct SettingsView: View {
             await session.refreshServerNames()
         }
     }
+}
+
+/// The privacy policy and support pages, the licenses, and the version.
+private struct AboutSection: View {
+    var body: some View {
+        Section(String(localized: "About", bundle: .module, comment: "Settings section header.")) {
+            if let privacyPolicy = Website.privacyPolicy {
+                Link(destination: privacyPolicy) {
+                    Text(
+                        String(
+                            localized: "Privacy Policy", bundle: .module,
+                            comment: "Settings row that opens Serafin's privacy policy on its website."))
+                }
+            }
+            if let support = Website.support {
+                Link(destination: support) {
+                    Text(
+                        String(
+                            localized: "Support", bundle: .module,
+                            comment: "Settings row that opens Serafin's support page on its website."))
+                }
+            }
+            NavigationLink(value: Route.licences) {
+                Text(
+                    String(
+                        localized: "Licenses", bundle: .module,
+                        comment: "Title of the licenses screen, and its row in Settings."))
+            }
+            LabeledContent(
+                String(
+                    localized: "Version", bundle: .module,
+                    comment:
+                        "Settings row showing a version: the app's in Settings, or a package's on the licences screen."
+                ),
+                value: Self.version
+            )
+        }
+    }
 
     /// The app version and build, such as "0.1.0 (1)".
     private static var version: String {
@@ -51,6 +77,14 @@ struct SettingsView: View {
         let build = info?["CFBundleVersion"] as? String ?? "–"
         return "\(short) (\(build))"
     }
+}
+
+/// Serafin's own pages on its website.
+enum Website {
+    /// What Serafin keeps, where, and what reaches anyone else: nothing reaches the developer.
+    static let privacyPolicy = URL(string: "https://getserafin.app/privacy/")
+    /// Help with Serafin, and how to reach the developer.
+    static let support = URL(string: "https://getserafin.app/support/")
 }
 
 /// The accent colour, for buttons, links, selections and the tab bar, as a row that opens its own screen.
@@ -229,6 +263,34 @@ private struct AccountsSection: View {
                     )
                 }
                 .tint(.red)
+                // On the row itself, so the dialog's popover points at the button that asked.
+                .confirmationDialog(
+                    String(
+                        localized: "Remove this server?", bundle: .module, comment: "Title of the remove server dialog."
+                    ),
+                    isPresented: Binding(
+                        get: { serverToRemove?.id == server.id },
+                        set: { if !$0 { serverToRemove = nil } }),
+                    titleVisibility: .visible
+                ) {
+                    Button(
+                        String(
+                            localized: "Remove \(server.displayName)", bundle: .module,
+                            comment: "Button that removes a server."
+                        ),
+                        role: .destructive
+                    ) {
+                        Task { await run { try await session.remove(server) } }
+                    }
+                } message: {
+                    Text(
+                        String(
+                            localized: "Everyone signed in to it on this device is signed out.",
+                            bundle: .module,
+                            comment: "Message in the remove server dialog."
+                        )
+                    )
+                }
             } header: {
                 Text(server.displayName)
             } footer: {
@@ -248,29 +310,6 @@ private struct AccountsSection: View {
             if let failure {
                 FailureMessage(message: failure)
             }
-        }
-        .confirmationDialog(
-            String(localized: "Remove this server?", bundle: .module, comment: "Title of the remove server dialog."),
-            isPresented: Binding(get: { serverToRemove != nil }, set: { if !$0 { serverToRemove = nil } }),
-            titleVisibility: .visible,
-            presenting: serverToRemove
-        ) { server in
-            Button(
-                String(
-                    localized: "Remove \(server.displayName)", bundle: .module, comment: "Button that removes a server."
-                ),
-                role: .destructive
-            ) {
-                Task { await run { try await session.remove(server) } }
-            }
-        } message: { _ in
-            Text(
-                String(
-                    localized: "Everyone signed in to it on this device is signed out.",
-                    bundle: .module,
-                    comment: "Message in the remove server dialog."
-                )
-            )
         }
     }
 
@@ -405,6 +444,43 @@ private struct DeliverySection: View {
                     comment: "Settings footer under the ways a video can play."
                 )
             )
+        }
+    }
+}
+
+/// The downloads, as a row that opens them with the space they take, the quality they're made at, and whether they
+/// may use cellular data.
+private struct DownloadsSection: View {
+    let downloads: DownloadCenter
+    @AppStorage(DownloadCenter.cellularKey) private var usesCellular = false
+    @AppStorage(DownloadCenter.qualityKey) private var quality = PlaybackQuality.maximum
+
+    var body: some View {
+        Section {
+            NavigationLink(value: Route.downloads) {
+                LabeledContent(DownloadsView.title, value: DownloadRow.size(downloads.usedBytes))
+            }
+            Picker(
+                String(
+                    localized: "Download Quality", bundle: .module,
+                    comment: "Settings row: the most bandwidth a downloaded video may take."),
+                selection: $quality
+            ) {
+                ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
+            }
+            .rebuiltForAccent()
+            Toggle(
+                String(
+                    localized: "Download over Cellular", bundle: .module,
+                    comment: "Settings switch that lets downloads use cellular data."),
+                isOn: $usesCellular)
+        } footer: {
+            Text(
+                String(
+                    localized:
+                        "Below Maximum, your server converts videos above the download quality, so they take less space. Downloads are kept on this device only, not in your backups, and are removed when you sign out.",
+                    bundle: .module,
+                    comment: "Settings footer under the download quality and the downloads row."))
         }
     }
 }

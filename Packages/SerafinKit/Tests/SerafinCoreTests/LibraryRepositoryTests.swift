@@ -231,6 +231,33 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(seasons.queryValues("fields").contains("ChildCount"))
     }
 
+    @Test func episodesWithFilesComeFromOneEpisodeOnOrFromOneSeason() async throws {
+        let host = "show-available.example.com"
+        let series = "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"
+        let season = "a09b8c7d6e5f4a3b2c1d0e9f8a7b6c5d"
+        let next = "c2b1d0e9f8a7b6c5d4e3f2a1b0c9d8e7"
+        let path = "/Shows/\(series)/Episodes"
+        StubURLProtocol.stub("\(host):443", path: path, .json(200, try Fixture.json("Episodes")))
+        let library = try library(on: host)
+
+        let episodes = try await library.availableEpisodes(series: series, from: next, limit: 8)
+        #expect(episodes.map(\.name) == ["A Scandal in Bohemia", "The Red-Headed League"])
+        let fromNext = try #require(StubURLProtocol.requests(to: "\(host):443", path: path).first)
+        #expect(fromNext.query("startItemId") == next)
+        #expect(fromNext.query("limit") == "8")
+        #expect(fromNext.query("seasonId") == nil)
+        // Missing episodes and those yet to air have no file.
+        #expect(fromNext.query("isMissing") == "false")
+        #expect(fromNext.query("enableUserData") == "true")
+
+        _ = try await library.availableEpisodes(series: series, season: season)
+        let inSeason = try #require(StubURLProtocol.requests(to: "\(host):443", path: path).last)
+        #expect(inSeason.query("seasonId") == season)
+        #expect(inSeason.query("startItemId") == nil)
+        #expect(inSeason.query("limit") == nil)
+        #expect(inSeason.query("isMissing") == "false")
+    }
+
     @Test func similarTitles() async throws {
         let host = "similar.example.com"
         let id = "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
@@ -274,7 +301,7 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(person.query("userId") == "user-1")
     }
 
-    @Test func suggestionsAreAFewUnwatchedTitlesAtRandom() async throws {
+    @Test func suggestionsAreTwelveUnwatchedTitlesAtRandom() async throws {
         let host = "suggestions.example.com"
         StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
         _ = try await library(on: host).suggestions()
@@ -283,8 +310,20 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(request.queryValues("includeItemTypes") == ["Movie", "Series"])
         #expect(request.queryValues("filters") == ["IsUnplayed"])
         #expect(request.queryValues("sortBy") == ["Random"])
-        #expect(request.query("limit") == "6")
+        #expect(request.query("limit") == "12")
         #expect(request.query("recursive") == "true")
+    }
+
+    @Test func watchedTitlesFillSuggestionsWhenFewAreUnwatched() async throws {
+        let host = "suggestions-top-up.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Items", .json(200, try Fixture.json("Items")))
+        let suggestions = try await library(on: host).suggestions()
+
+        // Two unwatched titles aren't twelve, so a second ask takes any title, and the two aren't repeated.
+        let requests = StubURLProtocol.requests(to: "\(host):443", path: "/Items")
+        #expect(requests.count == 2)
+        #expect(requests.last?.queryValues("filters") == [])
+        #expect(suggestions.count == 2)
     }
 
     @Test func aPersonsGridAsksForTheirTitles() async throws {
@@ -409,5 +448,78 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         let library = try library(on: host)
         await #expect(throws: SerafinError.offline) { try await library.nextUp() }
         #expect(try await library.nextUp().count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func theSameReadMadeMeanwhileWaitsForTheOneOnItsWay() async throws {
+        let host = "shared-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let first = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        let second = Task { try await library.nextUp() }
+        // Time for the second read to be made while the first is on its way.
+        try await Task.sleep(for: .milliseconds(100))
+        StubURLProtocol.release(host)
+        #expect(try await first.value.count == 1)
+        #expect(try await second.value.count == 1)
+        #expect(nextUpRequests(on: host) == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aCancelledCallerStopsWaitingAndLeavesTheReadToTheOthers() async throws {
+        let host = "abandoned-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let staying = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        let leaving = Task { try await library.nextUp() }
+        try await Task.sleep(for: .milliseconds(100))
+        leaving.cancel()
+        await #expect(throws: CancellationError.self) { try await leaving.value }
+        StubURLProtocol.release(host)
+        #expect(try await staying.value.count == 1)
+        #expect(nextUpRequests(on: host) == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aReadOnItsWayWhenTheCacheIsEmptiedIsNotKept() async throws {
+        let host = "stale-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let reading = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        await library.clearCache()
+        StubURLProtocol.release(host)
+        #expect(try await reading.value.count == 1)
+        _ = try await library.nextUp()
+        #expect(nextUpRequests(on: host) == 2)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aReadMadeAfterTheCacheIsEmptiedDoesNotWaitForOneFromBefore() async throws {
+        let host = "fresh-read.example.com"
+        try holdNextUp(on: host)
+        let library = try library(on: host)
+        let before = Task { try await library.nextUp() }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Shows/NextUp")
+        await library.clearCache()
+        let after = Task { try await library.nextUp() }
+        while nextUpRequests(on: host) < 2 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        StubURLProtocol.release(host)
+        #expect(try await before.value.count == 1)
+        #expect(try await after.value.count == 1)
+    }
+
+    /// Has Next Up on `host` answer only once ``StubURLProtocol/release(_:)`` is called with `host`.
+    private func holdNextUp(on host: String) throws {
+        StubURLProtocol.stub("\(host):443", path: "/Shows/NextUp", .held(host, .json(200, try Fixture.json("NextUp"))))
+    }
+
+    /// How many times `host` was asked for Next Up.
+    private func nextUpRequests(on host: String) -> Int {
+        StubURLProtocol.requests(to: "\(host):443", path: "/Shows/NextUp").count
     }
 }

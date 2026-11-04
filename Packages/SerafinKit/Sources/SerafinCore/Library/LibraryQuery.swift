@@ -10,7 +10,7 @@ public struct LibraryQuery: Hashable, Sendable {
         case dateAdded
         /// By release date.
         case premiereDate
-        /// By community rating.
+        /// By community rating. Titles with the same rating, or none, go by when they were added.
         case rating
 
         /// What the server sorts by. Ties fall back to the title, so pages never shuffle.
@@ -19,7 +19,9 @@ public struct LibraryQuery: Hashable, Sendable {
             case .name: [.sortName]
             case .dateAdded: [.dateCreated, .sortName]
             case .premiereDate: [.premiereDate, .sortName]
-            case .rating: [.communityRating, .sortName]
+            // A server sorts titles without a rating after rated ones, highest first; among those, and when no
+            // title has one, the date added decides, so a library without ratings still has an order.
+            case .rating: [.communityRating, .dateCreated, .sortName]
             }
         }
     }

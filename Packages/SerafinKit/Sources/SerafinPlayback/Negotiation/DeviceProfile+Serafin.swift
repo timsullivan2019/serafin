@@ -70,6 +70,43 @@ extension DeviceProfile {
         )
     }
 
+    /// What Serafin asks for when it downloads: the original file whenever the player opens it as it is, and
+    /// otherwise an MP4 the server makes as it sends it, copying the video and audio where the player plays them and
+    /// converting them where it doesn't, as when streaming.
+    ///
+    /// Text subtitles stay out of that MP4, which can't carry them as the player reads them, and come on their own as
+    /// WebVTT, to go into the copy Serafin saves. Styled ASS and SSA subtitles and image subtitles are burned into the
+    /// picture when they're the ones chosen.
+    ///
+    /// - Parameters:
+    ///   - maxBitrate: The most bits per second a download may take, from the user's download quality.
+    ///   - video: The AV1 and Dolby Vision the device plays.
+    public static func serafinDownload(maxBitrate: Int, video: VideoSupport = .current) -> DeviceProfile {
+        var profile = serafin(maxBitrate: maxBitrate, video: video)
+        let streamed = profile.transcodingProfiles?.first
+        profile.subtitleProfiles = [
+            SubtitleProfile(format: "vtt", method: .external),
+            SubtitleProfile(format: "mov_text", method: .embed),
+            SubtitleProfile(format: "ass", method: .encode),
+            SubtitleProfile(format: "ssa", method: .encode),
+            SubtitleProfile(format: "pgssub", method: .encode),
+            SubtitleProfile(format: "dvdsub", method: .encode),
+            SubtitleProfile(format: "dvbsub", method: .encode),
+        ]
+        profile.transcodingProfiles = [
+            TranscodingProfile(
+                protocol: .http,
+                audioCodec: streamed?.audioCodec,
+                container: "mp4",
+                context: .streaming,
+                maxAudioChannels: streamed?.maxAudioChannels,
+                type: .video,
+                videoCodec: streamed?.videoCodec
+            )
+        ]
+        return profile
+    }
+
     /// The HDR formats every device Serafin runs on plays: HDR10 and HLG, and HDR10+ as HDR10.
     static let hdrRanges: [VideoRangeType] = [.sdr, .hdr10, .hdr10Plus, .hlg]
 

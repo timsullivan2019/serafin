@@ -85,9 +85,11 @@ extension PlaybackSegment {
 }
 
 extension Duration {
-    /// A time in Jellyfin's ticks of 100 nanoseconds.
+    /// A time in Jellyfin's ticks of 100 nanoseconds. Whole seconds and the rest convert apart, so even the largest
+    /// count a server could send can't overflow. A negative time stays negative, for ``PlaybackSegment/normalized(_:)``
+    /// to leave out.
     fileprivate static func ticks(_ ticks: Int) -> Duration {
-        .nanoseconds(Int64(ticks) * 100)
+        .seconds(ticks / 10_000_000) + .nanoseconds(ticks % 10_000_000 * 100)
     }
 }
 

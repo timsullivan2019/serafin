@@ -27,6 +27,9 @@ public actor Accounts {
     private let connector: ServerConnector
     private let images: ImagePipeline
     private let homeSnapshots: HomeSnapshotStore
+    /// The movies and episodes saved on this device for every account, or nil when the accounts were made without
+    /// downloads, as in tests and previews.
+    public nonisolated let downloads: Downloads?
 
     /// One client per signed-in account, so everything signed in as that user shares its connections.
     private var accountClients: [SessionKey: JellyfinClient] = [:]
@@ -47,6 +50,8 @@ public actor Accounts {
     ///   - homeSnapshots: Where each account's last Home is kept. Tests pass a throwaway folder.
     ///   - sessionConfiguration: Makes the `URLSession` configuration for every request. Tests pass one with a stub
     ///     protocol.
+    ///   - downloads: Where downloads are kept and how they travel. The app passes
+    ///     ``DownloadsSetup/live(preparer:)``; without one there are no downloads.
     public init(
         secrets: any SecretStore,
         deviceName: String,
@@ -55,7 +60,8 @@ public actor Accounts {
         defaults: sending UserDefaults = .standard,
         imageDiskCache: Bool = true,
         homeSnapshots: HomeSnapshotStore = HomeSnapshotStore(),
-        sessionConfiguration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral }
+        sessionConfiguration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral },
+        downloads: DownloadsSetup? = nil
     ) {
         let identity = DeviceIdentity(secrets: secrets, deviceName: deviceName, version: version)
         let sessions = SessionStore(secrets: secrets, defaults: defaults)
@@ -79,6 +85,26 @@ public actor Accounts {
             sessionConfiguration: sessionConfiguration()
         )
         self.homeSnapshots = homeSnapshots
+        if let downloads {
+            let store = DownloadStore(directory: downloads.directory)
+            let transfers = DownloadTransfers(
+                configuration: downloads.configuration(),
+                pinning: pinning,
+                mediaDirectory: store.mediaDirectory
+            )
+            let created = Downloads(
+                store: store,
+                transfers: transfers,
+                identity: identity,
+                sessions: sessions,
+                preparer: downloads.preparer,
+                serverURL: { id in try? await serverStore.server(id: id)?.url }
+            )
+            self.downloads = created
+            Task { await created.activate() }
+        } else {
+            self.downloads = nil
+        }
     }
 
     // MARK: - Servers
@@ -148,6 +174,7 @@ public actor Accounts {
         }
         try await serverStore.remove(id: serverID)
         forgetClients(forServer: serverID)
+        await deleteDownloads { try await $0.deleteAll(forServer: serverID) }
         if let host = server.url.host(), try await !serverStore.servers().contains(where: { $0.url.host() == host }) {
             try pins.removePin(for: host)
         }
@@ -412,6 +439,7 @@ public actor Accounts {
         let token = try await sessions.token(for: key)
         try await sessions.removeToken(for: key)
         await homeSnapshots.remove(for: key)
+        await deleteDownloads { try await $0.deleteAll(for: key) }
         let client = accountClients.removeValue(forKey: key)
         libraries[key] = nil
         guard var server = try await serverStore.server(id: key.serverID) else { return nil }
@@ -422,6 +450,17 @@ public actor Accounts {
         try await serverStore.save(server)
         guard let token else { return nil }
         return SessionEnding(server: server, token: token, client: client)
+    }
+
+    /// Deletes downloads as part of signing out or removing a server. A failure is logged, not thrown: the user is
+    /// signed out either way.
+    private func deleteDownloads(_ deletion: (Downloads) async throws -> Void) async {
+        guard let downloads else { return }
+        do {
+            try await deletion(downloads)
+        } catch {
+            Self.logger.error("Could not delete downloads: \(error.localizedDescription, privacy: .private)")
+        }
     }
 
     /// Asks each server to end a session this device has already forgotten, all at once. Failures are logged, not

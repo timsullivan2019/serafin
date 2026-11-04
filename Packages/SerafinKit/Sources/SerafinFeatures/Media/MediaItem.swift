@@ -11,11 +11,17 @@ struct MediaItem: Identifiable, Hashable, Sendable {
     /// What cards and headers draw.
     var card: MediaCard
     private var box: SourceBox?
+    /// The pictures saved with the item's download, for an item shown from what was saved with it rather than from
+    /// the server, whose pictures it draws instead of the server's. Nil for an item from the server or the samples.
+    var savedArtwork: SavedArtwork?
 
     /// An item with its card and, from the server, its item. Nil for the built-in samples, which draw generated art.
-    init(card: MediaCard, source: BaseItemDto?) {
+    ///
+    /// - Parameter savedArtwork: For an item shown from what was saved with its download, the pictures saved with it.
+    init(card: MediaCard, source: BaseItemDto?, savedArtwork: SavedArtwork? = nil) {
         self.card = card
         box = source.map(SourceBox.init)
+        self.savedArtwork = savedArtwork
     }
 
     /// The server's item, for its artwork. Nil for the built-in samples, which draw generated art instead.
@@ -26,8 +32,12 @@ struct MediaItem: Identifiable, Hashable, Sendable {
 
     var id: String { card.id }
 
+    /// Whether the item is shown from what was saved with its download rather than from the server, as with no
+    /// connection. It plays from its file, and nothing that needs the server is offered for it.
+    var isSaved: Bool { savedArtwork != nil }
+
     static func == (lhs: Self, rhs: Self) -> Bool {
-        guard lhs.card == rhs.card else { return false }
+        guard lhs.card == rhs.card, lhs.savedArtwork == rhs.savedArtwork else { return false }
         return lhs.box === rhs.box || lhs.box?.item == rhs.box?.item
     }
 

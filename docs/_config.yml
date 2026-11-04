@@ -1,0 +1,3 @@
+# getserafin.app, which GitHub Pages serves from this folder. The project's own documents here aren't published.
+exclude:
+  - "*.md"

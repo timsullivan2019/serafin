@@ -18,7 +18,8 @@ extension LibraryRepository: LanguagePreferenceStore {}
 /// The account's audio and subtitle languages, as Settings shows and changes them.
 ///
 /// A change shows at once and is saved in the background. Saves go one at a time, each with the latest choices, so
-/// quick changes never reach the server out of order. When a save fails, the server's own preferences come back.
+/// quick changes never reach the server out of order. When a save fails, the server's own preferences come back,
+/// unless something newer has been chosen since, which its own save then sends.
 @Observable @MainActor final class LanguagesModel {
     enum Phase: Equatable {
         case loading
@@ -37,6 +38,8 @@ extension LibraryRepository: LanguagePreferenceStore {}
     @ObservationIgnored private let store: any LanguagePreferenceStore
     @ObservationIgnored private let locale: Locale
     @ObservationIgnored private var saving: Task<Void, Never>?
+    /// Goes up with every change, so a failed save can tell whether a newer one was made since it was sent.
+    @ObservationIgnored private var revision = 0
 
     init(store: any LanguagePreferenceStore, locale: Locale = .current) {
         self.store = store
@@ -90,16 +93,21 @@ extension LibraryRepository: LanguagePreferenceStore {}
         guard changed != preferences else { return }
         preferences = changed
         failure = nil
+        revision += 1
         let previous = saving
         saving = Task {
             await previous?.value
+            let sent = revision
             do {
                 // The latest choices, which may be newer than this change.
                 try await store.setLanguagePreferences(preferences)
+                // Anything an earlier save failed to send went with these.
+                failure = nil
             } catch is CancellationError {
             } catch {
                 failure = UserMessage(error)
-                if let saved = try? await store.languagePreferences() {
+                // A choice made since stands, and its own save, waiting behind this one, sends it.
+                if let saved = try? await store.languagePreferences(), revision == sent {
                     preferences = saved
                 }
             }

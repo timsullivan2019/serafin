@@ -101,6 +101,29 @@ private final class TestDate: @unchecked Sendable {
         #expect(Set(await store.domains.keys) == everything)
     }
 
+    @Test func anotherAccountsTitlesGoAsSoonAsSomeoneElseSignsIn() async throws {
+        let indexer = try indexer()
+        await indexer.update(account: alice, media: media) { _ in nil }
+        await indexer.removeEntries(notOwnedBy: SessionKey(serverID: "server-1", userID: "bob"))
+        #expect(await store.domains.isEmpty)
+    }
+
+    @Test func theSignedInAccountsOwnTitlesStay() async throws {
+        let indexer = try indexer()
+        await indexer.update(account: alice, media: media) { _ in nil }
+        let emptied = await store.emptied
+        await indexer.removeEntries(notOwnedBy: alice)
+        #expect(await store.emptied == emptied)
+        #expect(Set(await store.domains.keys) == everything)
+    }
+
+    @Test func titlesFromAPassCutShortGoToo() async throws {
+        // A pass that never finished noted no account for what it wrote.
+        await store.addLeftover("cut-short", in: "library-a")
+        await (try indexer()).removeEntries(notOwnedBy: alice)
+        #expect(await store.domains.isEmpty)
+    }
+
     @Test func emptyingTheIndexForgetsWhatWasWritten() async throws {
         let indexer = try indexer()
         await indexer.update(account: alice, media: media) { _ in nil }
@@ -116,6 +139,15 @@ private final class TestDate: @unchecked Sendable {
         // Every grid of the test source lists the same titles, so both sample libraries hold them.
         let shared = TestMediaSource(titles: ["Safety Last!", "The Freshman"])
         await (try indexer()).update(account: alice, media: shared) { _ in nil }
+        #expect(await store.writes == ["test-Safety Last!": 1, "test-The Freshman": 1])
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aServerThatSendsTheSamePageAgainEndsThePass() async throws {
+        var broken = TestMediaSource(titles: ["Safety Last!", "The Freshman"])
+        broken.ignoresStart = true
+        broken.claimedTotal = .max
+        await (try indexer()).update(account: alice, media: broken) { _ in nil }
         #expect(await store.writes == ["test-Safety Last!": 1, "test-The Freshman": 1])
     }
 }

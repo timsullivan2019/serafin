@@ -2,86 +2,205 @@ import Observation
 import SerafinCore
 import SerafinDesign
 
-/// The Library tab's libraries, each with its tile's picture and count, and whether to offer collections.
+/// The Library tab's rows: one for each library, then Collections, Favourites, Unwatched and Genres. Each row asks
+/// for its newest titles on its own, so the rows fill in as their answers arrive.
 @Observable @MainActor final class LibrariesModel {
     enum Phase {
+        /// Waiting for the libraries, before any row is known.
         case loading
-        case loaded([MediaLibrary])
+        /// The rows are known, and fill in as they load.
+        case loaded
+        /// The libraries didn't load, or every row failed.
         case failed(UserMessage)
     }
 
-    /// What a library's tile shows.
-    struct Overview: Sendable {
-        /// How many movies or shows the library holds.
-        let total: Int
-        /// Its newest posters, up to four, for a collage when it has no picture.
-        let newest: [MediaItem]
-        /// Its own picture, when the server has one.
-        let cover: MediaItem?
+    /// One row of the tab.
+    enum Row: Hashable, Identifiable, Sendable {
+        /// One library's newest movies or shows, under the library's own name, so a server with more than one movie
+        /// library, or with libraries named its own way, reads as it does on the server.
+        case library(MediaLibrary)
+        /// The newest collections, shown when the server has any.
+        case collections
+        /// The newest favourites, or the best-rated titles not yet watched, from every library, shown when there are any.
+        case shortcut(LibraryShortcut)
+        /// The genres, as tiles, shown when the server lists any.
+        case genres
     }
 
-    /// How many posters a collage takes.
-    static let collageSize = 4
+    /// How many titles a row holds.
+    nonisolated static let rowLength = 12
+    /// The order rows list their titles in: the newest additions first.
+    nonisolated static let newestFirst = GridOptions(sort: .dateAdded, ascending: false)
 
     private(set) var phase = Phase.loading
-    /// Whether the server has collections, which adds a Collections row. A failed check leaves it out.
-    private(set) var hasCollections = false
-    /// Each library's tile, by library ID, as they load.
-    private(set) var overviews: [String: Overview] = [:]
+    /// Every row the libraries call for, in order, whether or not it has anything in it.
+    private(set) var rows: [Row] = []
+    /// Each row's newest titles, once they've loaded.
+    private(set) var titles: [Row: [MediaItem]] = [:]
+    /// The genres, once they've loaded.
+    private(set) var genres: [Genre]?
+    /// The rows whose last answer was a failure, and which are left out until one succeeds.
+    private var failed: Set<Row> = []
+    /// Goes up with each load, so the genre tiles on screen ask for their posters again.
+    private(set) var generation = 0
 
+    /// The rows to show, in order. See ``visible(_:isLoaded:isEmpty:)``.
+    var visibleRows: [Row] {
+        Self.visible(rows, isLoaded: isLoaded, isEmpty: isEmpty)
+    }
+
+    /// Whether every row has had its answer, so a tab with nothing to show is really empty.
+    var isSettled: Bool {
+        rows.allSatisfy(isLoaded)
+    }
+
+    /// Loads the libraries, then every row at once.
+    ///
+    /// Rows keep what they show until their new titles arrive, so loading again, after pull to refresh or a change to
+    /// a favourite, never empties the screen.
     func load(from media: any MediaSource) async {
-        async let collections = try? media.hasCollections()
+        generation += 1
         do {
-            let libraries = try await media.libraries()
-            phase = .loaded(libraries)
-            await loadOverviews(of: libraries, from: media)
+            rows = Self.rows(for: try await media.libraries())
         } catch is CancellationError {
+            return
         } catch {
             if case .loaded = phase {} else { phase = .failed(UserMessage(error)) }
+            return
         }
-        hasCollections = await collections ?? hasCollections
-    }
-
-    /// Asks for every library's count, newest posters and picture at once. A library whose answer fails keeps its
-    /// last tile, or shows a plain one.
-    private func loadOverviews(of libraries: [MediaLibrary], from media: any MediaSource) async {
-        let newestFirst = GridOptions(sort: .dateAdded, ascending: false)
-        await withTaskGroup(of: (String, Overview?).self) { group in
-            for library in libraries {
-                group.addTask {
-                    async let cover = media.cover(of: library)
-                    let page = try? await media.page(
-                        of: .library(library), options: newestFirst, start: 0, limit: Self.collageSize)
-                    guard let page else { return (library.id, nil) }
-                    return (
-                        library.id,
-                        Overview(total: page.total, newest: page.items.compactMap { $0 }, cover: await cover)
-                    )
+        // After a failure the tab starts over, its rows loading in place again.
+        if case .failed = phase { failed = [] }
+        titles = titles.filter { rows.contains($0.key) }
+        phase = .loaded
+        var failure: (any Error)?
+        await withTaskGroup(of: Arrival.self) { group in
+            for row in rows {
+                group.addTask { await Self.fetch(row, from: media) }
+            }
+            for await arrival in group {
+                switch arrival {
+                case .titles(let row, let items):
+                    titles[row] = items
+                    failed.remove(row)
+                case .genres(let list):
+                    genres = list
+                    failed.remove(.genres)
+                case .failed(let row, let error):
+                    // A cancelled load makes way for the next, which answers for the row.
+                    if error is CancellationError { continue }
+                    failure = failure ?? error
+                    failed.insert(row)
                 }
             }
-            for await (id, overview) in group {
-                if let overview {
-                    overviews[id] = overview
-                }
-            }
+        }
+        if let failure, isSettled, visibleRows.isEmpty {
+            phase = .failed(UserMessage(failure))
         }
     }
 
-    /// How many titles a library holds, as its tile says it, such as "75 movies".
-    nonisolated static func caption(total: Int, kind: MediaLibrary.Kind) -> String {
-        switch kind {
-        case .movies:
-            String(
-                localized: "\(total) movies", bundle: .module,
-                comment: "How many movies a library holds, under its name on the Library tab.")
-        case .shows:
-            String(
-                localized: "\(total) shows", bundle: .module,
-                comment: "How many shows a library holds, under its name on the Library tab.")
-        case .mixed:
-            String(
-                localized: "\(total) movies and shows", bundle: .module,
-                comment: "A number of movies and shows: in Shortcuts, and under a library's name on the Library tab.")
+    /// The rows for `libraries`: one for each library, movies first, then shows, then libraries of both, each kind in
+    /// the server's order; then Collections, Favourites, Unwatched and Genres. None at all without a library.
+    ///
+    /// Rows for Live TV, Music and Downloads join these in their own phases, behind those phases' flags; see
+    /// docs/PLAN-2.md.
+    static func rows(for libraries: [MediaLibrary]) -> [Row] {
+        guard !libraries.isEmpty else { return [] }
+        return MediaLibrary.ordered(libraries).map(Row.library) + [.collections]
+            + LibraryShortcut.allCases.map(Row.shortcut) + [.genres]
+    }
+
+    /// The rows to show, in order.
+    ///
+    /// A library's row shows from the start, its cards loading in place, and goes if it turns out to be empty. Any
+    /// other row may turn out empty, so it shows once it has loaded, and the rows after it wait for it: a row that
+    /// arrives never pushes down a row already on screen.
+    nonisolated static func visible(_ rows: [Row], isLoaded: (Row) -> Bool, isEmpty: (Row) -> Bool) -> [Row] {
+        var visible: [Row] = []
+        for row in rows {
+            if isLoaded(row) {
+                if !isEmpty(row) { visible.append(row) }
+            } else if case .library = row {
+                visible.append(row)
+            } else {
+                break
+            }
+        }
+        return visible
+    }
+
+    private func isLoaded(_ row: Row) -> Bool {
+        if failed.contains(row) { return true }
+        return row == .genres ? genres != nil : titles[row] != nil
+    }
+
+    private func isEmpty(_ row: Row) -> Bool {
+        row == .genres ? genres?.isEmpty ?? true : titles[row]?.isEmpty ?? true
+    }
+
+    /// What one row's request brought back.
+    private enum Arrival: Sendable {
+        case titles(Row, [MediaItem])
+        case genres([Genre])
+        case failed(Row, any Error)
+    }
+
+    /// Asks for one row's newest titles, or for the genres.
+    nonisolated private static func fetch(_ row: Row, from media: any MediaSource) async -> Arrival {
+        do {
+            guard let scope = row.scope else { return .genres(try await media.genres()) }
+            let page = try await media.page(of: scope, options: row.options, start: 0, limit: rowLength)
+            return .titles(row, page.items.compactMap { $0 })
+        } catch {
+            return .failed(row, error)
+        }
+    }
+}
+
+extension LibrariesModel.Row {
+    var id: String {
+        switch self {
+        case .library(let library): "library-\(library.id)"
+        case .collections: "collections"
+        case .shortcut(let shortcut): shortcut.rawValue
+        case .genres: "genres"
+        }
+    }
+
+    /// The row's title: the library's own name, or what the row holds, such as "Favorites".
+    var title: String {
+        scope?.title ?? String(localized: "Genres", bundle: .module, comment: "Genres, as a heading or a label.")
+    }
+
+    /// The grid the row's titles come from, or nil for the genres.
+    var scope: GridScope? {
+        switch self {
+        case .library(let library): .library(library)
+        case .collections: .collections
+        case .shortcut(let shortcut): .shortcut(shortcut)
+        case .genres: nil
+        }
+    }
+
+    /// How the row asks for its titles: the newest additions first, with its grid's filter, such as favourites only.
+    /// Unwatched goes highest rated first instead, newest among equals, so it doesn't repeat the newest titles the
+    /// library rows above it already show.
+    var options: GridOptions {
+        var options = LibrariesModel.newestFirst
+        if case .shortcut(.unwatched) = self {
+            options.sort = .rating
+        }
+        options.unplayedOnly = scope?.initialOptions.unplayedOnly ?? false
+        options.favouritesOnly = scope?.initialOptions.favouritesOnly ?? false
+        return options
+    }
+
+    /// What the row's title opens: the row's grid, with that grid's own sort and filter chips, or the list of genres.
+    var route: Route {
+        switch self {
+        case .library(let library): .library(library)
+        case .collections: .collections
+        case .shortcut(let shortcut): .shortcut(shortcut)
+        case .genres: .genres
         }
     }
 }
@@ -111,7 +230,8 @@ import SerafinDesign
 ///
 /// The grid knows its full length from the first page, and holds a place for every item. Each place's page loads
 /// when the place comes on screen, so a jump from the letter index to the middle of a long grid loads only the
-/// pages around where it lands.
+/// pages around where it lands. The model fetches each page itself, once, so a place scrolling away doesn't cancel a
+/// page the places still on screen are waiting for, and a page that fails is asked for once more.
 @Observable @MainActor final class LibraryModel {
     enum Phase {
         case loading
@@ -125,6 +245,11 @@ import SerafinDesign
     static let prefetchDistance = 12
     /// How long a grid sorted by name has to be to get the letter index.
     static let indexMinimum = 48
+    /// How long a page that failed to load waits before it's asked for again.
+    static let retryDelay = Duration.seconds(1)
+    /// The most places a grid holds: far more titles than any real library has, and few enough that a broken server
+    /// claiming billions can't use up the device's memory.
+    static let largestTotal = 250_000
 
     let scope: GridScope
     /// The sort and filters. Changing them reloads the grid.
@@ -138,7 +263,8 @@ import SerafinDesign
     private(set) var filters = LibraryFilters(genres: [], years: [])
     private var loadedOptions: GridOptions?
     private var loadedPages: Set<Int> = []
-    private var loadingPages: Set<Int> = []
+    /// The pages on their way, by number.
+    private var pageLoads: [Int: Task<Void, Never>] = [:]
     private var letterPositions: [String: Int] = [:]
 
     init(scope: GridScope) {
@@ -179,13 +305,18 @@ import SerafinDesign
         do {
             let page = try await media.page(of: scope, options: options, start: 0, limit: Self.pageSize)
             guard options == self.options else { return }
-            if options != loadedOptions || page.total != slots.count {
-                slots = Array(repeating: nil, count: page.total)
+            let total = min(max(page.total, 0), Self.largestTotal)
+            if options != loadedOptions || total != slots.count {
+                slots = Array(repeating: nil, count: total)
                 letterPositions = [:]
             }
             loadedOptions = options
             loadedPages = []
-            loadingPages = []
+            // The pages still on their way belong to the grid as it was.
+            for load in pageLoads.values {
+                load.cancel()
+            }
+            pageLoads = [:]
             place(page.items, at: 0)
             loadedPages.insert(0)
             generation += 1
@@ -230,19 +361,36 @@ import SerafinDesign
         await reload(from: media)
     }
 
+    /// Loads page `page`, or waits for it when it's already on its way. The fetch belongs to the model rather than to
+    /// the place that asked, so it carries on when that place scrolls away.
     private func loadPage(_ page: Int, from media: any MediaSource) async {
         let start = page * Self.pageSize
-        guard start < slots.count, !loadedPages.contains(page), !loadingPages.contains(page) else { return }
+        guard start < slots.count, !loadedPages.contains(page) else { return }
+        if let loading = pageLoads[page] {
+            await loading.value
+            return
+        }
         let options = options
         let generation = generation
-        loadingPages.insert(page)
-        let result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
-        // A reload in the meantime started the pages over, and its own loads replace this one.
-        guard generation == self.generation else { return }
-        loadingPages.remove(page)
-        guard let result, options == self.options else { return }
-        place(result.items, at: start)
-        loadedPages.insert(page)
+        let loading = Task {
+            var result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
+            if result == nil, !Task.isCancelled {
+                // Once more after a moment, for a dropped connection or a busy server. Pull to refresh tries again
+                // after that.
+                try? await Task.sleep(for: Self.retryDelay)
+                if !Task.isCancelled {
+                    result = try? await media.page(of: scope, options: options, start: start, limit: Self.pageSize)
+                }
+            }
+            // A reload in the meantime started the pages over, and its own loads replace this one.
+            guard generation == self.generation else { return }
+            pageLoads[page] = nil
+            guard let result, options == self.options else { return }
+            place(result.items, at: start)
+            loadedPages.insert(page)
+        }
+        pageLoads[page] = loading
+        await loading.value
     }
 
     private func place(_ items: [MediaItem?], at start: Int) {

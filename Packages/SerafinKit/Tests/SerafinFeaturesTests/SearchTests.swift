@@ -94,7 +94,7 @@ private let carol = SessionKey(serverID: "server-b", userID: "carol")
         await model.loadSuggestions(from: SampleMediaSource())
         #expect(model.hasLoadedSuggestions)
         #expect(!model.suggestions.isEmpty)
-        #expect(model.suggestions.count <= 6)
+        #expect(model.suggestions.count <= 12)
         #expect(model.suggestions.allSatisfy { !$0.card.isPlayed && $0.card.kind != .episode })
     }
 

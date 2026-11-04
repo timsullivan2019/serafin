@@ -14,16 +14,18 @@ import Testing
     @Test(arguments: [375.0, 390, 402, 440])
     func phonesKeepTheirCardCounts(window: CGFloat) {
         #expect(abs(across(.posters, regular: false, window: window) - 3.3) < 0.001)
+        #expect(abs(across(.largePosters, regular: false, window: window) - 3.3) < 0.001)
         #expect(abs(across(.landscape, regular: false, window: window) - 1.3) < 0.001)
         #expect(abs(across(.people, regular: false, window: window) - 3.3) < 0.001)
         #expect(abs(across(.posters, regular: false, large: true, window: window) - 1.6) < 0.001)
+        #expect(abs(across(.largePosters, regular: false, large: true, window: window) - 1.6) < 0.001)
         #expect(abs(across(.landscape, regular: false, large: true, window: window) - 1.05) < 0.001)
         #expect(abs(across(.people, regular: false, large: true, window: window) - 2.1) < 0.001)
     }
 
     @Test(arguments: [375.0, 390, 402, 440])
     func everyRowOnAPhoneShowsTheSameSliceOfItsNextCard(window: CGFloat) {
-        let slices = [MediaRowStyle.posters, .landscape, .people].map { style in
+        let slices = [MediaRowStyle.posters, .largePosters, .landscape, .people].map { style in
             let across = across(style, regular: false, window: window)
             return across - across.rounded(.down)
         }
@@ -33,16 +35,18 @@ import Testing
     @Test(arguments: [820.0, 834])
     func elevenInchIPadsInPortraitKeepTheirCardCounts(window: CGFloat) {
         #expect(abs(across(.posters, regular: true, window: window) - 6.3) < 0.001)
+        #expect(abs(across(.largePosters, regular: true, window: window) - 4.3) < 0.001)
         #expect(abs(across(.landscape, regular: true, window: window) - 3.2) < 0.001)
         #expect(abs(across(.people, regular: true, window: window) - 7.3) < 0.001)
         #expect(abs(across(.posters, regular: true, large: true, window: window) - 3.3) < 0.001)
+        #expect(abs(across(.largePosters, regular: true, large: true, window: window) - 3.3) < 0.001)
         #expect(abs(across(.landscape, regular: true, large: true, window: window) - 2.2) < 0.001)
         #expect(abs(across(.people, regular: true, large: true, window: window) - 3.6) < 0.001)
     }
 
     @Test(arguments: [(600.0, false), (600, true), (1194, true), (1376, true)])
     func otherWindowsGainCardsInsteadOfStretchingThem(window: CGFloat, regular: Bool) {
-        for style in [MediaRowStyle.posters, .landscape, .people] {
+        for style in [MediaRowStyle.posters, .largePosters, .landscape, .people] {
             let sizing = RowSizing(style: style, isRegular: regular, isLarge: false)
             let ratio = sizing.cardWidth(in: visible(window)) / sizing.comfortableWidth
             #expect(ratio > 0.8 && ratio < 1.35, "\(style) at \(window) points is \(ratio)× its comfortable width")
@@ -57,12 +61,20 @@ import Testing
 
     @Test func aRowWithNoWidthYetSizesItsCardsToNothingRatherThanLessThanNothing() {
         // The first layout pass gives a row no width; a negative card width there made SwiftUI log a fault per card.
-        for style in [MediaRowStyle.posters, .landscape, .people] {
+        for style in [MediaRowStyle.posters, .largePosters, .landscape, .people] {
             for isRegular in [false, true] {
                 let sizing = RowSizing(style: style, isRegular: isRegular, isLarge: false)
                 #expect(sizing.cardWidth(in: 0) == 0)
                 #expect(sizing.cardWidth(in: 10) == 0)
             }
         }
+    }
+
+    @Test(arguments: [820.0, 834, 1194])
+    func libraryPostersOnIPadAreTheArtworkRulesGridSize(window: CGFloat) {
+        // docs/PLAN-2.md 0.1: grid posters on iPad are at least 160 points wide.
+        let sizing = RowSizing(style: .largePosters, isRegular: true, isLarge: false)
+        let width = sizing.cardWidth(in: visible(window))
+        #expect(width >= 160 && width < 200)
     }
 }

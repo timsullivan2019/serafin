@@ -20,8 +20,9 @@ Out of scope: the security of the Jellyfin server itself, of the user's network,
 | Passwords | Memory only, while signing in | The key to the user's account, and often reused elsewhere. |
 | The server list: addresses, names, user IDs and names | Application Support, `servers.json` | Says where the user's server is and who signs in to it. |
 | The saved Home: titles, artwork references and progress | Caches, one file per account | Shows what the user watches. |
-| Artwork | Caches, Nuke's disk cache, up to 200 MB | Shows what the user's library holds. |
+| Artwork | Caches, Nuke's disk cache, up to 200 MB, shared by every account on the device | Shows what the user's library holds. |
 | The library in Spotlight | The system's Spotlight index | Shows titles and posters outside the app. |
+| Recent searches, the last ten for each account | `UserDefaults` | What the user typed, often titles; shows what they look for. |
 | Preferences: current account IDs, quality caps, subtitle size, accent colour | `UserDefaults` | Low value; holds no secrets or titles. |
 
 ## Actors
@@ -71,7 +72,7 @@ The security requirements from `AGENTS.md`, and where each is met.
 
 | Risk | Control | Where |
 | --- | --- | --- |
-| Password theft | Quick Connect is the default sign-in. A password is sent once to the server's sign-in endpoint and kept nowhere: the sign-in model clears it as it's sent, and only the returned token is saved. | `SignInModel`, `Accounts.signIn(to:username:password:)` |
+| Password theft | On iPhone and iPad, password sign-in comes first, so iOS Password AutoFill can fill it from the user's own iCloud Keychain, with Quick Connect a button away. A password is sent once to the server's sign-in endpoint and kept nowhere: the sign-in model clears it as it's sent, and only the returned token is saved. | `SignInView`, `SignInModel`, `Accounts.signIn(to:username:password:)` |
 | Token theft from the device | Tokens are Keychain items with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and `kSecAttrSynchronizable` false, so they never reach iCloud Keychain or backups. One item per server and user, keyed `token.<server>.<user>`. Never in `UserDefaults`, files or logs. | `KeychainSecretStore`, `SessionStore`; tested in `AppTests/KeychainSecretStoreTests` |
 | Token leak in transit | HTTPS by default. Plain HTTP only to private addresses (10/8, 172.16/12, 192.168/16, `.local`, localhost, Tailscale's 100.64/10 and `.ts.net` names), after a warning that can't be swiped away, and refused for public hosts before any request is sent. A `.ts.net` name without a port tries HTTPS first. The ATS keys are `NSAllowsLocalNetworking` and plain-HTTP exceptions for `100.64.0.0/10` and `ts.net`, which iOS 17 and later need before they let plain HTTP reach Tailscale; every other address stays HTTPS-only. | `TransportPolicy`, `PrivateNetwork`, `ServerAddress`, `ConnectionSheets` (`interactiveDismissDisabled`), `App/Info.plist`; tested in `ServerAddressTests`, `ServerConnectorTests`, `AppTests/TransportSecurityTests` |
 | Self-signed certificates | No global ATS exception. A certificate the system doesn't trust is refused unless the user has checked its SHA-256 fingerprint and pinned it; then only that public key is accepted for that host. Pins are Keychain items keyed by host, and go when the last server using the host is removed. | `PinningDelegate`, `PinStore`, `CertificateFingerprint`; streams through `StreamLoader`; tested in `CertificatePinningTests` |
@@ -88,7 +89,7 @@ Swift packages only, pinned to exact versions in `Packages/SerafinKit/Package.re
 
 | Package | Licence | Network behaviour |
 | --- | --- | --- |
-| Jellyfin SDK for Swift | MPL-2.0 | Requests go only to the server address it's given. Its local discovery broadcasts on UDP port 7359 on the local network, and only while Add Server is open. Its websocket and code generator aren't used. |
+| Jellyfin SDK for Swift | MPL-2.0 | Requests go only to the server address it's given. Its local discovery broadcasts on UDP port 7359 on the local network, and only while Add Server is open; on a device that needs Apple's multicast networking entitlement, in `App/Serafin.entitlements`, and the user's local network permission. Its websocket and code generator aren't used. |
 | Get | MIT | The SDK's `URLSession` wrapper. Makes no requests of its own. |
 | Nuke | MIT | Loads only the image URLs Serafin asks for, through the pinning delegate. Makes no requests of its own. |
 | SwiftNIO Transport Services, SwiftNIO | Apache-2.0 | Networking primitives the SDK's discovery runs on. No requests of their own. |
@@ -104,7 +105,8 @@ The Licences screen in Settings lists each package with its version and full lic
 | Server list | Application Support | Complete file protection: unreadable while the device is locked | Removing the server |
 | Saved Home | Caches | Complete file protection; never backed up | Sign-out, removing the server, Clear Cache, iOS when space runs low |
 | Artwork | Caches | iOS's default file protection; never backed up | Clear Cache, iOS when space runs low |
-| Spotlight entries | Spotlight's index | Complete protection class | Turning on the lock, signing out, removing the server |
+| Spotlight entries | Spotlight's index | Complete protection class | Turning on the lock, signing out, removing the server, another account signing in |
+| Recent searches | `UserDefaults` | iOS's default file protection | Sign-out, removing the server, the Search tab's Clear button, deleting the app |
 | Preferences | `UserDefaults` | iOS's default file protection | Removing the server (its quality caps), deleting the app |
 
 ## Known limits
@@ -113,5 +115,6 @@ The Licences screen in Settings lists each package with its version and full lic
 - **Tailscale names count as private by name alone.** Serafin doesn't resolve a `.ts.net` name before allowing plain HTTP to it. Inside the user's tailnet, WireGuard encrypts the traffic. A name made public with Tailscale Funnel is reached across the internet instead, where plain HTTP would be readable, which is one reason Serafin tries HTTPS first on a `.ts.net` name.
 - **Stream URLs carry the token.** A stream URL that leaked, for example from AirPlay to a shared receiver, would give its holder the session until the user signs out. That's a limit of AVPlayer, which can't send headers with HLS segment requests.
 - **Artwork uses iOS's default file protection**, readable after the first unlock since restart, not the stricter class the server list and saved Home use.
+- **Artwork is cached by its address, and every account on the device shares the cache.** Jellyfin serves item images without a sign-in (`GetItemImage` has no `[Authorize]`), so an image's address shows the same picture to anyone who has it, and sharing the cache lets no account see anything it couldn't fetch itself. Cached artwork stays after sign-out until Clear Cache or iOS removes it.
 - **Someone with the unlocked device** sees whatever the user can, unless the app lock is on.
 - **A malicious server** can still show misleading titles and artwork, or refuse service. It can't run code in Serafin, open other apps through URLs, or make Serafin send the user's token to another host.

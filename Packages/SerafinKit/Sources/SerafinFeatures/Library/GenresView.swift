@@ -58,7 +58,8 @@ struct GenresView: View {
     }
 }
 
-/// Two of a genre's posters side by side in a small rounded square, loaded when the row comes on screen.
+/// Two of a genre's posters side by side in a small rounded square, or its only one across it, loaded when the row
+/// comes on screen.
 private struct GenreThumbnail: View {
     let genre: Genre
     @State private var posters: [MediaItem] = []
@@ -66,17 +67,16 @@ private struct GenreThumbnail: View {
     @ScaledMetric(relativeTo: .body) private var size = 36.0
 
     var body: some View {
-        HStack(spacing: 1) {
-            ForEach(0..<2, id: \.self) { index in
-                Color.clear
-                    .overlay {
-                        if posters.indices.contains(index) {
-                            ItemArtwork(posters[index], role: .poster) { CollagePoster(image: $0) }
-                        } else {
-                            CollagePoster(image: nil)
-                        }
-                    }
-                    .clipped()
+        Group {
+            if posters.count >= 2 {
+                PosterPair { index in
+                    ItemArtwork(posters[index], role: .poster) { CollagePoster(image: $0) }
+                }
+            } else if let only = posters.first {
+                // A genre with one title shows its poster across the square, rather than leave half of it bare.
+                ItemArtwork(only, role: .poster) { CollagePoster(image: $0) }
+            } else {
+                CollagePoster(image: nil)
             }
         }
         .frame(width: size, height: size)

@@ -71,6 +71,15 @@ private let movieID = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         }
         #expect(PlaybackSegment(MediaSegmentDto(startTicks: 300, type: .intro)) == nil)
     }
+
+    @Test func anyTicksTheServerSendsBecomeTimesWithoutOverflowing() throws {
+        let long = try #require(PlaybackSegment(MediaSegmentDto(endTicks: .max, startTicks: 300_000_000, type: .intro)))
+        #expect(long.end == .seconds(922_337_203_685) + .nanoseconds(477_580_700))
+        let early = try #require(
+            PlaybackSegment(MediaSegmentDto(endTicks: 900_000_000, startTicks: .min, type: .intro)))
+        #expect(early.start < .zero)
+        #expect(PlaybackSegment.normalized([early]).isEmpty)
+    }
 }
 
 @Suite struct SegmentRepositoryTests {
@@ -146,6 +155,16 @@ private let movieID = "f137a2dd21bbc1b99aa5c0f6bf02a805"
             ])
         #expect(IntroSkipper.segments(inSegmentsAnswer: Data("{}".utf8)) == [])
         #expect(IntroSkipper.segments(inSegmentsAnswer: Data("[1, 2]".utf8)) == [])
+    }
+
+    @Test func timesPastTheEndOfAnyEpisodeAreLeftOut() {
+        // Times too large for a duration, which a broken or hostile server could send.
+        let json =
+            #"{"Recap":{"Start":0,"End":20},"Introduction":{"Start":30,"End":1e100},"Credits":{"Start":1e300,"End":1e308}}"#
+        #expect(
+            IntroSkipper.segments(inSegmentsAnswer: Data(json.utf8)) == [
+                PlaybackSegment(kind: .recap, start: .zero, end: .seconds(20))
+            ])
     }
 
     @Test func theOriginalPluginOnlyKnowsTheIntro() async throws {

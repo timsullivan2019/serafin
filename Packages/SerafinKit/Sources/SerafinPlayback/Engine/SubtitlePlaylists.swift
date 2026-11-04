@@ -17,6 +17,8 @@ import Foundation
 enum SubtitlePlaylists {
     /// The loader's scheme for a server's scheme.
     private static let loaderSchemes = ["https": "serafin-https", "http": "serafin-http"]
+    /// The longest a subtitle playlist is taken to run, in seconds: a week, far beyond any video.
+    static let longest: Double = 7 * 24 * 60 * 60
 
     /// Whether the server's stream at `url` is made of fragmented MP4 segments, whose subtitles need putting in time.
     /// Jellyfin sends MPEG-TS segments unless asked otherwise, and its subtitles are in time with those.
@@ -62,19 +64,19 @@ enum SubtitlePlaylists {
     }
 
     /// A subtitle playlist fetched from `url`, as one segment for the whole track, asked for without Jellyfin's time
-    /// map. A playlist that isn't Jellyfin's, or that's still growing, keeps its segments, with their addresses made
-    /// absolute.
+    /// map. A playlist that isn't Jellyfin's, that's still growing, or whose segments don't add up to a length up to
+    /// ``longest``, keeps its segments, with their addresses made absolute.
     static func subtitles(_ playlist: String, from url: URL) -> String {
         let lines = lines(of: playlist)
         let segments = lines.filter { !$0.isEmpty && !$0.hasPrefix("#") }
         guard lines.contains("#EXT-X-ENDLIST"),
             let first = segments.first.flatMap({ URL(string: $0, relativeTo: url)?.absoluteURL }),
             let last = segments.last.flatMap({ URL(string: $0, relativeTo: url)?.absoluteURL }),
-            let track = wholeTrack(from: first, to: last)
+            let track = wholeTrack(from: first, to: last),
+            let seconds = length(of: lines)
         else {
             return lines.map { $0.hasPrefix("#") ? $0 : absolute($0, from: url) }.joined(separator: "\n")
         }
-        let seconds = lines.compactMap(segmentDuration).reduce(0, +)
         return [
             "#EXTM3U",
             "#EXT-X-VERSION:3",
@@ -107,6 +109,18 @@ enum SubtitlePlaylists {
             }
         }
         return parts.url
+    }
+
+    /// How long the segments in a playlist's `lines` run in all, in seconds, or nil when a segment's duration isn't a
+    /// number from zero to ``longest``, or the total is longer than that.
+    private static func length(of lines: [String]) -> Double? {
+        var total = 0.0
+        for line in lines where line.hasPrefix("#EXTINF:") {
+            guard let seconds = segmentDuration(line), (0...longest).contains(seconds) else { return nil }
+            total += seconds
+            guard total <= longest else { return nil }
+        }
+        return total
     }
 
     /// The duration an `#EXTINF` line gives its segment, in seconds, or nil for any other line.

@@ -17,7 +17,7 @@ public struct Skeleton: View {
         case thumbnailGrid(columnMinimum: CGFloat)
         /// A detail screen: the hero, the overview and a row of posters.
         case detail
-        /// The Library tab: library tiles, then the Browse list.
+        /// The Library tab: rows of posters, then a row of genre tiles.
         case libraries
     }
 
@@ -186,42 +186,49 @@ struct SkeletonHome: View {
     }
 }
 
-/// The Library tab's skeleton: two rows of 16:9 tiles, then Browse rows with their icons.
+/// The Library tab's skeleton: rows of posters at the tab's own size, then a row of genre tiles.
 struct SkeletonLibraries: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.large) {
+                SkeletonRow(style: .largePosters, hasChevron: true)
+                SkeletonRow(style: .largePosters, hasChevron: true)
+                SkeletonRow(style: .largePosters, hasChevron: true)
+                SkeletonTileRow()
+            }
+            .padding(.top, Spacing.small)
+            .padding(.bottom, Spacing.medium)
+        }
+    }
+}
+
+/// A titled row of placeholder genre tiles, laid out like the Library tab's Genres row.
+struct SkeletonTileRow: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        List {
-            Section {
-                let columns = sizeClass == .regular ? 3 : 2
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.small), count: columns),
-                    spacing: Spacing.small
-                ) {
-                    ForEach(0..<(columns * 2), id: \.self) { _ in
+        let size = GenreTileLayout.size(
+            isRegular: sizeClass == .regular, isLarge: dynamicTypeSize.isAccessibilitySize)
+        VStack(alignment: .leading, spacing: Spacing.small) {
+            RowHeader("Placeholder row title", seeAll: {})
+                .padding(.horizontal, Spacing.medium)
+            ScrollView(.horizontal) {
+                HStack(spacing: Spacing.small) {
+                    ForEach(SkeletonSlot.row) { _ in
                         Rectangle()
                             .fill(.surface)
-                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .frame(width: size.width, height: size.height)
                             .clipShape(.rounded(.small))
                     }
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
             }
-            Section {
-                ForEach(0..<5, id: \.self) { _ in
-                    HStack(spacing: Spacing.small) {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(.textSecondary.opacity(0.25))
-                            .frame(width: 29, height: 29)
-                        SkeletonText("Placeholder row", style: .body)
-                    }
-                }
-            } header: {
-                SkeletonText("Browse", style: .caption)
-            }
+            .contentMargins(.horizontal, Spacing.medium, for: .scrollContent)
+            .scrollIndicators(.hidden)
         }
+        .redacted(reason: .placeholder)
         .modifier(SkeletonShade())
+        .allowsHitTesting(false)
     }
 }
 
@@ -338,5 +345,15 @@ extension EnvironmentValues {
     #Preview("Largest text") {
         SkeletonSample(layout: .detail)
             .dynamicTypeSize(.accessibility5)
+    }
+
+    #Preview("Library") {
+        SkeletonSample(layout: .libraries)
+    }
+
+    #Preview("Library, largest text") {
+        SkeletonSample(layout: .libraries)
+            .dynamicTypeSize(.accessibility5)
+            .preferredColorScheme(.dark)
     }
 #endif

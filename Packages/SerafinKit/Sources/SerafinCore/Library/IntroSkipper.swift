@@ -12,6 +12,8 @@ enum IntroSkipper {
     private static let logger = Logger(serafinCategory: "segments")
     /// The largest answer read. A few segments take a few hundred bytes; this stops a server sending something huge.
     static let responseLimit = 64 * 1024
+    /// The latest time read, in seconds: a week, far beyond the end of any episode.
+    static let latest: Double = 7 * 24 * 60 * 60
 
     /// The segments the plugin found in the episode `itemID`, or none.
     static func segments(of itemID: String, client: JellyfinClient) async -> [PlaybackSegment] {
@@ -98,10 +100,11 @@ enum IntroSkipper {
             case valid = "Valid"
         }
 
-        /// The segment of `kind` it describes, or nil when the plugin marks it not valid or it has no length.
+        /// The segment of `kind` it describes, or nil when the plugin marks it not valid, it has no length, or it
+        /// runs past ``IntroSkipper/latest``.
         func segment(_ kind: PlaybackSegment.Kind) -> PlaybackSegment? {
             guard valid != false, let start = start ?? introStart, let end = end ?? introEnd,
-                start.isFinite, end.isFinite, start >= 0, end > start
+                start.isFinite, end.isFinite, start >= 0, end > start, end <= IntroSkipper.latest
             else { return nil }
             return PlaybackSegment(kind: kind, start: .seconds(start), end: .seconds(end))
         }

@@ -103,10 +103,6 @@ public struct PlaybackNegotiator: Sendable {
         )
     }
 
-    /// The reasons Jellyfin gives that its HLS stream fixes by copying the video and audio into a new container: the
-    /// container itself, and HEVC's codec tag, which the server rewrites as `hvc1` as it copies.
-    static let repackagingReasons: Set<String> = ["ContainerNotSupported", "VideoCodecTagNotSupported"]
-
     /// Whether the server's HLS stream copies the original video and audio rather than converting them.
     ///
     /// Jellyfin sends repackaging and conversion through the same HLS address and calls both a transcode, so this
@@ -121,40 +117,25 @@ public struct PlaybackNegotiator: Sendable {
     static func copiesVideoAndAudio(_ transcodingURL: String, from source: MediaSourceInfo, audioStreamIndex: Int?)
         -> Bool
     {
-        let query = URLComponents(string: transcodingURL)?.queryItems ?? []
-        let reasons = list("TranscodeReasons", in: query)
-        let subtitleIsAdded = value("SubtitleMethod", in: query).map {
-            $0.caseInsensitiveCompare("Encode") != .orderedSame
-        }
+        let query = TranscodingQuery(transcodingURL)
+        let reasons = query.reasons
+        let repackaging = TranscodingQuery.repackagingReasons
+        let subtitleAdded = query.addsSubtitles == true
         let fixedByRepackaging = { (reason: String) in
-            repackagingReasons.contains(reason) || (reason == "SubtitleCodecNotSupported" && subtitleIsAdded == true)
+            repackaging.contains(reason) || (reason == "SubtitleCodecNotSupported" && subtitleAdded)
         }
         guard !reasons.isEmpty, reasons.allSatisfy(fixedByRepackaging) else { return false }
         let streams = source.mediaStreams ?? []
-        if let codec = streams.first(where: { $0.type == .video })?.codec,
-            !list("VideoCodec", in: query).contains(where: { $0.caseInsensitiveCompare(codec) == .orderedSame })
-        {
+        if let codec = streams.first(where: { $0.type == .video })?.codec, !query.lists(codec, in: "VideoCodec") {
             return false
         }
-        let audioIndex =
-            audioStreamIndex ?? value("AudioStreamIndex", in: query).flatMap { Int($0) }
-            ?? source.defaultAudioStreamIndex
+        let audioIndex = audioStreamIndex ?? query.integer("AudioStreamIndex") ?? source.defaultAudioStreamIndex
         if let codec = streams.first(where: { $0.type == .audio && $0.index == audioIndex })?.codec,
-            !list("AudioCodec", in: query).contains(where: { $0.caseInsensitiveCompare(codec) == .orderedSame })
+            !query.lists(codec, in: "AudioCodec")
         {
             return false
         }
         return true
-    }
-
-    /// The value of the query item `name`, matched in any case, as the server writes names either way.
-    private static func value(_ name: String, in query: [URLQueryItem]) -> String? {
-        query.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
-    }
-
-    /// The comma-separated values of the query item `name`.
-    private static func list(_ name: String, in query: [URLQueryItem]) -> [String] {
-        (value(name, in: query) ?? "").split(separator: ",").map(String.init)
     }
 
     /// What the server said about streaming a version: its container and codecs, and the reasons it gave for not
@@ -165,8 +146,7 @@ public struct PlaybackNegotiator: Sendable {
         let audio =
             streams.first { $0.type == .audio && $0.index == source.defaultAudioStreamIndex }
             ?? streams.first { $0.type == .audio }
-        let query = source.transcodingURL.flatMap(URLComponents.init(string:))?.queryItems ?? []
-        let reasons = value("TranscodeReasons", in: query)
+        let reasons = source.transcodingURL.flatMap { TranscodingQuery($0).value("TranscodeReasons") }
         let parts = [
             "container \(source.container ?? "?")",
             "video \(video?.codec ?? "?") \(video?.codecTag ?? "-") \(video?.videoRangeType?.rawValue ?? "-")",

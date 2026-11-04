@@ -11,6 +11,7 @@ public struct PosterCard<Menu: View>: View {
     private let card: MediaCard
     private let artwork: Image?
     private let zoomNamespace: Namespace.ID?
+    private let zoomID: String?
     private let menu: Menu
 
     /// Creates a poster card with a context menu.
@@ -18,25 +19,29 @@ public struct PosterCard<Menu: View>: View {
     /// - Parameters:
     ///   - card: The item to show.
     ///   - artwork: The poster, or nil while it loads.
-    ///   - zoomNamespace: The namespace for a zoom transition into the item's detail screen, keyed by the
-    ///     card's ``MediaCard/id``. Pass nil for no zoom.
+    ///   - zoomNamespace: The namespace for a zoom transition into the item's detail screen, keyed by `zoomID`. Pass
+    ///     nil for no zoom.
+    ///   - zoomID: What the zoom is keyed by: the card's ``MediaCard/id`` when nil. A screen that can show the same
+    ///     item in more than one row gives each card its own, so the screen zooms out of the card that was tapped.
     ///   - menu: The context menu's items, such as play, mark played and favourite.
     public init(
         card: MediaCard,
         artwork: Image?,
         zoomNamespace: Namespace.ID? = nil,
+        zoomID: String? = nil,
         @ViewBuilder menu: () -> Menu
     ) {
         self.card = card
         self.artwork = artwork
         self.zoomNamespace = zoomNamespace
+        self.zoomID = zoomID
         self.menu = menu()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xSmall) {
             CardArtwork(card: card, image: artwork, aspectRatio: 2 / 3)
-                .cardZoomSource(id: card.id, in: zoomNamespace)
+                .cardZoomSource(id: zoomID ?? card.id, in: zoomNamespace)
                 .cardHoverEffect()
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.posterTitle)

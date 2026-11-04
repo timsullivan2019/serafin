@@ -7,6 +7,9 @@ import SwiftUI
 public enum MediaRowStyle: Sendable {
     /// Posters: a little over three across on iPhone, six on an 11-inch iPad in portrait.
     case posters
+    /// Posters at the size library grids use on iPad, for the Library tab: the same as ``posters`` on iPhone, four and
+    /// a bit across an 11-inch iPad in portrait.
+    case largePosters
     /// Landscape thumbnails: one large card with the next peeking in on iPhone, three on an 11-inch iPad in portrait.
     /// On a phone every style shows the same slice of the next card.
     case landscape
@@ -14,10 +17,11 @@ public enum MediaRowStyle: Sendable {
     case people
 }
 
-/// A titled row of cards that scrolls sideways and settles on card edges, for the home screen and detail pages.
+/// A titled row of cards that scrolls sideways and settles on card edges, for the home screen, the Library tab and
+/// detail pages.
 ///
 /// When `seeAll` is given, the title becomes a button with a chevron, the pattern Apple's TV and Music apps use
-/// for opening the whole collection.
+/// for opening the whole collection. See ``RowHeader``.
 public struct MediaRow<Item: Identifiable, Card: View>: View {
     private let title: String
     private let style: MediaRowStyle
@@ -51,7 +55,7 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.small) {
-            header
+            RowHeader(title, seeAll: seeAll)
                 .padding(.horizontal, Spacing.medium)
             ScrollView(.horizontal) {
                 // An eager stack: rows hold tens of cards, and a lazy stack would size the row from the first few
@@ -70,7 +74,31 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
         }
     }
 
-    @ViewBuilder private var header: some View {
+    private func cardWidth(in length: CGFloat) -> CGFloat {
+        RowSizing(style: style, isRegular: sizeClass == .regular, isLarge: dynamicTypeSize.isAccessibilitySize)
+            .cardWidth(in: length)
+    }
+}
+
+/// A row's title, in `title2` bold.
+///
+/// With `seeAll`, the title is a button with a chevron that opens everything in the row, the pattern Apple's TV and
+/// Music apps use, and VoiceOver reads it as one button named for what it does, such as "Movies, see all".
+public struct RowHeader: View {
+    private let title: String
+    private let seeAll: (() -> Void)?
+
+    /// Creates a row's title.
+    ///
+    /// - Parameters:
+    ///   - title: The title, already localized.
+    ///   - seeAll: Called when the title is tapped. Pass nil for a plain title.
+    public init(_ title: String, seeAll: (() -> Void)? = nil) {
+        self.title = title
+        self.seeAll = seeAll
+    }
+
+    public var body: some View {
         if let seeAll {
             Button(action: seeAll) {
                 HStack(spacing: Spacing.xxSmall) {
@@ -86,21 +114,18 @@ public struct MediaRow<Item: Identifiable, Card: View>: View {
             }
             .buttonStyle(.plain)
             .modifier(PointerHighlight())
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityHint(
-                String(localized: "Shows everything in this row", bundle: .module, comment: "Hint on a row title.")
+            .accessibilityLabel(
+                String(
+                    localized: "\(title), see all", bundle: .module,
+                    comment: "Spoken name of a row's title, which opens the whole row, such as Movies, see all.")
             )
+            .accessibilityAddTraits(.isHeader)
         } else {
             Text(title)
                 .typography(.title)
                 .foregroundStyle(.textPrimary)
                 .accessibilityAddTraits(.isHeader)
         }
-    }
-
-    private func cardWidth(in length: CGFloat) -> CGFloat {
-        RowSizing(style: style, isRegular: sizeClass == .regular, isLarge: dynamicTypeSize.isAccessibilitySize)
-            .cardWidth(in: length)
     }
 }
 
@@ -119,10 +144,12 @@ struct RowSizing: Equatable {
     init(style: MediaRowStyle, isRegular: Bool, isLarge: Bool) {
         (comfortableWidth, peek) =
             switch (style, isRegular, isLarge) {
-            case (.posters, false, false): (92, 0.3)
-            case (.posters, false, true): (200, 0.6)
+            case (.posters, false, false), (.largePosters, false, false): (92, 0.3)
+            case (.posters, false, true), (.largePosters, false, true): (200, 0.6)
             case (.posters, true, false): (116, 0.3)
-            case (.posters, true, true): (220, 0.3)
+            // The artwork rules' poster for library grids on iPad, docs/PLAN-2.md 0.1.
+            case (.largePosters, true, false): (160, 0.3)
+            case (.posters, true, true), (.largePosters, true, true): (220, 0.3)
             // Every row on a phone shows the same slice of its next card, so no row looks unlike the others.
             case (.landscape, false, false): (240, 0.3)
             case (.landscape, false, true): (240, 0.05)

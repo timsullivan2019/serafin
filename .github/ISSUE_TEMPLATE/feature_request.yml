@@ -1,0 +1,47 @@
+name: Feature request
+description: Something you wish Serafin did.
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check the roadmap (docs/PLAN-3.md and the Projects board) and search existing requests; add a 👍 to one that already exists instead of opening a duplicate. Reactions are how we rank requests.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation, not the solution. "I watch on the train and want to pick subtitles before I lose signal" tells us more than "add a subtitle option to downloads".
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How would you expect it to work in Serafin?
+      description: Optional. If another app does this well, name it and say what you like about its approach.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Playback
+        - Downloads and offline
+        - Home, Library or Search
+        - Live TV
+        - Music
+        - Requests (Jellyseerr / Seerr)
+        - Apple TV or Mac
+        - Siri, Shortcuts, widgets
+        - Design or accessibility
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: server-side
+    attributes:
+      label: Does your Jellyfin server already support this?
+      description: Some features need a server plugin or a newer server version.
+      options:
+        - Yes, it works in the Jellyfin web app
+        - It needs a plugin I have installed
+        - Not sure

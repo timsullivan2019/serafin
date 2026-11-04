@@ -11,6 +11,10 @@ import SwiftUI
 /// and Play starting the season's first episode not yet watched. Picking the season the page opened on puts the hero
 /// back as it opened, so a season looks the same every time it's picked. The episodes show as soon as they load; the
 /// hero waits until the season's episodes and picture are both ready, then changes in one movement.
+///
+/// A downloaded movie or episode shows what was saved with its download while the server can't be reached: straight
+/// away when a download's card opened the page, otherwise once the server fails or hasn't answered for a moment. The
+/// server's details replace it as soon as they arrive.
 @Observable @MainActor final class ItemDetailModel {
     enum Phase {
         case loading
@@ -36,9 +40,15 @@ import SwiftUI
     }
 
     let id: String
+    /// The item as the card that opened the screen showed it, for the navigation bar until the details load.
+    let preview: MediaItem?
     private(set) var phase = Phase.loading
+    /// Whether the page shows what was saved with the item's download, since the server hasn't answered.
+    private(set) var showsSavedDetails = false
     /// Whether the user can ask the server to refresh the item's metadata, which administrators can.
     private(set) var canRefreshMetadata = false
+    /// How long the page waits for the server before showing what was saved with the item's download.
+    @ObservationIgnored var savedDetailsWait = Duration.seconds(2)
     /// The tint taken from the item's own backdrop, or nil until it loads. An item whose backdrop was measured
     /// moments ago, as in Home's hero, starts with its tint.
     private var ownTint: Color?
@@ -67,8 +77,10 @@ import SwiftUI
     /// - Parameters:
     ///   - id: The movie, show or episode.
     ///   - seasonID: For a show, the season to list first, as from a link to the season.
-    init(id: String, seasonID: String? = nil) {
+    ///   - preview: The item as the card that opened the screen showed it.
+    init(id: String, seasonID: String? = nil, preview: MediaItem? = nil) {
         self.id = id
+        self.preview = preview
         requestedSeasonID = seasonID
         ownTint = ArtworkMemory.tint(for: id)
     }
@@ -78,6 +90,7 @@ import SwiftUI
     /// watched, as what was tapped said it would.
     init(showing item: MediaItem, playable: MediaItem?) {
         id = item.id
+        preview = item
         let episode = item.card.kind == .series ? playable.flatMap { $0.card.kind == .episode ? $0 : nil } : nil
         requestedSeasonID = episode?.seasonID
         pinnedEpisodeID = episode?.id
@@ -88,6 +101,11 @@ import SwiftUI
     /// The details once they have loaded.
     var details: ItemDetails? {
         if case .loaded(let details) = phase { details } else { nil }
+    }
+
+    /// The season whose episodes the page lists, once the details have loaded.
+    var selectedSeason: ShowSeason? {
+        details?.seasons.first { $0.id == selectedSeasonID }
     }
 
     /// The screen's accent: the followed season's picture's, otherwise the item's backdrop's, or nil until that loads.
@@ -111,13 +129,24 @@ import SwiftUI
         return Self.badges(of: playable)
     }
 
-    /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the details
-    /// already showing.
+    /// Loads the details, and whether the user may refresh their metadata. A failed reload keeps the server's details
+    /// already showing. For a downloaded item, what was saved with the download shows while the server doesn't
+    /// answer, and when it fails, read again at once on a reload, as after marking it watched with no server.
     ///
     /// A show's page keeps the season it lists across reloads, as after marking an episode watched, and loads that
     /// season's episodes again with the details, so the page changes all at once.
     func load(from media: any MediaSource) async {
         async let canRefresh = media.canRefreshMetadata()
+        if preview?.isSaved == true || showsSavedDetails {
+            await showSavedDetailsWhileLoading(from: media)
+        }
+        // A server that's slow to answer, as one out of reach, doesn't keep a download's page waiting.
+        let fallback = Task { [weak self, savedDetailsWait] in
+            try? await Task.sleep(for: savedDetailsWait)
+            guard !Task.isCancelled else { return }
+            await self?.showSavedDetailsWhileLoading(from: media)
+        }
+        defer { fallback.cancel() }
         do {
             var details = try await media.details(of: id)
             if details.item.source == nil {
@@ -160,12 +189,41 @@ import SwiftUI
                 self.heroSeasonID = nil
                 seasonArtwork = nil
             }
+            showsSavedDetails = false
             phase = .loaded(details)
         } catch is CancellationError {
         } catch {
-            if case .loaded = phase {} else { phase = .failed(UserMessage(error)) }
+            fallback.cancel()
+            await failed(error, from: media)
         }
         canRefreshMetadata = await canRefresh
+    }
+
+    /// Shows what was saved with the item's download, read afresh, while nothing else shows yet or while it's what
+    /// shows, or does nothing for an item that isn't downloaded.
+    private func showSavedDetailsWhileLoading(from media: any MediaSource) async {
+        guard isLoadingOrSaved, let saved = await media.savedDetails(of: id), isLoadingOrSaved else { return }
+        showsSavedDetails = true
+        phase = .loaded(saved)
+    }
+
+    /// Whether nothing shows yet, or what was saved with the item's download shows.
+    private var isLoadingOrSaved: Bool {
+        if case .loading = phase { return true }
+        return showsSavedDetails
+    }
+
+    /// The server's details didn't load. The server's details already showing stay; otherwise what was saved with the
+    /// item's download shows, read again for where playback last stopped, or the failure when it isn't downloaded.
+    private func failed(_ error: any Error, from media: any MediaSource) async {
+        if case .loaded = phase, !showsSavedDetails { return }
+        if let saved = await media.savedDetails(of: id) {
+            showsSavedDetails = true
+            phase = .loaded(saved)
+        } else {
+            showsSavedDetails = false
+            phase = .failed(UserMessage(error))
+        }
     }
 
     /// Takes the tint from the loaded backdrop, fading to it from the neutral tint the screen starts with when it
@@ -279,10 +337,13 @@ import SwiftUI
     }
 
     /// Starts downloading every season's hero picture at the hero's size, so a season picked later shows its picture
-    /// without waiting on the network. The pictures are kept on disk, not decoded, until a season is picked.
+    /// without waiting on the network. The pictures are kept on disk, not decoded, until a season is picked. None
+    /// download over a connection in Low Data Mode.
     func prefetchSeasonArtwork(artwork: Artwork?, hero: HeroGeometry) {
         guard let artwork, let seasons = details?.seasons, hero.size.width > 0, hero.size.height > 0 else { return }
-        let requests = seasons.compactMap { Self.request(for: $0, artwork: artwork, hero: hero) }
+        let requests = seasons.compactMap {
+            Self.request(for: $0, artwork: artwork, hero: hero, allowsConstrainedNetwork: false)
+        }
         guard !requests.isEmpty else { return }
         if prefetcher == nil {
             prefetcher = ImagePrefetcher(pipeline: artwork.pipeline, destination: .diskCache)
@@ -322,13 +383,18 @@ import SwiftUI
     }
 
     /// The request for the picture `season` shows in the hero, or nil when it keeps the show's.
-    private static func request(for season: ShowSeason, artwork: Artwork, hero: HeroGeometry) -> ImageRequest? {
+    ///
+    /// - Parameter allowsConstrainedNetwork: Whether it may download over a connection in Low Data Mode.
+    private static func request(
+        for season: ShowSeason, artwork: Artwork, hero: HeroGeometry, allowsConstrainedNetwork: Bool = true
+    ) -> ImageRequest? {
         guard let role = season.heroRole(isCompact: hero.isCompact), let source = season.item.source else {
             return nil
         }
         let width = pictureWidth(role, of: season.id, hero: hero)
         guard width > 0 else { return nil }
-        return artwork.request(role, of: source, width: width, scale: hero.scale)
+        return artwork.request(
+            role, of: source, width: width, scale: hero.scale, allowsConstrainedNetwork: allowsConstrainedNetwork)
     }
 
     /// Loads the picture `season` shows in the hero and measures its tint, or nil when it has none to show, in which

@@ -73,6 +73,8 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         ("ContainerNotSupported", "h264", "aac", true),
         // HEVC without Apple's codec tag: the server rewrites the tag as it copies.
         ("ContainerNotSupported,VideoCodecTagNotSupported", "hevc,h264", "aac", true),
+        // The same, as Jellyfin writes several reasons, with a space after each comma.
+        ("ContainerNotSupported,%20VideoCodecTagNotSupported", "hevc,h264", "aac", true),
         // Dolby Vision the player can't show: the server has to change the video.
         ("ContainerNotSupported,VideoRangeTypeNotSupported", "hevc,h264", "aac", false),
         // Audio the stream doesn't carry: the server converts it.
@@ -287,6 +289,76 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func aSecondStopWaitsForTheFirstToBeAnswered() async throws {
+        let host = "overlapping-stops.example.com"
+        stubReports(on: host)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped", .json(204, "")))
+        let reporter = ProgressReporter(client: try stubClient(on: host), plan: try await plan(on: host))
+        await reporter.start(at: .zero, isPaused: false)
+
+        // The player stops, and a new video's load stops the same playback again before the server has answered.
+        let first = Task { await reporter.stop(at: .seconds(10)) }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Sessions/Playing/Stopped")
+        let second = Task {
+            await reporter.stop(at: .seconds(10))
+            return ContinuousClock.now
+        }
+        // Long enough for a second stop that didn't wait to have returned.
+        try await Task.sleep(for: .milliseconds(100))
+        let released = ContinuousClock.now
+        StubURLProtocol.release("\(host) stopped")
+
+        #expect(await second.value >= released)
+        await first.value
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aStopWaitsForAProgressReportOnItsWay() async throws {
+        let host = "late-progress.example.com"
+        stubReports(on: host)
+        StubURLProtocol.stub(
+            "\(host):443", path: "/Sessions/Playing/Progress", .held("\(host) progress", .json(204, "")))
+        let reporter = ProgressReporter(client: try stubClient(on: host), plan: try await plan(on: host))
+        await reporter.start(at: .zero, isPaused: false)
+
+        let progress = Task { await reporter.progress(at: .seconds(10), isPaused: false) }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Sessions/Playing/Progress")
+        let stop = Task { await reporter.stop(at: .seconds(11)) }
+        // Long enough for a stop that didn't wait to have reached the server.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").isEmpty)
+
+        StubURLProtocol.release("\(host) progress")
+        await progress.value
+        await stop.value
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aStopDuringASwitchToANewPlanEndsTheReports() async throws {
+        let host = "stopped-switch.example.com"
+        stubReports(on: host)
+        StubURLProtocol.stub("\(host):443", path: "/Sessions/Playing/Stopped", .held("\(host) stopped", .json(204, "")))
+        let first = try await plan(on: host)
+        let reporter = ProgressReporter(client: try stubClient(on: host), plan: first)
+        await reporter.start(at: .zero, isPaused: false)
+
+        let switching = Task { await reporter.replace(with: first.with(audio: 2), at: .seconds(30), isPaused: false) }
+        try await StubURLProtocol.waitForRequest(to: "\(host):443", path: "/Sessions/Playing/Stopped")
+        let stop = Task { await reporter.stop(at: .seconds(30)) }
+        while await reporter.stopCount == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        StubURLProtocol.release("\(host) stopped")
+        await switching.value
+        await stop.value
+
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing").count == 1)
+        #expect(StubURLProtocol.requests(to: "\(host):443", path: "/Sessions/Playing/Stopped").count == 1)
+    }
+
     @Test func aFailedReportDoesNotThrow() async throws {
         let host = "failing-reports.example.com"
         StubURLProtocol.stub("\(host):443", .failure(.notConnectedToInternet))
@@ -331,5 +403,30 @@ func body(of received: StubURLProtocol.Received) throws -> [String: Any] {
         #expect(next?.id == "e3")
         let request = try #require(StubURLProtocol.requests(to: "\(host):443", path: "/Shows/show/Episodes").first)
         #expect(request.query("adjacentTo") == "e2")
+    }
+
+    @Test func withNoServerTheEpisodeDownloadedAfterIsNext() async throws {
+        let host = "next-episode-offline.example.com"
+        StubURLProtocol.stub("\(host):443", path: "/Shows/show/Episodes", .failure(.notConnectedToInternet))
+        let finder = NextEpisode(client: try stubClient(on: host), userID: "user-1")
+        #expect(await finder.after(episode("e2"), orDownloaded: episode("e4"))?.id == "e4")
+        #expect(await finder.after(episode("e2"), orDownloaded: nil) == nil)
+    }
+
+    @Test func theServersAnswerStandsOverTheEpisodeDownloadedAfter() async throws {
+        let host = "next-episode-online.example.com"
+        StubURLProtocol.stub(
+            "\(host):443",
+            path: "/Shows/show/Episodes",
+            .json(
+                200,
+                #"{"Items":[{"Id":"e1","Type":"Episode"},{"Id":"e2","Type":"Episode"},{"Id":"e3","Type":"Episode"}],"TotalRecordCount":3}"#
+            ),
+            .json(200, #"{"Items":[{"Id":"e1","Type":"Episode"},{"Id":"e2","Type":"Episode"}],"TotalRecordCount":2}"#)
+        )
+        let finder = NextEpisode(client: try stubClient(on: host), userID: "user-1")
+        #expect(await finder.after(episode("e2"), orDownloaded: episode("e4"))?.id == "e3")
+        // The server says it's the last episode.
+        #expect(await finder.after(episode("e2"), orDownloaded: episode("e4")) == nil)
     }
 }

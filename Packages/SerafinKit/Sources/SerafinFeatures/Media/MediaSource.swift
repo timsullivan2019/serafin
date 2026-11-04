@@ -74,7 +74,7 @@ enum GridScope: Hashable, Sendable {
     case collections
     /// The movies and shows in one collection.
     case collection(id: String, title: String)
-    /// Every movie and show, filtered or sorted one way, from the Library tab's Browse list.
+    /// Every movie and show filtered one way, such as the favourites, from a row on the Library tab.
     case shortcut(LibraryShortcut)
     /// The movies and shows a person is in or worked on, from search or a cast row.
     case person(CastMember)
@@ -124,39 +124,25 @@ enum GridScope: Hashable, Sendable {
     }
 }
 
-/// A way into every movie and show at once, from the Library tab's Browse list.
+/// A way into every movie and show at once, from a row on the Library tab. Recently added titles are a sort in
+/// every grid instead.
 enum LibraryShortcut: String, CaseIterable, Hashable, Sendable {
     /// Favourites, by name.
     case favourites
-    /// Newest additions first.
-    case recentlyAdded
     /// Everything not yet watched, by name.
     case unwatched
 
-    /// The grid's title and the Browse row's name.
+    /// The grid's title and the Library tab row's.
     var title: String {
         switch self {
         case .favourites:
             String(
                 localized: "Favorites", bundle: .module,
-                comment: "Favorites: the library filter chip, and the Library tab's Browse row and grid.")
-        case .recentlyAdded:
-            String(
-                localized: "Recently Added", bundle: .module,
-                comment: "Library Browse row and grid of the newest additions.")
+                comment: "Favorites: the library filter chip, and the Library tab's row and grid.")
         case .unwatched:
             String(
                 localized: "Unwatched", bundle: .module,
-                comment: "Unwatched: the library filter chip, and the Library tab's Browse row and grid.")
-        }
-    }
-
-    /// The Browse row's symbol.
-    var systemImage: String {
-        switch self {
-        case .favourites: "heart.fill"
-        case .recentlyAdded: "clock.fill"
-        case .unwatched: "circle.dashed"
+                comment: "Unwatched: the library filter chip, and the Library tab's row and grid.")
         }
     }
 
@@ -164,7 +150,6 @@ enum LibraryShortcut: String, CaseIterable, Hashable, Sendable {
     var options: GridOptions {
         switch self {
         case .favourites: GridOptions(favouritesOnly: true)
-        case .recentlyAdded: GridOptions(sort: .dateAdded, ascending: false)
         case .unwatched: GridOptions(unplayedOnly: true)
         }
     }
@@ -278,8 +263,6 @@ protocol MediaSource: Sendable {
     func item(_ id: String) async throws -> MediaItem
     /// The user's movie and TV libraries.
     func libraries() async throws -> [MediaLibrary]
-    /// A library's own picture, when the server has one, for its tile on the Library tab.
-    func cover(of library: MediaLibrary) async -> MediaItem?
     /// One page of a grid.
     func page(of scope: GridScope, options: GridOptions, start: Int, limit: Int) async throws -> MediaPage
     /// The genres and years in a grid, for its filter menus. Only a library's grid has them.
@@ -289,10 +272,11 @@ protocol MediaSource: Sendable {
     func count(in scope: GridScope, options: GridOptions, before name: String) async throws -> Int
     /// The genres of the user's movies and shows, in alphabetical order.
     func genres() async throws -> [Genre]
-    /// Whether the server has any collections.
-    func hasCollections() async throws -> Bool
     /// Everything a detail screen shows about an item.
     func details(of id: String) async throws -> ItemDetails
+    /// What a downloaded movie's or episode's page shows with no server, from what was saved with the download, or nil
+    /// when it isn't downloaded.
+    func savedDetails(of id: String) async -> ItemDetails?
     /// The episodes of one of a show's seasons, in order.
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem]
     /// Movies, shows, episodes, people and collections matching `term`.
@@ -303,7 +287,8 @@ protocol MediaSource: Sendable {
     func canRefreshMetadata() async -> Bool
     /// Asks the server to look up an item's metadata again.
     func refreshMetadata(of item: MediaItem) async throws
-    /// Marks an item played or not.
+    /// Marks an item played or not: on the server, or for an item shown from what was saved with its download, on the
+    /// device until the server answers.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws
     /// Adds an item to the favourites or takes it out.
     func setFavourite(_ isFavourite: Bool, for item: MediaItem) async throws
@@ -333,8 +318,18 @@ extension MediaLibrary {
     }
 }
 
+extension MediaLibrary {
+    /// Libraries in the order Home and the Library tab list their rows: movies first, then shows, then libraries of
+    /// both, each kind in the server's order.
+    static func ordered(_ libraries: [MediaLibrary]) -> [MediaLibrary] {
+        libraries.enumerated()
+            .sorted { ($0.element.kind.homeOrder, $0.offset) < ($1.element.kind.homeOrder, $1.offset) }
+            .map(\.element)
+    }
+}
+
 extension MediaLibrary.Kind {
-    /// Where a library's Latest row goes on Home: movies first, then shows, then libraries of both.
+    /// Where a library's rows go on Home and the Library tab: movies first, then shows, then libraries of both.
     var homeOrder: Int {
         switch self {
         case .movies: 0

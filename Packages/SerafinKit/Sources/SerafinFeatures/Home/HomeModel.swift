@@ -41,12 +41,25 @@ import SerafinDesign
     /// Whether the rows are being asked for.
     var isLoading: Bool { loads > 0 }
 
+    /// Why the last load failed, whether rows are showing or not, or nil when it got through.
+    var failure: UserMessage? {
+        if let notice { return notice.message }
+        if case .failed(let message) = phase { return message }
+        return nil
+    }
+
     /// Whether the last load failed, leaving a failure or out-of-date rows on screen, so it's worth asking again when
     /// the device joins a network or Serafin comes back to the foreground.
     var isWorthRetrying: Bool {
-        if notice != nil { return true }
-        if case .failed = phase { return true }
-        return false
+        failure != nil
+    }
+
+    /// Why the server's rows can't show, for showing the downloads instead: the device has no connection, which a load
+    /// still on its way may not have found yet, or else why the last load failed. Nil while the server answers.
+    ///
+    /// - Parameter isOnline: Whether the device has a connection.
+    func offlineReason(isOnline: Bool) -> UserMessage? {
+        isOnline ? failure : UserMessage(SerafinError.offline)
     }
 
     /// Loads the rows. The first load shows the rows saved on the device straight away, if there are any, while it

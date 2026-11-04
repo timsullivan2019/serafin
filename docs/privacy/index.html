@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Privacy Policy · Serafin</title>
+  <meta name="description" content="Serafin collects nothing about you. What the app keeps on your device, what it sends to your own Jellyfin server, and how to remove it.">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <a class="name" href="/">Serafin</a>
+    <nav>
+      <a href="/support/">Support</a>
+      <a href="/privacy/" aria-current="page">Privacy</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated October 12, 2026</p>
+    <p class="lead">Serafin collects nothing about you. It has no servers or accounts of its own, and no analytics, advertising or crash-reporting code. Nothing you do in the app reaches its developer.</p>
+
+    <h2>What Serafin sends to your server</h2>
+    <p>Serafin talks only to the Jellyfin servers you add. Like any Jellyfin app, it sends your server:</p>
+    <ul>
+      <li>Your username and password when you sign in with them, once, to get a sign-in token. Serafin never stores your password.</li>
+      <li>Requests for your library, and what you change in it, such as marking something watched or a favorite.</li>
+      <li>What you play and how far you get, so your server can keep your place and your watch history.</li>
+      <li>Changes to your audio and subtitle languages, which your server keeps in your account.</li>
+      <li>The app's name and version, an ID made for this install, and your device's model, such as "iPhone". Serafin doesn't send the name you've given your device.</li>
+    </ul>
+    <p>Your server's administrator can see this activity, as with any Jellyfin app. Connections use HTTPS. Serafin allows unencrypted connections only to addresses on your own network or your Tailscale network, and only after you've accepted a warning.</p>
+
+    <h2>What stays on your device</h2>
+    <ul>
+      <li><strong>Sign-in tokens, the install's ID and any certificates you've trusted</strong> are kept in the iOS Keychain on this device only. They aren't synced to iCloud or included in backups.</li>
+      <li><strong>Your servers</strong>: their addresses and names, and who signs in to each.</li>
+      <li><strong>Artwork and a copy of Home</strong>, so screens open quickly and Home still shows when your server can't be reached.</li>
+      <li><strong>Your last ten searches</strong> for each account, so the Search tab can offer them again.</li>
+      <li><strong>Your settings</strong>, such as the accent color, subtitle size and streaming quality.</li>
+    </ul>
+
+    <h2>What Serafin shares with iOS</h2>
+    <p>So you can find your movies and shows from Spotlight, Siri and Shortcuts, Serafin hands their titles and posters to iOS on your device, where Apple's privacy policy applies. While Serafin's lock is on, Spotlight holds nothing from your library and Siri can't look in it. What's playing shows on the Lock Screen, and AirPlay sends it to the device you choose.</p>
+    <p>When you add a server, Serafin can look for Jellyfin servers on your local network if you allow it. That search stays on your network. If you turn on Serafin's lock, iOS checks your Face ID, Touch ID or passcode; Serafin never sees them.</p>
+    <p>If you've chosen in iOS Settings to share analytics with app developers, Apple may send the developer crash reports from Serafin. Apple's privacy policy covers those.</p>
+
+    <h2>Removing your information</h2>
+    <ul>
+      <li><strong>Sign Out</strong> deletes that account's sign-in token, asks your server to end the session, and removes the account's searches, its copy of Home and its titles in Spotlight.</li>
+      <li><strong>Remove Server</strong> signs out every account on that server and forgets the server.</li>
+      <li><strong>Clear Cache</strong>, in Settings, removes saved artwork and copies of Home.</li>
+      <li><strong>Deleting the app</strong> removes everything except the iOS Keychain items, which iOS keeps. Sign out before deleting the app to end your sessions, or remove this device in your server's dashboard.</li>
+    </ul>
+    <p>Information on your server, such as your watch history, is kept by your server. Its administrator can tell you what it holds and remove it.</p>
+
+    <h2>Children</h2>
+    <p>Serafin collects nothing from anyone, children included.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the new version will be posted on this page with its date.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about privacy go to <a href="mailto:support@getserafin.app">support@getserafin.app</a>.</p>
+  </main>
+  <footer>
+    <p>Serafin is an independent app for Jellyfin. It isn't made or endorsed by the Jellyfin project.</p>
+  </footer>
+</body>
+</html>

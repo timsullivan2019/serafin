@@ -28,7 +28,7 @@ public enum PlaybackState: Equatable, Sendable {
 }
 
 /// Plays one item at a time with AVPlayer, the way the server negotiated it, and keeps the server told where
-/// playback is.
+/// playback is. A downloaded copy plays from its file instead, and keeps its position on the device.
 ///
 /// Screens read ``state``, ``elapsed``, ``duration``, ``buffered`` and ``rate``, and call the control methods.
 /// AirPlay and Now Playing hang off ``player``. On iOS the engine also keeps the view showing the video, so Picture in
@@ -50,7 +50,8 @@ public enum PlaybackState: Equatable, Sendable {
     public private(set) var plan: PlaybackPlan?
     /// Why playback failed, when ``state`` is ``PlaybackState/failed``.
     public private(set) var failure: (any Error)?
-    /// The episode after the one playing, for autoplay. Nil for movies and last episodes.
+    /// The episode after the one playing, for autoplay. Nil for movies and last episodes. When the server can't say,
+    /// as with no connection, a downloaded episode's is the one downloaded after it, if any.
     public private(set) var nextItem: BaseItemDto?
     /// Whether the next episode plays by itself after a countdown, as the account's Play Next Episode Automatically
     /// setting says. On until the account says otherwise.
@@ -58,6 +59,12 @@ public enum PlaybackState: Equatable, Sendable {
     /// The stretches the server marked in the item, such as its intro, in order and without overlaps. Empty when it
     /// marked none.
     public private(set) var segments: [PlaybackSegment] = []
+    /// The thumbnails the scrubber shows of the version playing: the ones saved with a downloaded copy, or else the
+    /// server's. Nil until playback has started, and when there are none.
+    public private(set) var trickplay: TrickplayTiles?
+    /// The item's chapters, as the server lists them or as they were saved with a downloaded copy, for the scrubber.
+    /// Empty until playback has started, and when it has none.
+    public private(set) var chapters: [ChapterInfo] = []
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
     /// The subtitles showing, which the player's sheet checks. Settings decide them as each video starts, from the
@@ -95,6 +102,7 @@ public enum PlaybackState: Equatable, Sendable {
     private let negotiator: PlaybackNegotiator
     private let nextEpisode: NextEpisode
     private let segmentRepository: SegmentRepository
+    private let trickplayRepository: TrickplayRepository
     private let streamLoader: StreamLoader
     /// Reads the account's playback preferences, for Settings' subtitle mode and autoplay, or nil to leave subtitles
     /// to the server and play next episodes by themselves.
@@ -118,7 +126,7 @@ public enum PlaybackState: Equatable, Sendable {
     /// nil when the item plays the server's playlists as they are. See ``SubtitlePlaylists``.
     @ObservationIgnored private var retimedItem: AVPlayerItem?
     private var options = PlaybackOptions()
-    private var reporter: ProgressReporter?
+    private var reporter: (any PlaybackReporter)?
     private var timeObserver: Any?
     private var itemObservations: [NSKeyValueObservation] = []
     private var playerObservation: NSKeyValueObservation?
@@ -141,8 +149,8 @@ public enum PlaybackState: Equatable, Sendable {
     /// How many seeks are under way. The player reports its old position until a seek lands, so the elapsed time
     /// holds at the target meanwhile.
     @ObservationIgnored private var seeksInFlight = 0
-    /// Goes up with every load and stop, so a load that finishes after another has started, or after a stop, does
-    /// nothing.
+    /// Goes up with every load and stop, so a load or stop that finishes after a newer one has started does nothing
+    /// more.
     @ObservationIgnored private var generation = 0
     #if canImport(UIKit)
         private var details: NowPlayingDetails?
@@ -174,6 +182,13 @@ public enum PlaybackState: Equatable, Sendable {
         @ObservationIgnored public var pictureInPictureDidClose: (() -> Void)?
         /// Picture in Picture's wait for a player screen to show the video it's handing back.
         @ObservationIgnored private var pendingRestore: PictureInPictureRestore?
+        /// Whether the hand-back under way happens in the app, where the picture is hidden from Picture in Picture so
+        /// its window shrinks away instead of flying in.
+        @ObservationIgnored private var isHandingBackInApp = false
+        /// Until when the video plays on if iOS pauses it as Picture in Picture hands it back inside the app, or nil
+        /// when it wasn't playing. With no picture to fly into, iOS treats the hand-back like closing the window and
+        /// pauses, a few milliseconds in.
+        @ObservationIgnored private var playsOnAfterHandBack: ContinuousClock.Instant?
     #endif
 
     /// Creates an engine for the signed-in account.
@@ -194,6 +209,7 @@ public enum PlaybackState: Equatable, Sendable {
         self.negotiator = PlaybackNegotiator(client: client, userID: userID)
         self.nextEpisode = NextEpisode(client: client, userID: userID)
         self.segmentRepository = SegmentRepository(client: client)
+        self.trickplayRepository = TrickplayRepository(client: client, userID: userID)
         self.streamLoader = StreamLoader(pinning: pinning)
         self.playbackPreferences = playbackPreferences
         diagnosticsSession = URLSession(configuration: .ephemeral, delegate: pinning, delegateQueue: nil)
@@ -223,7 +239,8 @@ public enum PlaybackState: Equatable, Sendable {
 
     // MARK: - Loading
 
-    /// Negotiates `item` with the server and starts playing it at `options.startPosition`.
+    /// Negotiates `item` with the server and starts playing it at `options.startPosition`, or plays its downloaded
+    /// copy with no server.
     ///
     /// Anything already playing stops and is reported first. Everything the engine shows changes before the first
     /// wait, so a caller that starts the load straight away, as with `Task.immediate`, changes the screen in the same
@@ -234,12 +251,24 @@ public enum PlaybackState: Equatable, Sendable {
     /// ``SubtitleRules`` decide, rather than from the server, which would bring back the last subtitles picked for the
     /// video whatever Settings say.
     ///
+    /// A downloaded copy plays as the original file does, with the tracks inside it, and keeps where it stops on the
+    /// device rather than telling the server. Its subtitles follow Settings when the server answers for the account's
+    /// settings within ``settingsWaitForCopies``, so a copy starts promptly with no server, and otherwise follow the
+    /// server's choice when the copy was saved. When the server can't say which episode comes next, the episode
+    /// downloaded after it does.
+    ///
     /// - Parameters:
     ///   - item: The movie or episode.
     ///   - options: What to ask the server for.
+    ///   - copy: The item's downloaded copy, to play instead of streaming, or nil to stream.
     ///   - keepsSubtitleChoice: Whether the subtitles picked in the player for what played before carry on, as for an
     ///     episode playing on from the last. Otherwise Settings' choice applies again.
-    public func load(_ item: BaseItemDto, options: PlaybackOptions, keepsSubtitleChoice: Bool = false) async {
+    public func load(
+        _ item: BaseItemDto,
+        options: PlaybackOptions,
+        from copy: DownloadedCopy? = nil,
+        keepsSubtitleChoice: Bool = false
+    ) async {
         let asked = ContinuousClock.now
         generation += 1
         let load = generation
@@ -265,6 +294,8 @@ public enum PlaybackState: Equatable, Sendable {
         }
         nextItem = nil
         segments = []
+        trickplay = nil
+        chapters = []
         failure = nil
         elapsed = options.startPosition
         duration = item.runTimeTicks.map(Ticks.duration) ?? .zero
@@ -279,8 +310,18 @@ public enum PlaybackState: Equatable, Sendable {
             // Asked for alongside the plan, so an intro at the very start can be skipped from its first seconds, but
             // waited for only once playback has started, so a slow answer never holds the picture up.
             async let marked = segmentRepository.segments(of: itemID, isEpisode: item.type == .episode)
-            async let preferences = Self.read(playbackPreferences)
-            var plan = try await negotiator.plan(for: itemID, options: options)
+            // Likewise the thumbnails and chapters the scrubber shows, unless a copy has both saved.
+            async let details = Self.details(
+                of: item, asking: copy?.hasScrubbingDetails == true ? nil : trickplayRepository)
+            // A copy plays with no server, so it waits only a moment for the account's settings.
+            let settingsWait = copy == nil ? nil : Self.settingsWaitForCopies
+            async let preferences = Self.read(playbackPreferences, waitingAtMost: settingsWait)
+            var plan: PlaybackPlan
+            if let copy {
+                plan = PlaybackPlan(itemID: itemID, copy: copy, options: options)
+            } else {
+                plan = try await negotiator.plan(for: itemID, options: options)
+            }
             guard load == generation else { return }
             let account = await preferences
             guard load == generation else { return }
@@ -288,8 +329,9 @@ public enum PlaybackState: Equatable, Sendable {
             subtitleRules = rules
             playsNextEpisodeAutomatically = account?.playsNextEpisodeAutomatically ?? true
             let subtitles = Self.startingSubtitles(carrying: subtitleChoice, rules: rules, in: plan)
-            // The server picked by its own defaults, so it's asked again when the subtitles need another stream.
-            if subtitles.serverIndex != (plan.subtitleStreamIndex ?? -1) {
+            // The server picked by its own defaults, so it's asked again when the subtitles need another stream. A copy
+            // carries every subtitle it can show, so they show in place.
+            if copy == nil, subtitles.serverIndex != (plan.subtitleStreamIndex ?? -1) {
                 var chosen = Self.optionsAskingAgain(options, for: plan)
                 chosen.subtitleStreamIndex = subtitles.serverIndex
                 chosen.allowsDirectPlay = Self.allowsDirectPlay(showing: subtitles.serverIndex, in: plan)
@@ -297,8 +339,9 @@ public enum PlaybackState: Equatable, Sendable {
                 guard load == generation else { return }
                 self.options = chosen
             }
+            let delivery = copy == nil ? String(describing: plan.method) : "download"
             Self.logger.debug(
-                "Playing by \(String(describing: plan.method), privacy: .public), planned in \((ContinuousClock.now - asked).loggedSeconds, privacy: .public)"
+                "Playing by \(delivery, privacy: .public), planned in \((ContinuousClock.now - asked).loggedSeconds, privacy: .public)"
             )
             guard
                 await install(
@@ -306,12 +349,21 @@ public enum PlaybackState: Equatable, Sendable {
                     != nil,
                 load == generation, let plan = self.plan
             else { return }
-            reporter = ProgressReporter(client: client, plan: plan)
+            if let copy {
+                reporter = LocalProgressReporter(keep: copy.keepPosition)
+            } else {
+                reporter = ProgressReporter(client: client, plan: plan)
+            }
             await reporter?.start(at: options.startPosition, isPaused: false)
+            guard load == generation else { return }
             startReporting()
             let found = await marked
             guard load == generation else { return }
             segments = found
+            let known = await details
+            guard load == generation else { return }
+            trickplay = copy?.trickplay ?? Self.serverTrickplay(in: known, mediaSourceID: plan.mediaSourceID)
+            chapters = copy?.chapters ?? known.chapters ?? []
         } catch is CancellationError {
             if load == generation {
                 state = .idle
@@ -324,7 +376,7 @@ public enum PlaybackState: Equatable, Sendable {
             return
         }
         if item.type == .episode {
-            let next = try? await nextEpisode.after(item)
+            let next = await nextEpisode.after(item, orDownloaded: copy?.nextEpisode)
             if load == generation {
                 nextItem = next
             }
@@ -347,15 +399,18 @@ public enum PlaybackState: Equatable, Sendable {
         legible = nil
     }
 
-    /// Stops playback, reports where it stopped and unloads the item.
+    /// Stops playback, reports where it stopped and unloads the item. An item that starts loading while the server
+    /// hears about the stop has the player from then on, and this leaves it alone.
     public func stop() async {
         generation += 1
+        let stopping = generation
         streamRequest += 1
         player.pause()
         #if canImport(UIKit)
             pictureInPicture?.stopPictureInPicture()
         #endif
         await stopReporting()
+        guard stopping == generation else { return }
         reporter = nil
         player.replaceCurrentItem(with: nil)
         clearItemObservations()
@@ -369,8 +424,26 @@ public enum PlaybackState: Equatable, Sendable {
         offeredGenerated = nil
         nextItem = nil
         segments = []
+        trickplay = nil
+        chapters = []
         state = .idle
         await PlaybackAudioSession.deactivate()
+    }
+
+    /// `item` with its trickplay thumbnails and chapters, as `repository` finds them, or `item` as it is with no
+    /// repository to ask.
+    private nonisolated static func details(
+        of item: BaseItemDto, asking repository: TrickplayRepository?
+    ) async -> BaseItemDto {
+        guard let repository else { return item }
+        return await repository.details(of: item)
+    }
+
+    /// The server's trickplay thumbnails of the version `mediaSourceID` in `item`'s `Trickplay` field, or nil when
+    /// it made none.
+    nonisolated static func serverTrickplay(in item: BaseItemDto, mediaSourceID: String) -> TrickplayTiles? {
+        let layouts = Trickplay.layouts(in: item.trickplay, mediaSourceID: mediaSourceID)
+        return layouts.isEmpty ? nil : .server(mediaSourceID: mediaSourceID, layouts: layouts)
     }
 
     // MARK: - Lock Screen and Picture in Picture
@@ -459,6 +532,8 @@ public enum PlaybackState: Equatable, Sendable {
         /// carry on.
         func surfaceDisappeared() {
             isSurfaceShowing = false
+            playsOnAfterHandBack = nil
+            hostedVideoView?.cancelHandBack()
             if !isPictureInPictureEngaged {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -538,6 +613,8 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture has the picture, the layer lets go of the player and the film carries on as sound. If iOS paused it
         /// on the way, it plays on.
         private func enteredBackground() {
+            playsOnAfterHandBack = nil
+            hostedVideoView?.cancelHandBack()
             if !isPictureInPictureEngaged {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -568,6 +645,19 @@ public enum PlaybackState: Equatable, Sendable {
         /// Picture in Picture stopped, or couldn't start. Unless it handed the video back to the app, it was closed.
         fileprivate func pictureInPictureEnded(restored: Bool) {
             isPictureInPictureEngaged = false
+            isHandingBackInApp = false
+            if restored {
+                hostedVideoView?.showAfterHandBack()
+                // iOS paused on the way and the video wasn't played on yet.
+                if let deadline = playsOnAfterHandBack, ContinuousClock.now < deadline,
+                    player.timeControlStatus == .paused, state != .ended
+                {
+                    player.playImmediately(atRate: rate)
+                }
+            } else {
+                hostedVideoView?.cancelHandBack()
+            }
+            playsOnAfterHandBack = nil
             if !isSurfaceShowing {
                 hostedVideoView?.playerLayer.player = nil
             }
@@ -582,6 +672,8 @@ public enum PlaybackState: Equatable, Sendable {
         fileprivate func restoreUserInterface(_ restore: PictureInPictureRestore) {
             pendingRestore?.finish()
             pendingRestore = restore
+            // From another app, the window flies into the app as it opens and lands square, so it keeps its flight.
+            isHandingBackInApp = UIApplication.shared.applicationState == .active
             restoreFromPictureInPicture?()
             if isSurfaceShowing, hostedVideoView?.window != nil {
                 // A player screen is up already, as when Picture in Picture started on the way to the background.
@@ -601,6 +693,13 @@ public enum PlaybackState: Equatable, Sendable {
         private func finishRestore(_ restore: PictureInPictureRestore? = nil) {
             guard let pendingRestore, restore == nil || restore === pendingRestore else { return }
             self.pendingRestore = nil
+            // Inside the app, iOS rounds the window's corners to match the screen's as it lands in the picture. With
+            // the picture hidden it has nowhere to land, so it shrinks away where it is, and the picture fades in
+            // once the video is back.
+            if isHandingBackInApp, let hostedVideoView, hostedVideoView.window != nil {
+                playsOnAfterHandBack = player.timeControlStatus == .paused ? nil : .now + .seconds(2)
+                hostedVideoView.hideForHandBack()
+            }
             pendingRestore.finish()
         }
     #endif
@@ -611,11 +710,15 @@ public enum PlaybackState: Equatable, Sendable {
     public func play() {
         guard player.currentItem != nil else { return }
         if state == .ended {
-            // Playing again after the end starts over, as a new playback on the server.
+            // Playing again after the end starts over, as a new playback on the server, unless another item loads or
+            // playback stops meanwhile.
+            let replay = generation
             Task {
                 await seek(to: .zero)
+                guard replay == generation else { return }
                 player.playImmediately(atRate: rate)
                 await reporter?.start(at: .zero, isPaused: false)
+                guard replay == generation else { return }
                 startReporting()
             }
             return
@@ -741,12 +844,18 @@ public enum PlaybackState: Equatable, Sendable {
 
     /// The subtitles a video starts with: those picked in the player for the video before, when this one carries on
     /// from it and has them; otherwise what Settings' `rules` say; or, when the account's settings couldn't be read,
-    /// the server's own choice.
+    /// the server's own choice. A downloaded copy with subtitles burned into its picture starts with them, since
+    /// nothing else can show.
     nonisolated static func startingSubtitles(
         carrying choice: SubtitleChoice?,
         rules: SubtitleRules?,
         in plan: PlaybackPlan
     ) -> SubtitleSelection {
+        if plan.isDownloaded, let burnedIn = plan.subtitleStreamIndex,
+            isBurnedIn(burnedIn, in: plan.streams(.subtitle))
+        {
+            return .stream(burnedIn)
+        }
         switch choice {
         case .off:
             return .off
@@ -999,6 +1108,11 @@ public enum PlaybackState: Equatable, Sendable {
     /// `subtitles` in the new stream.
     private func renegotiate(_ newOptions: PlaybackOptions, subtitles: SubtitleSelection) async {
         guard let item, let itemID = item.id else { return }
+        // A downloaded copy has no server to ask, so it plays on with the tracks it has.
+        guard plan?.isDownloaded != true else {
+            Self.logger.debug("A downloaded copy can't change to tracks it doesn't carry")
+            return
+        }
         streamRequest += 1
         let request = streamRequest
         let options = plan.map { Self.optionsAskingAgain(newOptions, for: $0) } ?? newOptions
@@ -1196,11 +1310,11 @@ public enum PlaybackState: Equatable, Sendable {
 
     /// The subtitles iOS would generate from the audio in a stream without text subtitles, when iOS holds them back
     /// from this one: it offers subtitles generated in another language, but none in the audio's, which `plan`'s
-    /// stream carries as text. Nil otherwise.
+    /// stream carries as text. Nil otherwise, and for a downloaded copy, which has no other stream to load.
     nonisolated static func withheldGenerated(among options: [LegibleOption], in plan: PlaybackPlan)
         -> GeneratedSubtitles?
     {
-        guard let audio = SubtitleRules.language(plan.audioLanguage),
+        guard !plan.isDownloaded, let audio = SubtitleRules.language(plan.audioLanguage),
             options.contains(where: { $0.isGenerated && $0.language != audio }),
             !options.contains(where: { $0.isGenerated && $0.language == audio }),
             carriedSubtitles(of: plan).contains(where: { SubtitleRules.language($0.language) == audio })
@@ -1212,6 +1326,28 @@ public enum PlaybackState: Equatable, Sendable {
     nonisolated static func isBurnedIn(_ streamIndex: Int?, in streams: [MediaStream]) -> Bool {
         guard let streamIndex, streamIndex >= 0 else { return false }
         return streams.first { $0.index == streamIndex }?.deliveryMethod == .encode
+    }
+
+    /// How long a downloaded copy waits for the account's settings before it plays without them.
+    nonisolated static let settingsWaitForCopies = Duration.seconds(2)
+
+    /// Reads the account's preferences as ``read(_:)`` does, but gives up after `limit`, or waits as long as the
+    /// server takes when `limit` is nil.
+    private nonisolated static func read(
+        _ read: (@Sendable () async throws -> PlaybackPreferences)?,
+        waitingAtMost limit: Duration?
+    ) async -> PlaybackPreferences? {
+        guard let limit else { return await Self.read(read) }
+        return await withTaskGroup(of: PlaybackPreferences?.self) { group in
+            group.addTask { await Self.read(read) }
+            group.addTask {
+                try? await Task.sleep(for: limit)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     /// Reads the account's language preferences with `read`, or nil when there's nothing to read them with or they
@@ -1364,6 +1500,19 @@ public enum PlaybackState: Equatable, Sendable {
 
     private func statusChanged() {
         isWaiting = player.currentItem != nil && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        #if canImport(UIKit)
+            // iOS paused as Picture in Picture hands the video back inside the app, having looked for the picture
+            // and not found it. The picture comes back to full size, and the video plays on.
+            if let deadline = playsOnAfterHandBack, player.timeControlStatus == .paused {
+                playsOnAfterHandBack = nil
+                hostedVideoView?.layOutAfterHandBack()
+                if ContinuousClock.now < deadline, state != .ended {
+                    Self.logger.debug("Playing on after Picture in Picture paused to hand back")
+                    player.playImmediately(atRate: rate)
+                    return
+                }
+            }
+        #endif
         guard !isStarting, state != .failed, state != .ended, player.currentItem?.status == .readyToPlay else { return }
         switch player.timeControlStatus {
         case .playing: state = .playing
@@ -1393,10 +1542,13 @@ public enum PlaybackState: Equatable, Sendable {
             let playing = playsWhenReady
             playsWhenReady = false
             isStarting = true
+            let starting = generation
             Task {
                 if let start {
                     await player.seek(to: CMTime(start), toleranceBefore: .zero, toleranceAfter: .zero)
                 }
+                // Another item, or another stream of this one, took over during the seek, or playback stopped.
+                guard starting == generation, player.currentItem === playerItem else { return }
                 isStarting = false
                 if playing {
                     player.playImmediately(atRate: rate)

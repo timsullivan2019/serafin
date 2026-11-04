@@ -81,6 +81,20 @@ private func item(_ streams: [MediaStream], defaultAudio: Int? = nil) -> BaseIte
         #expect(chapters[0].startText == "0:00")
     }
 
+    @Test func theScrubberMarksChaptersInOrderNamedAsOnTheDetailScreen() {
+        let chapters = Chapter.scrubberChapters([
+            ChapterInfo(name: "The Village", startPositionTicks: 950_000_000),
+            ChapterInfo(name: "Opening", startPositionTicks: 0),
+            ChapterInfo(name: "", startPositionTicks: 3_760 * 10_000_000),
+        ])
+        #expect(chapters.map(\.start) == [.zero, .seconds(95), .seconds(3_760)])
+        #expect(chapters[0].name == "Opening")
+        #expect(chapters[1].name == "The Village")
+        // Named by its place in the server's list.
+        #expect(chapters[2].name.contains("3"))
+        #expect(Chapter.scrubberChapters([]).isEmpty)
+    }
+
     @Test func aShareLinkOpensTheItemInJellyfinsWebApp() throws {
         var source = BaseItemDto(id: "aaaa1111")
         source.serverID = "ffff9999"
