@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 import Testing
 
 @testable import SerafinCore
@@ -8,6 +9,12 @@ private func authenticationJSON(userID: String = "user-1", name: String = "Alice
     -> String
 {
     #"{"User":{"Name":"\#(name)","Id":"\#(userID)","HasPassword":true},"AccessToken":"\#(token)","ServerId":"s"}"#
+}
+
+/// What `/System/Info/Public` returns for the server with `id`, with the address it gives for itself when there is one.
+private func publicInfoJSON(id: String, localAddress: String? = nil) -> String {
+    let local = localAddress.map { #","LocalAddress":"\#($0)""# } ?? ""
+    return #"{"Id":"\#(id)","ServerName":"Home","Version":"10.10.7","ProductName":"Jellyfin Server"\#(local)}"#
 }
 
 /// What `/QuickConnect/Initiate` and `/QuickConnect/Connect` return.
@@ -384,6 +391,11 @@ private struct Harness {
         let saved = try await harness.accounts.add(connected)
 
         #expect(saved.url.absoluteString == "https://new-address.example.com")
+        // The old address stays, for wherever the server still answers there.
+        #expect(
+            saved.addresses.map(\.absoluteString) == [
+                "https://old-address.example.com", "https://new-address.example.com",
+            ])
         #expect(saved.name == "Moved")
         #expect(saved.users.map(\.id) == ["user-1"])
         #expect(try await harness.accounts.current()?.server.url == saved.url)
@@ -516,5 +528,158 @@ private struct Harness {
         let second = try await harness.accounts.client(for: account)
         #expect(first === second)
         #expect(first.accessToken == "token-user-1")
+    }
+}
+
+@Suite struct ServerAddressAccountsTests {
+    /// Signs in to a server at `host`, and stubs the public info of the server at each of `others`, given as host and
+    /// port, as `server` or as the server with the ID given beside it.
+    private func signedIn(
+        on host: String, _ harness: Harness, answering others: [String: String?] = [:]
+    ) async throws -> Server {
+        let server = try harness.server(on: host)
+        _ = try await harness.signIn(to: server)
+        for (hostAndPort, id) in others {
+            StubURLProtocol.stub(
+                hostAndPort, path: "/System/Info/Public", .json(200, publicInfoJSON(id: id ?? server.id)))
+        }
+        return server
+    }
+
+    @Test func anAddressIsAddedOnlyWhereTheSameServerAnswers() async throws {
+        let harness = try Harness()
+        let server = try await signedIn(
+            on: "added.example.com", harness,
+            answering: ["192.168.71.10:8096": nil, "192.168.71.11:8096": "someone-else"])
+
+        let home = try await harness.accounts.connect(to: ServerAddress.parse("http://192.168.71.10:8096"))
+        let saved = try #require(try await harness.accounts.addAddress(home, toServer: server.id))
+        #expect(saved.addresses.map(\.absoluteString) == ["https://added.example.com", "http://192.168.71.10:8096"])
+        // Serafin carries on at the address in use until it finds the new one answers better.
+        #expect(saved.url == server.url)
+        #expect(try await harness.accounts.current()?.server.addresses == saved.addresses)
+
+        let other = try await harness.accounts.connect(to: ServerAddress.parse("http://192.168.71.11:8096"))
+        await #expect(throws: SerafinError.differentServer) {
+            try await harness.accounts.addAddress(other, toServer: server.id)
+        }
+        #expect(try await harness.accounts.servers().first?.addresses == saved.addresses)
+    }
+
+    @Test func aServerWithFourAddressesTakesNoMore() async throws {
+        let harness = try Harness()
+        let server = try await signedIn(
+            on: "four.example.com", harness,
+            answering: Dictionary(uniqueKeysWithValues: (20...23).map { ("192.168.72.\($0):8096", String?.none) }))
+        for last in 20...22 {
+            let connected = try await harness.accounts.connect(
+                to: ServerAddress.parse("http://192.168.72.\(last):8096"))
+            try await harness.accounts.addAddress(connected, toServer: server.id)
+        }
+
+        let fifth = try await harness.accounts.connect(to: ServerAddress.parse("http://192.168.72.23:8096"))
+        await #expect(throws: SerafinError.tooManyAddresses) {
+            try await harness.accounts.addAddress(fifth, toServer: server.id)
+        }
+        #expect(try await harness.accounts.servers().first?.addresses.count == Server.maximumAddresses)
+    }
+
+    @Test func movingToAnotherAddressKeepsTheSignInAndMakesANewClient() async throws {
+        let harness = try Harness()
+        let server = try await signedIn(on: "moving.example.com", harness, answering: ["192.168.73.10:8096": nil])
+        let account = try #require(try await harness.accounts.current())
+        let before = try await harness.accounts.client(for: account)
+        let home = try await harness.accounts.connect(to: ServerAddress.parse("http://192.168.73.10:8096"))
+        try await harness.accounts.addAddress(home, toServer: server.id)
+
+        #expect(try await harness.accounts.useAddress(home.server.url, forServer: server.id))
+        #expect(try await harness.accounts.useAddress(home.server.url, forServer: server.id) == false)
+
+        let moved = try #require(try await harness.accounts.current())
+        #expect(moved.key == account.key)
+        #expect(moved.server.url == home.server.url)
+        let after = try await harness.accounts.client(for: moved)
+        #expect(after !== before)
+        #expect(after.configuration.url == home.server.url)
+        #expect(after.accessToken == "token-user-1")
+    }
+
+    @Test func theBestAddressFollowsTheNetwork() async throws {
+        let harness = try Harness()
+        let server = try await signedIn(
+            on: "best.example.com", harness, answering: ["best.example.com:443": nil, "192.168.74.10:8096": nil])
+        let home = try await harness.accounts.connect(to: ServerAddress.parse("http://192.168.74.10:8096"))
+        #expect(await harness.accounts.bestAddress(ofServer: server.id, prefersLocal: true) == nil)
+        try await harness.accounts.addAddress(home, toServer: server.id)
+
+        #expect(await harness.accounts.bestAddress(ofServer: server.id, prefersLocal: true) == home.server.url)
+        #expect(await harness.accounts.bestAddress(ofServer: server.id, prefersLocal: false) == server.url)
+        let both: Set<URL> = [server.url, home.server.url]
+        #expect(await harness.accounts.answeringAddresses(ofServer: server.id) == both)
+    }
+
+    @Test func removingAnAddressForgetsItsPinUnlessAnotherAddressHasTheSameHost() async throws {
+        let harness = try Harness()
+        let server = try await signedIn(
+            on: "pin-a.example.com", harness, answering: ["pin-a.example.com:8920": nil, "pin-b.example.com:443": nil])
+        for address in ["https://pin-a.example.com:8920", "https://pin-b.example.com"] {
+            let connected = try await harness.accounts.connect(to: ServerAddress.parse(address))
+            try await harness.accounts.addAddress(connected, toServer: server.id)
+        }
+        let certificate = try #require(TestCertificates.a1.flatMap(CertificateFingerprint.init(certificate:)))
+        try await harness.accounts.trust(certificate, for: ServerAddress.parse("pin-a.example.com"))
+        try await harness.accounts.trust(certificate, for: ServerAddress.parse("pin-b.example.com"))
+        let pins = PinStore(secrets: harness.secrets)
+
+        let pinB = try #require(URL(string: "https://pin-b.example.com"))
+        try await harness.accounts.removeAddress(pinB, fromServer: server.id)
+        #expect(try pins.pin(for: "pin-b.example.com") == nil)
+
+        // The address in use goes, but its host's pin stays for the address on the other port.
+        try await harness.accounts.removeAddress(server.url, fromServer: server.id)
+        #expect(try pins.pin(for: "pin-a.example.com") != nil)
+        let moved = try #require(try await harness.accounts.current())
+        #expect(moved.server.url.absoluteString == "https://pin-a.example.com:8920")
+        #expect(moved.server.addresses == [moved.server.url])
+    }
+
+    @Test func theAddressAServerGivesForItselfIsOfferedWhereItAnswers() async throws {
+        let harness = try Harness()
+        let server = try await signedIn(on: "offer.example.com", harness, answering: ["192.168.75.10:8096": nil])
+        StubURLProtocol.stub(
+            "offer.example.com:443", path: "/System/Info/Public",
+            .json(200, publicInfoJSON(id: server.id, localAddress: "http://192.168.75.10:8096")))
+        let saved = try #require(try await harness.accounts.servers().first)
+
+        let offered = try #require(await harness.accounts.suggestedAddress(for: saved))
+        #expect(offered.server.url.absoluteString == "http://192.168.75.10:8096")
+        #expect(offered.security == TransportSecurity.unencryptedOnPrivateNetwork)
+
+        // Once it's saved, it isn't offered again.
+        try await harness.accounts.addAddress(offered, toServer: server.id)
+        let withIt = try #require(try await harness.accounts.servers().first)
+        #expect(await harness.accounts.suggestedAddress(for: withIt) == nil)
+    }
+
+    @Test(arguments: [
+        // An address only the server's container can reach, where nothing answers.
+        "http://172.17.0.2:8096",
+        // An address where another server answers.
+        "http://192.168.76.11:8096",
+        // A remote address, which isn't for home.
+        "https://elsewhere.example.com",
+    ])
+    func anAddressTheServerDoesntAnswerAtFromHereIsNotOffered(_ localAddress: String) async throws {
+        let harness = try Harness()
+        let server = try await signedIn(
+            on: "no-offer.example.com", harness,
+            answering: ["192.168.76.11:8096": "someone-else", "elsewhere.example.com:443": nil])
+        let info = try PublicServerInfo(
+            validating: PublicSystemInfo(
+                id: server.id, localAddress: localAddress, productName: "Jellyfin Server", serverName: "Home",
+                version: "10.10.7"))
+        let saved = try #require(try await harness.accounts.servers().first)
+
+        #expect(await harness.accounts.suggestedAddress(for: saved, reportedBy: info) == nil)
     }
 }

@@ -16,7 +16,7 @@ struct AddServerView: View {
     var body: some View {
         Form {
             Section {
-                addressField
+                ServerAddressField(address: $model.address, isFocused: $addressFocused, submit: connect)
             } header: {
                 if isWelcome {
                     WelcomeHeader()
@@ -27,7 +27,11 @@ struct AddServerView: View {
                 }
             }
             Section {
-                connectButton
+                ProminentFormButton(
+                    title: String(localized: "Connect", bundle: .module, comment: "Button that connects to a server."),
+                    isWorking: model.isConnecting, action: connect
+                )
+                .disabled(!model.canConnect)
             }
             if !model.discovered.isEmpty {
                 Section(String(localized: "On This Network", bundle: .module, comment: "Servers found nearby.")) {
@@ -71,39 +75,31 @@ struct AddServerView: View {
             }
             .scrollIndicators(.never)
         }
-    }
-
-    private var addressField: some View {
-        TextField(
-            String(localized: "Server Address", bundle: .module, comment: "Label of the server address field."),
-            text: $model.address,
-            prompt: Text(
-                String(localized: "jellyfin.example.com", bundle: .module, comment: "Example in the address field.")
-            )
-        )
-        .focused($addressFocused)
-        .autocorrectionDisabled()
-        .textContentType(.URL)
-        .serverAddressKeyboard()
-        .submitLabel(.go)
-        .onSubmit(connect)
-    }
-
-    private var connectButton: some View {
-        Button(action: connect) {
-            HStack(spacing: Spacing.xSmall) {
-                if model.isConnecting {
-                    ProgressView()
-                }
-                Text(String(localized: "Connect", bundle: .module, comment: "Button that connects to a server."))
+        .alert(
+            model.offer.map { AddressKindText.offerTitle($0.connected.server.url) } ?? "",
+            isPresented: Binding(get: { model.offer != nil }, set: { if !$0 { model.offer = nil } }),
+            presenting: model.offer
+        ) { offer in
+            Button(AddAddressView.title) {
+                Task { if let saved = await model.acceptOffer(offer, with: session) { onServer(saved) } }
             }
-            .frame(maxWidth: .infinity)
+            Button(
+                String(localized: "Not Now", bundle: .module, comment: "Button that turns down an offered address."),
+                role: .cancel
+            ) {
+                onServer(model.declineOffer(offer))
+            }
+        } message: { offer in
+            Text(AddressKindText.offerMessage(serverName: offer.server.displayName))
         }
-        .buttonStyle(.glassProminent)
-        .controlSize(.large)
-        .disabled(!model.canConnect)
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
+        .sheet(item: $model.unencryptedOffer) { offer in
+            UnencryptedConnectionSheet(server: offer.connected.server) {
+                Task { if let saved = await model.acceptOffer(offer, with: session) { onServer(saved) } }
+            } cancel: {
+                onServer(model.declineOffer(offer))
+            }
+            .scrollIndicators(.never)
+        }
     }
 
     private func connect() {
@@ -134,6 +130,52 @@ private struct WelcomeHeader: View {
         .padding(.bottom, Spacing.medium)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The field a server's address is typed into, with the keyboard for addresses and Go to submit it.
+struct ServerAddressField: View {
+    @Binding var address: String
+    var isFocused: FocusState<Bool>.Binding
+    let submit: () -> Void
+
+    var body: some View {
+        TextField(
+            String(localized: "Server Address", bundle: .module, comment: "Label of the server address field."),
+            text: $address,
+            prompt: Text(
+                String(localized: "jellyfin.example.com", bundle: .module, comment: "Example in the address field.")
+            )
+        )
+        .focused(isFocused)
+        .autocorrectionDisabled()
+        .textContentType(.URL)
+        .serverAddressKeyboard()
+        .submitLabel(.go)
+        .onSubmit(submit)
+    }
+}
+
+/// The full-width button under a form's fields, with a spinner beside its title while it works.
+struct ProminentFormButton: View {
+    let title: String
+    let isWorking: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.xSmall) {
+                if isWorking {
+                    ProgressView()
+                }
+                Text(title)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.glassProminent)
+        .controlSize(.large)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
     }
 }
 

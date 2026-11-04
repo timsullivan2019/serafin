@@ -22,7 +22,7 @@ public struct ServerConnector: Sendable {
     /// The most Serafin reads of a server's public info. A real answer is well under a kilobyte.
     static let maximumInfoSize = 64 * 1024
     /// How long a request may sit idle before the address counts as unreachable.
-    static let timeout: TimeInterval = 15
+    public static let timeout: TimeInterval = 15
 
     private let pinning: PinningDelegate
     private let sessionConfiguration: @Sendable () -> URLSessionConfiguration
@@ -64,13 +64,15 @@ public struct ServerConnector: Sendable {
     }
 
     /// Connects to exactly `url`, with no fallback.
-    public func connect(to url: URL) async throws -> ConnectedServer {
+    ///
+    /// - Parameter timeout: How long the request may sit idle before the address counts as unreachable.
+    public func connect(to url: URL, timeout: TimeInterval = ServerConnector.timeout) async throws -> ConnectedServer {
         let security = try TransportPolicy.security(of: url)
         let host = url.host() ?? ""
         pinning.forgetRejection(for: host)
         let info: PublicServerInfo
         do {
-            info = try PublicServerInfo(validating: try await publicSystemInfo(at: url))
+            info = try PublicServerInfo(validating: try await publicSystemInfo(at: url, timeout: timeout))
         } catch let error as SerafinError {
             throw error
         } catch let error as CancellationError {
@@ -92,12 +94,12 @@ public struct ServerConnector: Sendable {
     /// Fetches and decodes the public system info at `url`, reading at most ``maximumInfoSize`` bytes.
     ///
     /// The session is made for this one request and torn down after it, so no connection or delegate outlives it.
-    private func publicSystemInfo(at url: URL) async throws -> PublicSystemInfo {
+    private func publicSystemInfo(at url: URL, timeout: TimeInterval) async throws -> PublicSystemInfo {
         guard let path = Paths.getPublicSystemInfo.url?.path() else { throw SerafinError.notJellyfin }
         let session = URLSession(configuration: sessionConfiguration(), delegate: pinning, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
 
-        var request = URLRequest(url: url.appending(path: path), timeoutInterval: Self.timeout)
+        var request = URLRequest(url: url.appending(path: path), timeoutInterval: timeout)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (bytes, response) = try await session.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode

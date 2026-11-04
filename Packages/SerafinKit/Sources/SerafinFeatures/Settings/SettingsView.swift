@@ -254,6 +254,13 @@ private struct AccountsSection: View {
                         systemImage: "person.crop.circle.badge.plus"
                     )
                 }
+                NavigationLink(value: Route.serverAddresses(serverID: server.id)) {
+                    LabeledContent {
+                        Text(AddressKindText.kind(ServerAddressKind(server.url)))
+                    } label: {
+                        Label(ServerAddressesView.title, systemImage: "network")
+                    }
+                }
                 Button(role: .destructive) {
                     serverToRemove = server
                 } label: {

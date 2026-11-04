@@ -39,7 +39,7 @@ import SerafinPlayback
     /// Where Settings keeps whether putting the player away hands a playing video to Picture in Picture.
     static let minimizesToPictureInPictureKey = "minimizesToPictureInPicture"
     /// The engine playing for the signed-in account. Nil in previews.
-    let engine: PlayerEngine?
+    private(set) var engine: PlayerEngine?
     /// How text subtitles look, as picked in Settings. A change shows straight away on what's playing.
     var subtitleStyle: SubtitleStyle {
         didSet {
@@ -58,10 +58,10 @@ import SerafinPlayback
     @ObservationIgnored private var isDismissingToPictureInPicture = false
     /// Stops playback if Picture in Picture, asked to start, neither starts nor fails.
     @ObservationIgnored private var pictureInPictureFallback: Task<Void, Never>?
-    @ObservationIgnored private let media: any MediaSource
+    @ObservationIgnored private var media: any MediaSource
     @ObservationIgnored private let actions: MediaActions
-    @ObservationIgnored private let artwork: Artwork?
-    @ObservationIgnored private let downloads: DownloadCenter?
+    @ObservationIgnored private var artwork: Artwork?
+    @ObservationIgnored private var downloads: DownloadCenter?
     @ObservationIgnored private let serverID: String?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isOnExpensiveNetwork: @MainActor () -> Bool
@@ -103,6 +103,17 @@ import SerafinPlayback
             self.isOnExpensiveNetwork = { network.isExpensive }
         }
         subtitleStyle = SubtitleStyle.saved(in: defaults)
+        engine?.subtitleStyle = subtitleStyle
+    }
+
+    /// Plays through `engine` from now on, with the library, artwork and downloads made with it, as when the account's
+    /// server moves to another address. The account's server moves only while nothing plays, so nothing is cut off.
+    func reconnect(engine: PlayerEngine?, media: any MediaSource, artwork: Artwork?, downloads: DownloadCenter?) {
+        guard engine !== self.engine else { return }
+        self.engine = engine
+        self.media = media
+        self.artwork = artwork
+        self.downloads = downloads
         engine?.subtitleStyle = subtitleStyle
     }
 

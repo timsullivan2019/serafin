@@ -36,6 +36,10 @@ enum Route: Hashable {
     case addServer
     /// Signing in to a saved server, from Settings or after adding one.
     case signIn(Server)
+    /// A saved server's addresses, from Settings.
+    case serverAddresses(serverID: String)
+    /// Adding another address to a saved server, from its addresses.
+    case addAddress(Server)
     /// The open-source licences, from Settings.
     case licences
     /// Audio and subtitle languages, and how subtitles look, from Settings.
@@ -148,6 +152,10 @@ private struct RouteDestination: View {
             AddServerView { server in navigate(.signIn(server)) }
         case .signIn(let server):
             SignInView(server: server)
+        case .serverAddresses(let serverID):
+            ServerAddressesView(serverID: serverID)
+        case .addAddress(let server):
+            AddAddressView(server: server)
         case .licences:
             LicencesView()
         case .audioAndSubtitles:

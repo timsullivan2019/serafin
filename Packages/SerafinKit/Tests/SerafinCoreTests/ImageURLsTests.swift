@@ -140,7 +140,8 @@ private let bareEpisode = BaseItemDto(
         let artwork = Artwork(
             urls: urls,
             pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil),
-            authorization: #"MediaBrowser Token="secret""#
+            authorization: #"MediaBrowser Token="secret""#,
+            serverID: "server-1"
         )
         let request = try #require(artwork.request(.poster, of: movie, width: 120, scale: 3))
 
@@ -157,7 +158,8 @@ private let bareEpisode = BaseItemDto(
 
     @Test func aDownloadMadeAheadStaysOffConnectionsInLowDataMode() throws {
         let artwork = Artwork(
-            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x")
+            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x",
+            serverID: "server-1")
         let shown = try #require(artwork.request(.poster, of: movie, width: 120, scale: 3))
         let ahead = try #require(
             artwork.request(.poster, of: movie, width: 120, scale: 3, allowsConstrainedNetwork: false))
@@ -177,7 +179,8 @@ private let bareEpisode = BaseItemDto(
 
     @Test func noArtMeansNoRequest() {
         let artwork = Artwork(
-            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x")
+            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x",
+            serverID: "server-1")
         #expect(artwork.request(.backdrop, of: BaseItemDto(id: "dddd4444"), width: 390, scale: 3) == nil)
     }
 
@@ -187,7 +190,8 @@ private let bareEpisode = BaseItemDto(
             urls: ImageURLs(serverURL: try #require(URL(string: "https://\(host)"))),
             pipeline: ImagePipeline.serafin(
                 pinning: nil, diskCacheName: nil, sessionConfiguration: StubURLProtocol.configuration()),
-            authorization: #"MediaBrowser Token="secret""#
+            authorization: #"MediaBrowser Token="secret""#,
+            serverID: "server-1"
         )
         let path = "/Items/aaaa1111/Images/Primary"
         StubURLProtocol.stub("\(host):443", path: path, .json(200, "picture"))
@@ -233,7 +237,8 @@ private let bareEpisode = BaseItemDto(
 
     @Test func theRequestCarriesTheHeaderNotTheToken() throws {
         let artwork = Artwork(
-            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "header")
+            urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "header",
+            serverID: "server-1")
         let request = try #require(artwork.request(userImage: "eeee5555", tag: "face-tag", width: 28, scale: 3))
         #expect(request.urlRequest?.value(forHTTPHeaderField: "Authorization") == "header")
         #expect(request.url?.query?.contains("api_key") == false)
@@ -245,5 +250,33 @@ private let bareEpisode = BaseItemDto(
         let url = try #require(urls.url(itemID: "aaaa1111", type: .chapter, tag: "c3", index: 3, maxWidth: 400))
         #expect(url.path() == "/Items/aaaa1111/Images/Chapter/3")
         #expect(urls.url(itemID: "aaaa1111", type: .chapter, tag: "c3", index: -1, maxWidth: 400) == nil)
+    }
+}
+
+@Suite struct ImageCacheKeyTests {
+    private func artwork(at address: String, serverID: String = "server-1") throws -> Artwork {
+        Artwork(
+            urls: ImageURLs(serverURL: try #require(URL(string: address))),
+            pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x", serverID: serverID)
+    }
+
+    @Test func anImageLoadedAtOneOfTheServersAddressesIsCachedForTheOthers() throws {
+        let atHome = try #require(
+            try artwork(at: "http://192.168.1.20:8096").request(.poster, of: movie, width: 120, scale: 3))
+        let away = try #require(
+            try artwork(at: "https://media.example.com/jellyfin").request(.poster, of: movie, width: 120, scale: 3))
+
+        #expect(atHome.url != away.url)
+        #expect(atHome.imageID == away.imageID)
+        #expect(atHome.imageID == "server-1/Items/aaaa1111/Images/Primary?maxWidth=400&quality=90&tag=poster-tag")
+    }
+
+    @Test func anotherServersImageAtTheSamePathIsCachedApart() throws {
+        let one = try #require(
+            try artwork(at: "https://media.example.com").request(.poster, of: movie, width: 120, scale: 3))
+        let other = try #require(
+            try artwork(at: "https://media.example.com", serverID: "server-2").request(
+                .poster, of: movie, width: 120, scale: 3))
+        #expect(one.imageID != other.imageID)
     }
 }

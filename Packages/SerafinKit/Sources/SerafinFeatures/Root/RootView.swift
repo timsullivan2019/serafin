@@ -49,6 +49,7 @@ public struct RootView: View {
         .environment(\.accent, accent.color)
         // No scroll bar anywhere, in any direction. Sheets don't take this from here, so each sets it too.
         .scrollIndicators(.never)
+        .modifier(AddressCheck())
         .appLock(lock)
         // Here rather than on the tabs, so a result tapped while the app is still starting isn't lost.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
@@ -97,6 +98,41 @@ private struct SpotlightTrigger: Equatable {
     let isLockOn: Bool
 }
 
+/// Moves the current account's server to the address it answers best at whenever that may have changed: once the
+/// account is chosen, when the device joins or leaves a network, when Serafin comes back to the foreground, and when
+/// the player stops, since a move waits until it does.
+private struct AddressCheck: ViewModifier {
+    @Environment(AppSession.self) private var session
+    @Environment(\.scenePhase) private var scenePhase
+    private let network = NetworkWatcher.shared
+
+    func body(content: Content) -> some View {
+        content.task(id: trigger) {
+            guard let trigger, trigger.isActive, trigger.connection.isOnline, trigger.isPlayerIdle else { return }
+            // A network the device has just joined can take a moment to carry anything.
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            await session.checkAddress(prefersLocal: trigger.connection.prefersLocalAddresses)
+        }
+    }
+
+    /// What starts a check, or nil when no account's server has more than one address.
+    private var trigger: Trigger? {
+        guard let server = session.account?.server, server.addresses.count > 1 else { return nil }
+        return Trigger(
+            serverID: server.id, addresses: server.addresses, connection: network.connection,
+            isActive: scenePhase == .active, isPlayerIdle: session.isPlayerIdle)
+    }
+
+    private struct Trigger: Equatable {
+        let serverID: String
+        let addresses: [URL]
+        let connection: NetworkWatcher.Connection
+        let isActive: Bool
+        let isPlayerIdle: Bool
+    }
+}
+
 /// Home, Library and Search tabs, with a sidebar on iPad. Settings opens as a sheet from the profile button on each
 /// tab's first screen, as in Apple's media apps.
 struct MainTabs: View {
@@ -110,6 +146,10 @@ struct MainTabs: View {
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
     @Namespace private var playerZoom
+    /// What the tabs were made with, which playback takes again when the account's server moves to another address.
+    private let engine: PlayerEngine?
+    private let media: any MediaSource
+    private let artwork: Artwork?
 
     /// Creates the tabs.
     ///
@@ -126,6 +166,9 @@ struct MainTabs: View {
         downloads: DownloadCenter? = nil,
         serverID: String? = nil
     ) {
+        self.engine = engine
+        self.media = media
+        self.artwork = artwork
         let actions = MediaActions()
         _actions = State(initialValue: actions)
         _playback = State(
@@ -200,6 +243,12 @@ struct MainTabs: View {
         }
         .modifier(DownloadFailureAlert(downloads: downloads))
         .modifier(DownloadProgressSync(downloads: downloads, actions: actions))
+        // The account's server moved to another address: playback goes through the new engine, and the screens ask
+        // the server again, which also brings back any that failed at the old address.
+        .onChange(of: engine.map { ObjectIdentifier($0) }) {
+            playback.reconnect(engine: engine, media: media, artwork: artwork, downloads: downloads)
+            actions.reload()
+        }
     }
 }
 

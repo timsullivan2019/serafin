@@ -7,7 +7,8 @@ import Nuke
 ///
 /// Every request asks the server for an image as wide as the view that shows it, carries the account's
 /// `Authorization` header rather than a token in the URL, and is decoded no larger than that width even if the
-/// server sends more.
+/// server sends more. The caches keep each image under the server's ID and the image's path rather than its whole
+/// address, so an image loaded at one of the server's addresses is there at the others.
 public struct Artwork: Sendable {
     /// Requested widths are rounded up to a multiple of this many pixels, so nearby sizes share the cache.
     static let widthStep = 100
@@ -18,11 +19,20 @@ public struct Artwork: Sendable {
     public let pipeline: ImagePipeline
     /// The account's `Authorization` header.
     let authorization: String
+    /// The server the images come from.
+    let serverID: String
 
-    init(urls: ImageURLs, pipeline: ImagePipeline, authorization: String) {
+    init(urls: ImageURLs, pipeline: ImagePipeline, authorization: String, serverID: String) {
         self.urls = urls
         self.pipeline = pipeline
         self.authorization = authorization
+        self.serverID = serverID
+    }
+
+    /// The key the caches keep the image at `url` under: the server's ID and the image's path and query on the
+    /// server, which are the same at every address the server has. Nil for an address that isn't on the server.
+    func cacheKey(of url: URL) -> String? {
+        Downloads.path(of: url, under: urls.serverURL).map { "\(serverID)\($0)" }
     }
 
     /// The request for `item`'s image in `role`, drawn `width` points wide on a screen of `scale`, or nil when the
@@ -93,7 +103,11 @@ public struct Artwork: Sendable {
         }
         var urlRequest = URLRequest(url: url)
         urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
-        return try await pipeline.data(for: ImageRequest(urlRequest: urlRequest)).0
+        var request = ImageRequest(urlRequest: urlRequest)
+        if let key = cacheKey(of: url) {
+            request.imageID = key
+        }
+        return try await pipeline.data(for: request).0
     }
 
     /// The request for a picture saved on the device, such as a download's poster, drawn `width` points wide on a
@@ -111,6 +125,9 @@ public struct Artwork: Sendable {
         urlRequest.allowsConstrainedNetworkAccess = allowsConstrainedNetwork
         var request = ImageRequest(urlRequest: urlRequest)
         request.thumbnail = Self.thumbnail(pixels: pixels)
+        if let key = cacheKey(of: url) {
+            request.imageID = key
+        }
         return request
     }
 

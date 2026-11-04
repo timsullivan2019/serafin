@@ -14,6 +14,9 @@ public actor Accounts {
     static let pollFailureTolerance = 3
     /// How long sign-out waits for the server before settling for signing out on this device alone.
     static let logoutTimeout: TimeInterval = 10
+    /// How long the address a server gives for itself has to answer before it isn't offered. An address at home or on
+    /// the tailnet that answers at all does so well within it, and adding a server waits on it away from home.
+    static let suggestionTimeout: TimeInterval = 3
 
     private static let logger = Logger(serafinCategory: "accounts")
 
@@ -25,6 +28,8 @@ public actor Accounts {
     public nonisolated let pinning: PinningDelegate
     private let clients: ClientFactory
     private let connector: ServerConnector
+    /// Picks the address each server answers best at.
+    private let resolver: AddressResolver
     private let images: ImagePipeline
     private let homeSnapshots: HomeSnapshotStore
     /// The movies and episodes saved on this device for every account, or nil when the accounts were made without
@@ -78,7 +83,11 @@ public actor Accounts {
             sessionDelegate: { _ in pinning },
             sessionConfiguration: sessionConfiguration
         )
-        self.connector = ServerConnector(pinning: pinning, sessionConfiguration: sessionConfiguration)
+        let connector = ServerConnector(pinning: pinning, sessionConfiguration: sessionConfiguration)
+        self.connector = connector
+        self.resolver = AddressResolver { url in
+            try await connector.connect(to: url, timeout: AddressResolver.timeout).server.id
+        }
         self.images = ImagePipeline.serafin(
             pinning: pinning,
             diskCacheName: imageDiskCache ? ImagePipeline.diskCacheName : nil,
@@ -127,20 +136,111 @@ public actor Accounts {
         pinning.forgetRejection(for: host)
     }
 
-    /// Saves a server that answered. A server saved before under the same ID keeps its users and takes the new
-    /// address and name.
+    /// Saves a server that answered. A server saved before under the same ID keeps its users and its other addresses,
+    /// takes the new name, and connects at the address that answered from now on.
+    ///
+    /// - Throws: ``SerafinError/tooManyAddresses`` when the address is new to a saved server that has
+    ///   ``Server/maximumAddresses`` already.
     @discardableResult
     public func add(_ connected: ConnectedServer) async throws -> Server {
-        var server = connected.server
-        if let saved = try await serverStore.server(id: server.id) {
-            server.users = saved.users
-            server.lastUserID = saved.lastUserID
-            if saved.url != server.url {
-                forgetClients(forServer: server.id)
-            }
+        let address = connected.server.url
+        let name = connected.server.name
+        let before = try await serverStore.server(id: connected.server.id)
+        let updated = try await serverStore.update(id: connected.server.id) { server in
+            try server.add(address)
+            server.use(address)
+            server.name = name
         }
-        try await serverStore.save(server)
-        return server
+        if let updated {
+            if updated.url != before?.url {
+                forgetClients(forServer: updated.id)
+            }
+            return updated
+        }
+        try await serverStore.save(connected.server)
+        return connected.server
+    }
+
+    // MARK: - Addresses
+
+    /// The address the server with `serverID` answers best at on the network the device is on, as ``AddressResolver``
+    /// picks it. Nil when the server isn't saved, has only the one address, or answers at none of them. Nothing changes
+    /// until ``useAddress(_:forServer:)``.
+    ///
+    /// - Parameter prefersLocal: Whether home addresses come first, as on Wi-Fi or a wired network, rather than
+    ///   remote ones, as on cellular.
+    public func bestAddress(ofServer serverID: String, prefersLocal: Bool) async -> URL? {
+        guard let server = try? await serverStore.server(id: serverID), server.addresses.count > 1 else { return nil }
+        return await resolver.bestAddress(of: server, prefersLocal: prefersLocal)
+    }
+
+    /// Which of the server's addresses answer as that server now, all asked at once.
+    public func answeringAddresses(ofServer serverID: String) async -> Set<URL> {
+        guard let server = try? await serverStore.server(id: serverID) else { return [] }
+        return await resolver.answeringAddresses(of: server)
+    }
+
+    /// Connects to the server with `serverID` at `address` from now on, when it's one of the server's addresses. The
+    /// server's clients go, so everything made from now on talks to the new address.
+    ///
+    /// - Returns: Whether the address in use changed.
+    @discardableResult
+    public func useAddress(_ address: URL, forServer serverID: String) async throws -> Bool {
+        guard let before = try await serverStore.server(id: serverID) else { return false }
+        let updated = try await serverStore.update(id: serverID) { $0.use(address) }
+        guard let updated, updated.url != before.url else { return false }
+        forgetClients(forServer: serverID)
+        return true
+    }
+
+    /// Adds the address `connected` answered at to the saved server with `serverID`, after its other addresses. The
+    /// address in use stays until Serafin finds the new one answers better.
+    ///
+    /// - Returns: The server as saved, or nil when it's no longer saved.
+    /// - Throws: ``SerafinError/differentServer`` when another server answered there, and
+    ///   ``SerafinError/tooManyAddresses`` when the server has ``Server/maximumAddresses`` already.
+    @discardableResult
+    public func addAddress(_ connected: ConnectedServer, toServer serverID: String) async throws -> Server? {
+        guard connected.server.id == serverID else { throw SerafinError.differentServer }
+        let address = connected.server.url
+        return try await serverStore.update(id: serverID) { try $0.add(address) }
+    }
+
+    /// The address `server` gives for itself on its own network or tailnet, as a server ready to add at it, when it
+    /// isn't one of `server`'s addresses yet and the server answers there as itself. Nil otherwise: when the server
+    /// gives none, gives a remote one, or gives one it doesn't answer at, such as an address only its container can
+    /// reach, and when `server` has ``Server/maximumAddresses`` already.
+    ///
+    /// - Parameter info: What the server reported when it was just reached, or nil to ask it at the address in use.
+    public func suggestedAddress(for server: Server, reportedBy info: PublicServerInfo? = nil) async -> ConnectedServer?
+    {
+        guard server.addresses.count < Server.maximumAddresses else { return nil }
+        var reported = info
+        if reported == nil {
+            reported = try? await connector.connect(to: server.url).info
+        }
+        guard
+            let address = reported?.localAddress, server.address(matching: address) == nil,
+            ServerAddressKind(address) != .remote,
+            let connected = try? await connector.connect(to: address, timeout: Self.suggestionTimeout),
+            connected.server.id == server.id
+        else { return nil }
+        return connected
+    }
+
+    /// Forgets one of the server's addresses, with its certificate pin unless another saved address has the same
+    /// host. When it was the address in use, the server connects at its first address left from now on. A server's
+    /// last address stays; removing the server forgets it.
+    public func removeAddress(_ address: URL, fromServer serverID: String) async throws {
+        guard let before = try await serverStore.server(id: serverID), let saved = before.address(matching: address)
+        else { return }
+        guard let updated = try await serverStore.update(id: serverID, { $0.remove(saved) }),
+            updated.addresses.count < before.addresses.count
+        else { return }
+        if updated.url != before.url {
+            forgetClients(forServer: serverID)
+        }
+        try await forgetPins(of: [saved])
     }
 
     /// Asks the server with `serverID` for its name again, and saves it if the server has been renamed.
@@ -162,8 +262,8 @@ public actor Accounts {
         }
     }
 
-    /// Signs every user out of a server and forgets it. Its certificate pin goes too, unless another saved server
-    /// uses the same host.
+    /// Signs every user out of a server and forgets it. Its addresses' certificate pins go too, unless another saved
+    /// address has the same host.
     public func remove(serverID: String) async throws {
         guard let server = try await serverStore.server(id: serverID) else { return }
         var endings: [SessionEnding] = []
@@ -175,9 +275,7 @@ public actor Accounts {
         try await serverStore.remove(id: serverID)
         forgetClients(forServer: serverID)
         await deleteDownloads { try await $0.deleteAll(forServer: serverID) }
-        if let host = server.url.host(), try await !serverStore.servers().contains(where: { $0.url.host() == host }) {
-            try pins.removePin(for: host)
-        }
+        try await forgetPins(of: server.addresses)
         await Self.endSessions(endings, clients: clients)
     }
 
@@ -214,7 +312,8 @@ public actor Accounts {
     public func signInArtwork(for server: Server) async throws -> Artwork {
         _ = try TransportPolicy.security(of: server.url)
         let authorization = try await identity.authorizationHeader(accessToken: nil)
-        return Artwork(urls: ImageURLs(serverURL: server.url), pipeline: images, authorization: authorization)
+        return Artwork(
+            urls: ImageURLs(serverURL: server.url), pipeline: images, authorization: authorization, serverID: server.id)
     }
 
     /// Asks `server` for a Quick Connect code to show the user.
@@ -383,7 +482,9 @@ public actor Accounts {
         _ = try TransportPolicy.security(of: account.server.url)
         guard let token = try await sessions.token(for: account.key) else { throw SerafinError.notSignedIn }
         let authorization = try await identity.authorizationHeader(accessToken: token)
-        return Artwork(urls: ImageURLs(serverURL: account.server.url), pipeline: images, authorization: authorization)
+        return Artwork(
+            urls: ImageURLs(serverURL: account.server.url), pipeline: images, authorization: authorization,
+            serverID: account.server.id)
     }
 
     // MARK: - Helpers
@@ -503,6 +604,14 @@ public actor Accounts {
         signInClients[serverID] = nil
         accountClients = accountClients.filter { $0.key.serverID != serverID }
         libraries = libraries.filter { $0.key.serverID != serverID }
+    }
+
+    /// Forgets the certificate pins of `addresses`' hosts, but not of a host another saved address still has.
+    private func forgetPins(of addresses: [URL]) async throws {
+        let kept = Set(try await serverStore.servers().flatMap(\.addresses).compactMap { $0.host()?.lowercased() })
+        for host in Set(addresses.compactMap { $0.host()?.lowercased() }) where !kept.contains(host) {
+            try pins.removePin(for: host)
+        }
     }
 
     /// Turns an error from talking to `server` into a ``SerafinError``, or passes a cancellation on.

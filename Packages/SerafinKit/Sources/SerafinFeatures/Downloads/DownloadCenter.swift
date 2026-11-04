@@ -65,11 +65,11 @@ import os
     private static let logger = Logger(serafinCategory: "downloads")
     @ObservationIgnored private let downloads: Downloads
     @ObservationIgnored private let key: SessionKey
-    @ObservationIgnored private let planner: DownloadPlanner
-    @ObservationIgnored private let library: LibraryRepository
-    @ObservationIgnored private let artwork: Artwork?
-    @ObservationIgnored private let sync: PlaybackSync?
-    @ObservationIgnored private let trickplay: TrickplayRepository?
+    @ObservationIgnored private var planner: DownloadPlanner
+    @ObservationIgnored private var library: LibraryRepository
+    @ObservationIgnored private var artwork: Artwork?
+    @ObservationIgnored private var sync: PlaybackSync?
+    @ObservationIgnored private var trickplay: TrickplayRepository?
     @ObservationIgnored private let defaults: UserDefaults
     /// Whether the server has said if the account may download, which it can't while it's out of reach.
     @ObservationIgnored private var knowsPermission = false
@@ -112,6 +112,20 @@ import os
         }
         // Apart from reading the downloads, which show at once even when the server takes long to answer.
         Task { [weak self] in await self?.checkPermission() }
+    }
+
+    /// Talks to the account's server through these from now on, as when the server moves to another address. The
+    /// downloads, and what screens show of them, stay as they are; a download already on its way keeps the address it
+    /// started at, and one still waiting starts at the new one.
+    func reconnect(
+        planner: DownloadPlanner, library: LibraryRepository, artwork: Artwork?, sync: PlaybackSync?,
+        trickplay: TrickplayRepository?
+    ) {
+        self.planner = planner
+        self.library = library
+        self.artwork = artwork
+        self.sync = sync
+        self.trickplay = trickplay
     }
 
     /// Where the download of `itemID` is.

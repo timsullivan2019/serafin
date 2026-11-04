@@ -32,6 +32,10 @@ public enum SerafinError: Error, Equatable, Sendable {
     case notJellyfin
     /// The server runs a Jellyfin version older than Serafin supports, which it carries.
     case unsupportedServerVersion(String)
+    /// The address answers as another Jellyfin server than the one it was to be added to.
+    case differentServer
+    /// The server already has as many addresses as Serafin keeps, ``Server/maximumAddresses``.
+    case tooManyAddresses
     /// The server refused the username and password.
     case invalidCredentials
     /// Quick Connect is turned off on this server, so the user signs in with a password instead.
