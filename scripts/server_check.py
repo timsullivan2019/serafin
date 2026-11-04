@@ -299,7 +299,7 @@ class Live:
 
         s.request("POST", "/Users/New", headers=self.admin, body={"Name": "viewer", "Password": user_password})
         query = urllib.parse.urlencode(
-            {"name": "Movies", "collectionType": "movies", "paths": "/media/Movies", "refreshLibrary": "true"})
+            {"name": "Movies", "collectionType": "movies", "paths": "/media/Movies", "refreshLibrary": "false"})
         status, data, _ = s.request("POST", f"/Library/VirtualFolders?{query}", headers=self.admin, body={
             "LibraryOptions": {
                 "EnableTrickplayImageExtraction": True,
@@ -310,6 +310,13 @@ class Live:
             }})
         if status >= 300:
             sys.exit(f"Adding the library failed: HTTP {status} {data[:200]!r}")
+        # Scans with /Library/Refresh rather than the add's refreshLibrary. From 12.2 the add drops its scan while
+        # another one runs, such as the one a fresh server starts when its wizard finishes, and that scan began before
+        # the library existed, so it never finds the film (LibraryManager.StartScanInBackground and
+        # ConfigurationUpdated). /Library/Refresh stops a running scan and starts another, in every version.
+        status, data, _ = s.request("POST", "/Library/Refresh", headers=self.admin)
+        if status >= 300:
+            sys.exit(f"Starting the library scan failed: HTTP {status} {data[:200]!r}")
         self.password = user_password
 
     def sign_in(self, username, password, device_id=DEVICE_ID):
