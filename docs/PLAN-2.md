@@ -278,7 +278,7 @@ On the owner's server: watch three channels end to end, switch channels from the
 ### 5.0 Preconditions and policy
 
 - Downloads are offered only when the user's policy has `enableContentDownloading` (from `GET /Users/Me`). Otherwise the UI shows no download affordances and Settings explains why.
-- The demo server's `reviewer` and `screenshots` accounts get "Allow media downloading" enabled before 1.2 is submitted (update `deploy/demo-server/README.md`).
+- The demo server's `reviewer` account, which App Review and the App Store screenshots both use (there is no separate `screenshots` account), has "Allow media downloading" enabled (update `deploy/demo-server/README.md` to match).
 - Two download paths, decided per media source by `DownloadPlanner`:
   1. **Original file** via `GET /Items/{id}/Download` when the container is mp4, m4v or mov and the video and audio codecs are in the AVPlayer direct-play set. Exact copy, resumable with `Range`.
   2. **Remux** otherwise: `GET /Videos/{id}/stream` with `static=false`, `container=mp4`, `videoCodec=copy` (or `h264,hevc`), `audioCodec=aac,ac3,eac3` (copy when already supported), the chosen `audioStreamIndex`, `subtitleMethod=Embed` for text subtitles and `Encode` (burn-in) when the user picks an image-based subtitle, `mediaSourceId`, `api_key`. The response is a progressive MP4 with unknown length; progress shows as "indeterminate" with bytes received. The agent must verify on the owner's server that the output is seekable and plays from disk; if it is not, fall back to `AVAssetDownloadURLSession` against the HLS remux and store the resulting package, reporting playback progress to the server during the download so the transcode is not throttled.
@@ -429,7 +429,7 @@ Add before each corresponding release is submitted.
 
 - **Live TV loop channel (for 1.1):** a `livetv/` folder with a `docker-compose.override.yml` adding an `ffmpeg` service that loops Big Buck Bunny into HLS (`-re -stream_loop -1 -i bbb.mp4 -c copy -f hls -hls_time 6 -hls_list_size 10 -hls_flags delete_segments+omit_endlist` into a shared volume) and an internal Caddy site on port 8080 that file-serves it; a `demo.m3u` with one entry named "Serafin Demo 1" pointing at `http://caddy:8080/livetv/demo1/index.m3u8` with a `tvg-logo`; a `make-xmltv.sh` that writes 48 hours of hour-long "Serafin Demo Hour" programs with descriptions; README steps to add the M3U tuner and the XMLTV guide in Jellyfin's Live TV dashboard and to set a recording path. A second channel looping Sintel is optional.
 - **Music library (for 1.3):** `fetch-music.sh` downloading the Tears of Steel soundtrack from `download.blender.org/demo/movies/ToS/Tears-Of-Steel-OST/` and a curated list of Free Music Archive CC BY albums (URLs kept in a text file with their licence lines), tagging with embedded metadata, placed under `media/Music/<Artist>/<Album>/`; README steps to add the Music library.
-- **Permissions (for 1.2):** enable "Allow media downloading" for `reviewer` and `screenshots`.
+- **Permissions:** "Allow media downloading" is enabled for `reviewer`, the one account App Review and the screenshots use.
 - **Review notes:** append to the existing text, per release: how to find Live TV (the demo channel), how to download Big Buck Bunny and test offline, how to find Music. Live TV also gets a 60-second screen recording hosted at `getserafin.app/review/livetv.mp4` for the reviewer.
 
 ---
