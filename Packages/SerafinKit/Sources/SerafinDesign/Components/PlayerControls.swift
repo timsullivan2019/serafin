@@ -518,10 +518,9 @@ private struct ScrubberPreviewLayer: View {
 
     var body: some View {
         GlassEffectContainer {
-            ScrubberPreviewPlacement(knob: knob, top: geometry.bar.minY, isRegular: sizeClass == .regular)
-                .callAsFunction {
-                    preview
-                }
+            ScrubberPreviewPlacement(knob: knob, top: geometry.bar.minY, isRegular: sizeClass == .regular) {
+                preview
+            }
         }
         .allowsHitTesting(false)
         .animation(Motion.animation(reduceMotion: reduceMotion), value: fraction == nil)

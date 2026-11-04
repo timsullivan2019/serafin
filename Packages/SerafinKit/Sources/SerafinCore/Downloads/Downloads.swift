@@ -538,7 +538,7 @@ public actor Downloads {
                 break
             }
         }
-        let finished = try await store.update(id: id) { record in
+        let finished = try await store.update(id: id) { [saved] record in
             guard record.trickplay?.layout == layout else { return }
             record.trickplay = saved ? DownloadTrickplay(layout: layout, isComplete: true) : nil
         }

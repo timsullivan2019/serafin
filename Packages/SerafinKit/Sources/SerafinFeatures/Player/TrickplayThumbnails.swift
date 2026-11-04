@@ -58,7 +58,8 @@ import os
     convenience init?(_ tiles: TrickplayTiles?, isRegular: Bool, scale: CGFloat, artwork: Artwork?) {
         guard let tiles,
             let reader = TrickplayTileReader(
-                tiles, points: Self.previewBudget(isRegular: isRegular), scale: scale, artwork: artwork)
+                tiles, points: TrickplayThumbnails.previewBudget(isRegular: isRegular), scale: scale,
+                artwork: artwork)
         else { return nil }
         self.init(reader: reader)
     }
@@ -117,7 +118,7 @@ import os
         let place = layout.place(at: position)
         let range = layout.thumbnails(inTile: place.tile)
         let nearer = place.thumbnail - range.lowerBound < range.count / 2 ? place.tile - 1 : place.tile + 1
-        let wanted = Set([place.tile, nearer].filter(isTile).prefix(maximumTiles))
+        let wanted = Set([place.tile, nearer].filter { isTile($0) }.prefix(maximumTiles))
         for (tile, task) in decoding where !wanted.contains(tile) {
             task.cancel()
             decoding[tile] = nil

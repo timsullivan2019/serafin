@@ -432,14 +432,16 @@ public enum PlaybackState: Equatable, Sendable {
 
     /// `item` with its trickplay thumbnails and chapters, as `repository` finds them, or `item` as it is with no
     /// repository to ask.
-    private static func details(of item: BaseItemDto, asking repository: TrickplayRepository?) async -> BaseItemDto {
+    private nonisolated static func details(
+        of item: BaseItemDto, asking repository: TrickplayRepository?
+    ) async -> BaseItemDto {
         guard let repository else { return item }
         return await repository.details(of: item)
     }
 
     /// The server's trickplay thumbnails of the version `mediaSourceID` in `item`'s `Trickplay` field, or nil when
     /// it made none.
-    static func serverTrickplay(in item: BaseItemDto, mediaSourceID: String) -> TrickplayTiles? {
+    nonisolated static func serverTrickplay(in item: BaseItemDto, mediaSourceID: String) -> TrickplayTiles? {
         let layouts = Trickplay.layouts(in: item.trickplay, mediaSourceID: mediaSourceID)
         return layouts.isEmpty ? nil : .server(mediaSourceID: mediaSourceID, layouts: layouts)
     }
