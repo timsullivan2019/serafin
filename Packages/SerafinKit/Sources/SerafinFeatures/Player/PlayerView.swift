@@ -1,4 +1,5 @@
 import JellyfinAPI
+import Nuke
 import SerafinCore
 import SerafinDesign
 import SerafinPlayback
@@ -85,7 +86,7 @@ struct PlayerView: View {
         /// the card goes in the same update that shows the next episode's title.
         private var nextEpisode: NextEpisodePrompt? {
             guard let offered = screen.nextEpisodeOffer, offered == item.id, offered == engine.item?.id,
-                let next = engine.nextItem.flatMap(MediaItem.init)
+                let next = playback.nextItem
             else { return nil }
             let artwork = nextArtwork?.itemID == next.id ? nextArtwork : nil
             return NextEpisodePrompt(
@@ -132,7 +133,7 @@ struct PlayerView: View {
                 await screen.tickCountdown { playNext() }
             }
             .task(id: engine.nextItem?.id) {
-                guard let next = engine.nextItem else { return }
+                guard let next = playback.nextItem else { return }
                 nextArtwork = await NextEpisodeArtwork.load(next, artwork: artwork, scale: displayScale)
             }
             .task(id: screen.noticeCount) {
@@ -377,15 +378,25 @@ struct PlayerView: View {
         let image: Image
         let tint: Color
 
-        /// Loads `item`'s thumbnail at the card's size, or nil when there's none to show.
-        static func load(_ item: BaseItemDto, artwork: Artwork?, scale: CGFloat) async -> NextEpisodeArtwork? {
-            guard let id = item.id, let artwork,
-                let request = artwork.request(
-                    .landscape, of: item, width: NextEpisodeCard.thumbnailWidth, scale: scale),
+        /// Loads `item`'s thumbnail at the card's size, or nil when there's none to show: the server's, or for an item
+        /// shown from what was saved with its download, the picture saved with it.
+        static func load(_ item: MediaItem, artwork: Artwork?, scale: CGFloat) async -> NextEpisodeArtwork? {
+            guard let artwork, let request = request(for: item, from: artwork, scale: scale),
                 let loaded = try? await artwork.pipeline.image(for: request),
                 let bitmap = loaded.bitmap
             else { return nil }
-            return NextEpisodeArtwork(itemID: id, image: Image(uiImage: loaded), tint: ArtworkTint.color(for: bitmap))
+            return NextEpisodeArtwork(
+                itemID: item.id, image: Image(uiImage: loaded), tint: ArtworkTint.color(for: bitmap))
+        }
+
+        /// The request for `item`'s thumbnail at the card's size: for the picture saved with its download when it's
+        /// shown from that, otherwise for the server's.
+        private static func request(for item: MediaItem, from artwork: Artwork, scale: CGFloat) -> ImageRequest? {
+            let width = NextEpisodeCard.thumbnailWidth
+            if let saved = item.savedArtwork {
+                return saved.url(for: .landscape).map { Artwork.request(file: $0, width: width, scale: scale) }
+            }
+            return item.source.flatMap { artwork.request(.landscape, of: $0, width: width, scale: scale) }
         }
     }
 

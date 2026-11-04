@@ -39,6 +39,17 @@ public struct NextEpisode: Sendable {
         return Self.episode(after: episodeID, in: episodes)
     }
 
+    /// The episode after `episode` in its show, as ``after(_:)`` finds it, or when the server can't say, as with no
+    /// connection, `downloaded`: for a downloaded episode, the one downloaded after it, which plays with no server.
+    /// When the server says `episode` is the last, there's none, whatever is downloaded.
+    public func after(_ episode: BaseItemDto, orDownloaded downloaded: BaseItemDto?) async -> BaseItemDto? {
+        do {
+            return try await after(episode)
+        } catch {
+            return downloaded
+        }
+    }
+
     /// The episode listed after `episodeID`, if any.
     static func episode(after episodeID: String, in episodes: [BaseItemDto]) -> BaseItemDto? {
         guard let index = episodes.firstIndex(where: { $0.id == episodeID }), index + 1 < episodes.count else {

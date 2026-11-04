@@ -16,6 +16,9 @@ struct SettingsView: View {
                 .id(session.account?.server.id)
             DeliverySection()
             LockSection()
+            if let downloads = session.downloads {
+                DownloadsSection(downloads: downloads)
+            }
             StorageSection()
             AboutSection()
             #if DEBUG
@@ -441,6 +444,43 @@ private struct DeliverySection: View {
                     comment: "Settings footer under the ways a video can play."
                 )
             )
+        }
+    }
+}
+
+/// The downloads, as a row that opens them with the space they take, the quality they're made at, and whether they
+/// may use cellular data.
+private struct DownloadsSection: View {
+    let downloads: DownloadCenter
+    @AppStorage(DownloadCenter.cellularKey) private var usesCellular = false
+    @AppStorage(DownloadCenter.qualityKey) private var quality = PlaybackQuality.maximum
+
+    var body: some View {
+        Section {
+            NavigationLink(value: Route.downloads) {
+                LabeledContent(DownloadsView.title, value: DownloadRow.size(downloads.usedBytes))
+            }
+            Picker(
+                String(
+                    localized: "Download Quality", bundle: .module,
+                    comment: "Settings row: the most bandwidth a downloaded video may take."),
+                selection: $quality
+            ) {
+                ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
+            }
+            .rebuiltForAccent()
+            Toggle(
+                String(
+                    localized: "Download over Cellular", bundle: .module,
+                    comment: "Settings switch that lets downloads use cellular data."),
+                isOn: $usesCellular)
+        } footer: {
+            Text(
+                String(
+                    localized:
+                        "Below Maximum, your server converts videos above the download quality, so they take less space. Downloads are kept on this device only, not in your backups, and are removed when you sign out.",
+                    bundle: .module,
+                    comment: "Settings footer under the download quality and the downloads row."))
         }
     }
 }

@@ -7,7 +7,8 @@ import Synchronization
 
 /// The samples, except where a test needs something else: a long grid of made-up titles that pages and counts the way
 /// the server does, or the way a broken server does, a server that refuses every change, Home saved on the device and
-/// a server that can't be reached, grids or genres that don't load, or seasons whose episodes don't load.
+/// a server that can't be reached, grids or genres that don't load, seasons whose episodes don't load, or details that
+/// are slow or don't load, with downloads to show instead.
 struct TestMediaSource: MediaSource {
     /// Titles every grid lists instead of the samples, or nil for the samples' grids.
     var titles: [String]?
@@ -33,6 +34,12 @@ struct TestMediaSource: MediaSource {
     var failsGenres = false
     /// The seasons whose episodes fail to load.
     var failingSeasons: Set<String> = []
+    /// Why details fail to load, or nil when they load the samples'.
+    var detailsFailure: SerafinError?
+    /// How long details take to arrive, or nil for straight away.
+    var detailsDelay: Duration?
+    /// The downloads, as shown from what was saved with them.
+    var downloaded: [MediaItem] = []
     private let samples = SampleMediaSource()
 
     func home() async throws -> HomeContent {
@@ -84,7 +91,17 @@ struct TestMediaSource: MediaSource {
         return try await samples.genres()
     }
 
-    func details(of id: String) async throws -> ItemDetails { try await samples.details(of: id) }
+    func details(of id: String) async throws -> ItemDetails {
+        if let detailsDelay {
+            try await Task.sleep(for: detailsDelay)
+        }
+        if let detailsFailure { throw detailsFailure }
+        return try await samples.details(of: id)
+    }
+
+    func savedDetails(of id: String) async -> ItemDetails? {
+        ItemDetails.saved(id, among: downloaded)
+    }
 
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {
         if failingSeasons.contains(seasonID) { throw URLError(.timedOut) }

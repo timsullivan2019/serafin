@@ -96,12 +96,13 @@ struct EpisodeLink: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.playerZoomNamespace) private var playerZoom
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
 
     var body: some View {
         ItemArtwork(item, role: .landscape) { image in
             EpisodeCard(
                 card: item.card, artwork: image, zoomNamespace: zoom, playZoomNamespace: playerZoom,
-                textHeight: textHeight
+                textHeight: textHeight, download: downloads?.mark(of: item.id)
             ) {
                 playback.play(item, zoomSource: CardPlayZoom.id(for: item.id))
             } menu: {

@@ -53,7 +53,7 @@ struct HomeHeroPage: View {
     /// How wide a backdrop to ask for so that, filling a frame of `size`, it isn't enlarged: a 16:9 image filling a
     /// tall frame is as wide as 16:9 of the frame's height. Zero until the frame has a size, which asks for nothing
     /// yet. The detail screen's hero asks the same way, so zooming in from Home finds the same image already loaded.
-    static func backdropWidth(for size: CGSize) -> CGFloat {
+    nonisolated static func backdropWidth(for size: CGSize) -> CGFloat {
         guard size.width > 0, size.height > 0 else { return 0 }
         return max(size.width, size.height * 16 / 9)
     }

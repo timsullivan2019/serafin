@@ -180,6 +180,40 @@ private let bareEpisode = BaseItemDto(
             urls: urls, pipeline: ImagePipeline.serafin(pinning: nil, diskCacheName: nil), authorization: "x")
         #expect(artwork.request(.backdrop, of: BaseItemDto(id: "dddd4444"), width: 390, scale: 3) == nil)
     }
+
+    @Test func aPictureForADownloadIsWhatTheServerSendsAtItsWidth() async throws {
+        let host = "artwork-data.example.com"
+        let artwork = Artwork(
+            urls: ImageURLs(serverURL: try #require(URL(string: "https://\(host)"))),
+            pipeline: ImagePipeline.serafin(
+                pinning: nil, diskCacheName: nil, sessionConfiguration: StubURLProtocol.configuration()),
+            authorization: #"MediaBrowser Token="secret""#
+        )
+        let path = "/Items/aaaa1111/Images/Primary"
+        StubURLProtocol.stub("\(host):443", path: path, .json(200, "picture"))
+
+        #expect(try await artwork.data(.poster, of: movie, width: 500, scale: 2) == Data("picture".utf8))
+
+        let sent = try #require(StubURLProtocol.requests(to: "\(host):443", path: path).first)
+        #expect(sent.authorization == #"MediaBrowser Token="secret""#)
+        #expect(sent.query("maxWidth") == "1000")
+        #expect(sent.query("api_key") == nil)
+        #expect(try await artwork.data(.backdrop, of: BaseItemDto(id: "dddd4444"), width: 500, scale: 2) == nil)
+    }
+
+    @Test func aSavedPictureIsReadFromItsFileAndDecodedAtItsWidth() {
+        let file = URL.temporaryDirectory.appending(path: "poster")
+        let request = Artwork.request(file: file, width: 120, scale: 3)
+
+        #expect(request.url == file)
+        #expect(request.urlRequest?.value(forHTTPHeaderField: "Authorization") == nil)
+        let decodedSize = ImageRequest.ThumbnailOptions(
+            size: CGSize(width: 400, height: 1600),
+            unit: .pixels,
+            contentMode: .aspectFit
+        )
+        #expect(request.thumbnail == decodedSize)
+    }
 }
 
 @Suite struct ProfileImageTests {

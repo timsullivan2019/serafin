@@ -30,6 +30,9 @@ import os
     public private(set) var artwork: Artwork?
     /// Plays the current account's movies and episodes, or nil when no one is signed in.
     public private(set) var player: PlayerEngine?
+    /// The current account's downloads, or nil when no one is signed in or the session has no downloads, as in
+    /// previews.
+    private(set) var downloads: DownloadCenter?
 
     /// The account the app is browsing as, if any.
     public var account: Account? {
@@ -55,12 +58,16 @@ import os
     }
 
     /// The session the app runs with: tokens, certificate pins and the device ID in the Keychain, the server list
-    /// in Application Support, and the current account's movies and shows in Spotlight.
+    /// and downloads in Application Support, and the current account's movies and shows in Spotlight.
     ///
     /// - Parameter deviceName: The device name servers show, such as "iPhone".
     public static func live(deviceName: String) -> AppSession {
         AppSession(
-            accounts: Accounts(secrets: KeychainSecretStore(), deviceName: deviceName),
+            accounts: Accounts(
+                secrets: KeychainSecretStore(),
+                deviceName: deviceName,
+                downloads: .live(preparer: DownloadedCopyWriter())
+            ),
             spotlight: .shared
         )
     }
@@ -208,10 +215,22 @@ import os
             if current != account || library == nil || artwork == nil || player == nil {
                 let library = try await accounts.library(for: current)
                 self.library = library
-                artwork = try await accounts.artwork(for: current)
+                let artwork = try await accounts.artwork(for: current)
+                self.artwork = artwork
                 let previous = player
+                let client = try await accounts.client(for: current)
+                downloads = accounts.downloads.map {
+                    DownloadCenter(
+                        downloads: $0,
+                        key: current.key,
+                        planner: DownloadPlanner(client: client, userID: current.user.id),
+                        library: library,
+                        artwork: artwork,
+                        sync: PlaybackSync(client: client, key: current.key, downloads: $0)
+                    )
+                }
                 player = PlayerEngine(
-                    client: try await accounts.client(for: current),
+                    client: client,
                     userID: current.user.id,
                     pinning: accounts.pinning,
                     playbackPreferences: { try await library.playbackPreferences() }
@@ -230,6 +249,7 @@ import os
         library = nil
         artwork = nil
         player = nil
+        downloads = nil
         state = .signedOut
         await previous?.stop()
     }

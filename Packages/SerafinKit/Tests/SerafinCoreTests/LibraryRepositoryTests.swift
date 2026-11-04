@@ -231,6 +231,33 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(seasons.queryValues("fields").contains("ChildCount"))
     }
 
+    @Test func episodesWithFilesComeFromOneEpisodeOnOrFromOneSeason() async throws {
+        let host = "show-available.example.com"
+        let series = "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"
+        let season = "a09b8c7d6e5f4a3b2c1d0e9f8a7b6c5d"
+        let next = "c2b1d0e9f8a7b6c5d4e3f2a1b0c9d8e7"
+        let path = "/Shows/\(series)/Episodes"
+        StubURLProtocol.stub("\(host):443", path: path, .json(200, try Fixture.json("Episodes")))
+        let library = try library(on: host)
+
+        let episodes = try await library.availableEpisodes(series: series, from: next, limit: 8)
+        #expect(episodes.map(\.name) == ["A Scandal in Bohemia", "The Red-Headed League"])
+        let fromNext = try #require(StubURLProtocol.requests(to: "\(host):443", path: path).first)
+        #expect(fromNext.query("startItemId") == next)
+        #expect(fromNext.query("limit") == "8")
+        #expect(fromNext.query("seasonId") == nil)
+        // Missing episodes and those yet to air have no file.
+        #expect(fromNext.query("isMissing") == "false")
+        #expect(fromNext.query("enableUserData") == "true")
+
+        _ = try await library.availableEpisodes(series: series, season: season)
+        let inSeason = try #require(StubURLProtocol.requests(to: "\(host):443", path: path).last)
+        #expect(inSeason.query("seasonId") == season)
+        #expect(inSeason.query("startItemId") == nil)
+        #expect(inSeason.query("limit") == nil)
+        #expect(inSeason.query("isMissing") == "false")
+    }
+
     @Test func similarTitles() async throws {
         let host = "similar.example.com"
         let id = "5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
