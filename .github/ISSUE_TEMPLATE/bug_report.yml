@@ -1,0 +1,87 @@
+name: Bug report
+description: Something in Serafin isn't working the way it should.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The fields below are what we need to reproduce it; the more exact, the faster the fix.
+        Please don't include server addresses, usernames, passwords, tokens or screenshots that show them.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: "I tapped Resume on an episode and the player opened but stayed black for 30 seconds, then showed 'Couldn't play'."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Serafin, go to Home
+        2. Tap an episode in Continue Watching
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Playback (player, audio, subtitles, PiP, AirPlay)
+        - Downloads and offline
+        - Sign-in and servers
+        - Home, Library or Search
+        - Movie / show pages
+        - Settings
+        - Siri, Shortcuts or Spotlight
+        - Design or accessibility
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and iOS version
+      placeholder: "iPhone 16 Pro, iOS 26.1"
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Serafin version
+      description: Settings › About › Version
+      placeholder: "1.1.0 (42)"
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: Jellyfin server version
+      description: Dashboard › About in the Jellyfin web app
+      placeholder: "10.11.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How do you connect to your server?
+      options:
+        - HTTPS through a reverse proxy
+        - HTTPS directly (port 8920 or similar)
+        - Plain HTTP on my home network
+        - Tailscale or another VPN
+        - Not sure
+  - type: textarea
+    id: media
+    attributes:
+      label: Media details (playback bugs)
+      description: For playback problems, paste the Format section from the movie or episode page (resolution, HDR, audio, subtitles) and whether the player said Direct play, Repackaged on server, or Transcoding on server.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, a screen recording, or server logs with addresses removed.
