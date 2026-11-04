@@ -1,5 +1,6 @@
 import Foundation
 import JellyfinAPI
+import Nuke
 import Observation
 import SerafinCore
 import SerafinDesign
@@ -12,9 +13,9 @@ import SerafinPlayback
 /// What is playing, shared by the full-screen player and Picture in Picture.
 ///
 /// It starts items on the account's ``PlayerEngine`` at their resume point, under the streaming cap Settings gives
-/// for the network the device is on. Putting the player away hands a playing video to Picture in Picture, or stops
-/// it. When playback stops it has every screen reload, so progress and played marks show. Without an engine, as in
-/// previews, it only pretends to play.
+/// for the network the device is on, or from their downloaded copy when they're downloaded. Putting the player away
+/// hands a playing video to Picture in Picture, or stops it. When playback stops it has every screen reload, so
+/// progress and played marks show. Without an engine, as in previews, it only pretends to play.
 @Observable @MainActor final class PlaybackCoordinator {
     /// Where to start an item.
     enum Start: Equatable {
@@ -60,6 +61,7 @@ import SerafinPlayback
     @ObservationIgnored private let media: any MediaSource
     @ObservationIgnored private let actions: MediaActions
     @ObservationIgnored private let artwork: Artwork?
+    @ObservationIgnored private let downloads: DownloadCenter?
     @ObservationIgnored private let serverID: String?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isOnExpensiveNetwork: @MainActor () -> Bool
@@ -71,6 +73,7 @@ import SerafinPlayback
     ///   - media: The library, refreshed when playback stops.
     ///   - actions: Has the screens reload when playback stops.
     ///   - artwork: Loads the artwork the Lock Screen shows.
+    ///   - downloads: The account's downloads, whose copies play instead of streams. Nil in previews.
     ///   - serverID: The account's server, whose streaming caps apply. Nil in previews.
     ///   - defaults: Where Settings keeps the streaming caps and the subtitle style.
     ///   - isOnExpensiveNetwork: Whether the device is on cellular or a personal hotspot right now. Nil asks the app's
@@ -80,6 +83,7 @@ import SerafinPlayback
         media: any MediaSource = SampleMediaSource(),
         actions: MediaActions = MediaActions(),
         artwork: Artwork? = nil,
+        downloads: DownloadCenter? = nil,
         serverID: String? = nil,
         defaults: UserDefaults = .standard,
         isOnExpensiveNetwork: (@MainActor () -> Bool)? = nil
@@ -88,6 +92,7 @@ import SerafinPlayback
         self.media = media
         self.actions = actions
         self.artwork = artwork
+        self.downloads = downloads
         self.serverID = serverID
         self.defaults = defaults
         if let isOnExpensiveNetwork {
@@ -107,13 +112,29 @@ import SerafinPlayback
         return engine.state == .playing
     }
 
+    /// The episode after the one playing, as the next episode's card shows it and Play Next plays it, or nil when
+    /// there's none. One the engine took from the downloads, as when the server couldn't say which comes next, shows
+    /// as what was saved with it, with its pictures, since the server's can't load.
+    var nextItem: MediaItem? {
+        engine?.nextItem.flatMap { Self.item(for: $0, among: downloads?.offlineItems ?? []) }
+    }
+
+    /// `next` as the player shows it: as what was saved with its download, among the account's downloads as `saved`,
+    /// when it's the item made from that, and otherwise as the server describes it.
+    nonisolated static func item(for next: BaseItemDto, among saved: [MediaItem]) -> MediaItem? {
+        if let item = saved.first(where: { $0.id == next.id }), item.source == next {
+            return item
+        }
+        return MediaItem(next)
+    }
+
     /// The most bits per second to stream from the account's server on the current network, or nil for no cap.
     var maxBitrate: Int? {
         PlaybackQuality.saved(onCellular: isOnExpensiveNetwork(), server: serverID, in: defaults).bitsPerSecond
     }
 
     /// Starts `item` and shows the full-screen player. Only movies and episodes play; a show or season plays from
-    /// its page, which knows the episode to start.
+    /// its page, which knows the episode to start. A downloaded movie or episode plays from its file, with no server.
     ///
     /// - Parameters:
     ///   - zoomSource: The control the player grows out of, or nil to slide up as usual.
@@ -139,7 +160,10 @@ import SerafinPlayback
             isPretending = true
             return
         }
-        let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: Self.startPosition(of: item, from: start))
+        let download = downloads?.playableDownload(of: item.id)
+        let copy = download?.copy
+        let startPosition = Self.startPosition(of: item, from: start, download: download?.record)
+        let options = PlaybackOptions(maxBitrate: maxBitrate, startPosition: startPosition)
         #if canImport(UIKit)
             engine.pictureInPictureDidStart = { [weak self] in self?.pictureInPictureStarted() }
             engine.restoreFromPictureInPicture = { [weak self] in
@@ -160,8 +184,8 @@ import SerafinPlayback
         // Started at once, so the engine's change to the new item lands in the same update as its title here. The
         // Lock Screen's artwork loads alongside the video.
         loading = Task.immediate { [artwork] in
-            async let lockScreenJPEG = Self.lockScreenArtwork(for: source, from: artwork)
-            await engine.load(source, options: options, keepsSubtitleChoice: continuing)
+            async let lockScreenJPEG = Self.lockScreenArtwork(for: item, from: artwork)
+            await engine.load(source, options: options, from: copy, keepsSubtitleChoice: continuing)
             guard !Task.isCancelled, let jpeg = await lockScreenJPEG else { return }
             engine.describe(title: card.title, subtitle: subtitle, artwork: jpeg)
         }
@@ -172,21 +196,20 @@ import SerafinPlayback
     /// and anything else stops.
     func endedWithoutThePlayer() {
         guard !isPlayerPresented, nowPlaying != nil else { return }
-        guard let engine, engine.playsNextEpisodeAutomatically, let next = engine.nextItem, let item = MediaItem(next)
-        else {
+        guard let engine, engine.playsNextEpisodeAutomatically, let next = nextItem else {
             stop()
             return
         }
-        play(item, from: .beginning, presentsPlayer: false, continuing: true)
+        play(next, from: .beginning, presentsPlayer: false, continuing: true)
     }
 
     /// Plays the episode after the one that just ended, with the subtitles picked in the player for it.
     func playNext() {
-        guard let next = engine?.nextItem, let item = MediaItem(next) else {
+        guard let next = nextItem else {
             stop()
             return
         }
-        play(item, from: .beginning, continuing: true)
+        play(next, from: .beginning, continuing: true)
     }
 
     /// Tries the item again from where playback was.
@@ -334,6 +357,7 @@ import SerafinPlayback
     private static let turnDuration = Duration.milliseconds(400)
 
     /// Stops playback, closes the player and Picture in Picture, and has the screens reload to show the new progress.
+    /// Progress made playing a download is sent to the server first, when it answers.
     func stop() {
         loading?.cancel()
         loading = nil
@@ -347,34 +371,49 @@ import SerafinPlayback
             nowPlaying = nil
         }
         guard let engine else { return }
-        Task { [media, actions] in
+        let playedDownload = engine.plan?.isDownloaded == true
+        Task { [media, actions, downloads] in
             await engine.stop()
+            if playedDownload {
+                await downloads?.syncPlayback()
+            }
             await media.refresh()
             actions.reload()
         }
     }
 
-    /// Where `item` starts.
-    static func startPosition(of item: MediaItem, from start: Start) -> Duration {
+    /// Where `item` starts. Resuming its `download`, when it last stopped on this device after the server last heard
+    /// of it being played, starts where it stopped here.
+    static func startPosition(of item: MediaItem, from start: Start, download: DownloadRecord? = nil) -> Duration {
         switch start {
         case .beginning:
             return .zero
         case .position(let position):
             return max(position, .zero)
         case .resume:
-            guard let ticks = item.source?.userData?.playbackPositionTicks, ticks > 0 else { return .zero }
+            let userData = item.source?.userData
+            if let playback = download?.playback, userData?.lastPlayedDate.map({ playback.changed > $0 }) ?? true {
+                return playback.resumePosition(runtime: download?.metadata.runtime ?? item.card.runtime)
+            }
+            guard let ticks = userData?.playbackPositionTicks, ticks > 0 else { return .zero }
             return Ticks.duration(ticks)
         }
     }
 
-    /// A JPEG of the item's thumbnail for the Lock Screen, or nil when it can't be had.
-    private static func lockScreenArtwork(for item: BaseItemDto, from artwork: Artwork?) async -> Data? {
+    /// A JPEG of the item's thumbnail for the Lock Screen, or nil when it can't be had: the server's, or for an item
+    /// shown from what was saved with its download, the picture saved with it.
+    private static func lockScreenArtwork(for item: MediaItem, from artwork: Artwork?) async -> Data? {
         #if canImport(UIKit)
-            guard
-                let artwork,
-                let request = artwork.request(.landscape, of: item, width: 600, scale: 1),
-                let image = try? await artwork.pipeline.image(for: request)
-            else { return nil }
+            let width: CGFloat = 600
+            let request: ImageRequest? =
+                if let saved = item.savedArtwork {
+                    saved.url(for: .landscape).map { Artwork.request(file: $0, width: width, scale: 1) }
+                } else {
+                    item.source.flatMap { artwork?.request(.landscape, of: $0, width: width, scale: 1) }
+                }
+            guard let artwork, let request, let image = try? await artwork.pipeline.image(for: request) else {
+                return nil
+            }
             return image.jpegData(compressionQuality: 0.85)
         #else
             return nil

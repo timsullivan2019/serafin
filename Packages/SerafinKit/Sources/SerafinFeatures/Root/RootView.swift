@@ -25,12 +25,14 @@ public struct RootView: View {
                 ConnectFlow()
             case .signedIn(let account):
                 if let library = session.library {
-                    let media = LiveMediaSource(library: library)
+                    let media = LiveMediaSource(library: library, downloads: session.downloads)
                     MainTabs(
-                        engine: session.player, media: media, artwork: session.artwork, serverID: account.server.id
+                        engine: session.player, media: media, artwork: session.artwork, downloads: session.downloads,
+                        serverID: account.server.id
                     )
                     .environment(\.media, media)
                     .environment(\.artwork, session.artwork)
+                    .environment(session.downloads)
                     .environment(
                         \.signInEnded,
                         SignInEndedAction(account: account.key) { [session] in
@@ -104,6 +106,7 @@ struct MainTabs: View {
     @State private var settingsPath: [Route] = []
     @State private var searchRequest = SearchRequest()
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(DownloadCenter.self) private var downloads: DownloadCenter?
     @State private var playback: PlaybackCoordinator
     @State private var actions: MediaActions
     @Namespace private var playerZoom
@@ -114,18 +117,21 @@ struct MainTabs: View {
     ///   - engine: The account's player engine, or nil to pretend to play.
     ///   - media: The library, which playback refreshes when it stops.
     ///   - artwork: Loads the artwork the Lock Screen shows.
+    ///   - downloads: The account's downloads, whose copies play instead of streams.
     ///   - serverID: The account's server, whose streaming caps apply.
     init(
         engine: PlayerEngine? = nil,
         media: any MediaSource = SampleMediaSource(),
         artwork: Artwork? = nil,
+        downloads: DownloadCenter? = nil,
         serverID: String? = nil
     ) {
         let actions = MediaActions()
         _actions = State(initialValue: actions)
         _playback = State(
             initialValue: PlaybackCoordinator(
-                engine: engine, media: media, actions: actions, artwork: artwork, serverID: serverID)
+                engine: engine, media: media, actions: actions, artwork: artwork, downloads: downloads,
+                serverID: serverID)
         )
     }
 
@@ -191,6 +197,57 @@ struct MainTabs: View {
             Button(String(localized: "OK", bundle: .module, comment: "Button that closes an alert.")) {}
         } message: {
             Text(actions.failure?.message ?? "")
+        }
+        .modifier(DownloadFailureAlert(downloads: downloads))
+        .modifier(DownloadProgressSync(downloads: downloads, actions: actions))
+    }
+}
+
+/// Sends the server the progress made with downloads when it may answer again: when the device joins a network, and
+/// when Serafin comes back to the foreground. The screens reload once the server has it. Coming back to the
+/// foreground also carries on writing the copies of downloads that arrived while Serafin couldn't.
+private struct DownloadProgressSync: ViewModifier {
+    let downloads: DownloadCenter?
+    let actions: MediaActions
+    @Environment(\.scenePhase) private var scenePhase
+    private let network = NetworkWatcher.shared
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: network.connection) { _, connection in
+                if connection.isOnline { sync() }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                if let downloads {
+                    Task { await downloads.prepareArrived() }
+                }
+                sync()
+            }
+    }
+
+    private func sync() {
+        guard let downloads else { return }
+        Task {
+            if await downloads.syncPlayback() {
+                actions.reload()
+            }
+        }
+    }
+}
+
+/// The alert for a download that couldn't start or be deleted.
+private struct DownloadFailureAlert: ViewModifier {
+    let downloads: DownloadCenter?
+
+    func body(content: Content) -> some View {
+        content.alert(
+            downloads?.failure?.title ?? "",
+            isPresented: Binding(get: { downloads?.failure != nil }, set: { if !$0 { downloads?.failure = nil } })
+        ) {
+            Button(String(localized: "OK", bundle: .module, comment: "Button that closes an alert.")) {}
+        } message: {
+            Text(downloads?.failure?.message ?? "")
         }
     }
 }
@@ -340,7 +397,8 @@ private struct OutsideRequests: ViewModifier {
         }
     }
 
-    /// Plays a movie or episode where the user left off, or a show's next episode. Anything else opens its page.
+    /// Plays a movie or episode where the user left off, or a show's next episode. Anything else opens its page. A
+    /// downloaded movie or episode plays from its download when the server can't be reached.
     private func play(_ id: String) async {
         do {
             let details = try await media.details(of: id)
@@ -350,7 +408,11 @@ private struct OutsideRequests: ViewModifier {
             }
             playback.play(playable)
         } catch {
-            actions.failure = UserMessage(error)
+            if let playable = await media.savedDetails(of: id)?.playable {
+                playback.play(playable)
+            } else {
+                actions.failure = UserMessage(error)
+            }
         }
     }
 }

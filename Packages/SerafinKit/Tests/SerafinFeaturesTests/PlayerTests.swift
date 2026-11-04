@@ -157,8 +157,8 @@ import Testing
         defaults = try #require(UserDefaults(suiteName: suite))
     }
 
-    private func episode(positionTicks: Int?) throws -> MediaItem {
-        let userData = UserItemDataDto(key: "key", playbackPositionTicks: positionTicks)
+    private func episode(positionTicks: Int?, lastPlayed: Date? = nil) throws -> MediaItem {
+        let userData = UserItemDataDto(key: "key", lastPlayedDate: lastPlayed, playbackPositionTicks: positionTicks)
         let item = BaseItemDto(
             id: "aaaa1111", name: "A Scandal in Bohemia", seriesID: "bbbb2222", seriesName: "Sherlock Holmes",
             type: .episode, userData: userData)
@@ -171,6 +171,36 @@ import Testing
         #expect(PlaybackCoordinator.startPosition(of: item, from: .beginning) == .zero)
         #expect(PlaybackCoordinator.startPosition(of: item, from: .position(.seconds(42))) == .seconds(42))
         #expect(PlaybackCoordinator.startPosition(of: try episode(positionTicks: nil), from: .resume) == .zero)
+    }
+
+    /// A download of the episode, fifty minutes long, that last stopped playing at `position` on `changed`.
+    private func download(stoppedAt position: Duration, on changed: Date) -> DownloadRecord {
+        DownloadRecord(
+            key: SessionKey(serverID: "server", userID: "user"), itemID: "aaaa1111", mediaSourceID: "aaaa1111",
+            fileExtension: "mp4", state: .finished,
+            metadata: DownloadMetadata(title: "A Scandal in Bohemia", kind: .episode, runtime: .seconds(3000)),
+            playback: DownloadPlayback(position: position, changed: changed))
+    }
+
+    @Test func aDownloadResumesWhereItLastStoppedOnTheDevice() throws {
+        let serverDate = Date(timeIntervalSince1970: 1_790_000_000)
+        let item = try episode(positionTicks: 9_000_000_000, lastPlayed: serverDate)
+        // Played on a plane the day after the server last heard of it, it resumes where it stopped there.
+        let later = download(stoppedAt: .seconds(1500), on: serverDate.addingTimeInterval(86_400))
+        #expect(PlaybackCoordinator.startPosition(of: item, from: .resume, download: later) == .seconds(1500))
+        // Played on another device since, the server's place wins.
+        let earlier = download(stoppedAt: .seconds(1500), on: serverDate.addingTimeInterval(-86_400))
+        #expect(PlaybackCoordinator.startPosition(of: item, from: .resume, download: earlier) == .seconds(900))
+        // Never played anywhere else, the device's place stands.
+        let unplayed = try episode(positionTicks: nil)
+        #expect(PlaybackCoordinator.startPosition(of: unplayed, from: .resume, download: earlier) == .seconds(1500))
+        // Watched to the end, it starts over.
+        let watched = download(stoppedAt: .seconds(2990), on: serverDate.addingTimeInterval(86_400))
+        #expect(PlaybackCoordinator.startPosition(of: item, from: .resume, download: watched) == .zero)
+        // Starting over, or at a chosen position, takes neither.
+        #expect(PlaybackCoordinator.startPosition(of: item, from: .beginning, download: later) == .zero)
+        let chosen = PlaybackCoordinator.startPosition(of: item, from: .position(.seconds(42)), download: later)
+        #expect(chosen == .seconds(42))
     }
 
     @Test func theStreamingCapFollowsTheNetwork() {

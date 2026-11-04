@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question or share an idea
+    url: https://github.com/timsullivan2019/serafin/discussions
+    about: Questions, setup help and open-ended ideas go in Discussions, not issues.
+  - name: Report a security problem
+    url: https://github.com/timsullivan2019/serafin/security/advisories/new
+    about: Please report vulnerabilities privately here, not in a public issue.
+  - name: Roadmap
+    url: https://github.com/timsullivan2019/serafin/projects
+    about: What's planned and in what order.

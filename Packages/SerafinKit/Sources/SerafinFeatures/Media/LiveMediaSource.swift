@@ -8,6 +8,9 @@ struct LiveMediaSource: MediaSource {
     static let castLimit = 24
 
     let library: LibraryRepository
+    /// The account's downloads, whose pages show from what was saved with them when the server can't be reached. Nil
+    /// for none.
+    var downloads: DownloadCenter?
 
     func home() async throws -> HomeContent {
         HomeContent(try await library.home())
@@ -147,6 +150,10 @@ struct LiveMediaSource: MediaSource {
         return details
     }
 
+    func savedDetails(of id: String) async -> ItemDetails? {
+        await downloads?.savedDetails(of: id)
+    }
+
     func episodes(inSeason seasonID: String, of seriesID: String) async throws -> [MediaItem] {
         MediaItem.from(try await library.episodes(series: seriesID, season: seasonID))
     }
@@ -173,12 +180,21 @@ struct LiveMediaSource: MediaSource {
         return CastMember(id: id, name: name, role: nil, source: source)
     }
 
+    /// Marks `item` played or not on the server, and keeps what the server then has with its download, if it has one.
+    /// An item shown from what was saved with its download, as with no server, is marked on the device, and the mark
+    /// reaches the server once it answers.
     func setPlayed(_ isPlayed: Bool, for item: MediaItem) async throws {
-        if isPlayed {
-            try await library.markPlayed(id: item.id)
-        } else {
-            try await library.markUnplayed(id: item.id)
+        if item.isSaved, let downloads {
+            try await downloads.setPlayed(isPlayed, ofSaved: item)
+            return
         }
+        let userData: UserItemDataDto
+        if isPlayed {
+            userData = try await library.markPlayed(id: item.id)
+        } else {
+            userData = try await library.markUnplayed(id: item.id)
+        }
+        await downloads?.keepServerPlayback(userData, of: item.id)
     }
 
     func setFavourite(_ isFavourite: Bool, for item: MediaItem) async throws {

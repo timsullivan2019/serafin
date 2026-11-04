@@ -141,6 +141,10 @@ struct SampleMediaSource: MediaSource {
         "series-oz": ["Fantasy"],
     ]
 
+    func savedDetails(of id: String) async -> ItemDetails? {
+        nil
+    }
+
     func details(of id: String) async throws -> ItemDetails {
         let all = MockMedia.movies + MockMedia.series + MockMedia.episodes
         guard let card = all.first(where: { $0.id == id }) else { throw SerafinError.notFound }

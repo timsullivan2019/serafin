@@ -25,6 +25,10 @@ struct UserMessage: Equatable, Identifiable, Sendable {
             self = Self.playback(error)
             return
         }
+        if let error = error as? DownloadError {
+            self = Self.download(error)
+            return
+        }
         guard let error = error as? SerafinError else {
             self = Self.unexpected
             return
@@ -276,6 +280,172 @@ struct UserMessage: Equatable, Identifiable, Sendable {
                         "Something went wrong playing this. Try again, or lower the streaming quality in Settings.",
                     bundle: .module,
                     comment: "Explanation when the player can't play a stream."
+                )
+            )
+        }
+    }
+
+    /// The message for a video that can't be downloaded, and why.
+    static func refused(_ refusal: DownloadRefusal) -> UserMessage {
+        let title = String(
+            localized: "Can't Download This", bundle: .module, comment: "Title when a video can't be downloaded.")
+        return switch refusal {
+        case .notAllowed:
+            UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "This video has to be converted to play on this device, and your server doesn't let your account have videos converted. Your server's administrator can allow it.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when a video needs converting for a download and the server's policy doesn't allow it."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .overQuality:
+            UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "This video is above your download quality, and your server doesn't let your account have it converted to fit. Set Download Quality to Maximum in Settings to download it as it is.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when a video is above the download quality and the server's policy doesn't allow converting it."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .unavailable:
+            UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Your server can't make a copy of this video that plays on this device. You can still stream it.",
+                    bundle: .module,
+                    comment: "Explanation when the server offers nothing a download can save."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        }
+    }
+
+    /// Why episodes asked to download together, as a season, didn't all start: the first reason one didn't.
+    enum UnstartedEpisodes {
+        /// The server can't offer a copy the account may have.
+        case refused(DownloadRefusal)
+        /// The device ran out of space, so the rest weren't tried.
+        case notEnoughSpace
+        /// Anything else, as the server being out of reach.
+        case failed(any Error)
+    }
+
+    /// The message for episodes asked to download together, as a season, that didn't all start, with why.
+    ///
+    /// - Parameters:
+    ///   - reason: Why the first that didn't start couldn't.
+    ///   - anyStarted: Whether some of them started, which are on their way.
+    static func episodesNotStarted(_ reason: UnstartedEpisodes, anyStarted: Bool) -> UserMessage {
+        let title: String
+        if anyStarted {
+            title = String(
+                localized: "Some Episodes Weren't Downloaded", bundle: .module,
+                comment: "Title when some of the episodes asked to download together, as a season, didn't start.")
+        } else {
+            title = String(
+                localized: "Can't Download These Episodes", bundle: .module,
+                comment: "Title when none of the episodes asked to download together, as a season, could start.")
+        }
+        switch reason {
+        case .refused(.notAllowed):
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Some of these episodes have to be converted to play on this device, and your server doesn't let your account have videos converted. Your server's administrator can allow it.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when episodes downloaded together need converting and the server's policy doesn't allow it."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .refused(.overQuality):
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Some of these episodes are above your download quality, and your server doesn't let your account have them converted to fit. Set Download Quality to Maximum in Settings to download them as they are.",
+                    bundle: .module,
+                    comment:
+                        "Explanation when episodes downloaded together are above the download quality and the server's policy doesn't allow converting them."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .refused(.unavailable):
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "Your server can't make a copy of some of these episodes that plays on this device. You can still stream them.",
+                    bundle: .module,
+                    comment: "Explanation when the server offers nothing a download can save for some episodes."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .notEnoughSpace:
+            return UserMessage(
+                title: title,
+                message: String(
+                    localized:
+                        "There isn't enough space on this device for all of these episodes. Free up some space and try again.",
+                    bundle: .module,
+                    comment: "Explanation when episodes downloaded together wouldn't all fit on the device."
+                ),
+                systemImage: "externaldrive.badge.exclamationmark"
+            )
+        case .failed(let error):
+            let failure = UserMessage(error)
+            return UserMessage(
+                title: title, message: failure.message, systemImage: failure.systemImage,
+                needsSignIn: failure.needsSignIn)
+        }
+    }
+
+    private static func download(_ error: DownloadError) -> UserMessage {
+        switch error {
+        case .notAllowed:
+            UserMessage(
+                title: String(
+                    localized: "Downloads Are Off", bundle: .module,
+                    comment: "Title when the server doesn't let the user download."),
+                message: String(
+                    localized:
+                        "Your server doesn't allow downloads for your account. Its administrator can turn them on.",
+                    bundle: .module,
+                    comment: "Explanation when the server doesn't let the user download."
+                ),
+                systemImage: "arrow.down.circle"
+            )
+        case .notEnoughSpace:
+            UserMessage(
+                title: String(
+                    localized: "Not Enough Space", bundle: .module,
+                    comment: "Title when a download wouldn't fit on the device."),
+                message: String(
+                    localized:
+                        "There isn't enough space on this device for this video. Free up some space and try again.",
+                    bundle: .module,
+                    comment: "Explanation when a download wouldn't fit on the device."
+                ),
+                systemImage: "externaldrive.badge.exclamationmark"
+            )
+        case .storeUnavailable:
+            UserMessage(
+                title: String(
+                    localized: "Can't Save Downloads", bundle: .module,
+                    comment: "Title when the list of downloads can't be read or saved."),
+                message: String(
+                    localized: "Serafin couldn't update its downloads on this device. Try again in a moment.",
+                    bundle: .module,
+                    comment: "Explanation when the list of downloads can't be read or saved."
                 )
             )
         }

@@ -44,6 +44,8 @@ enum Route: Hashable {
     case skipSegments
     /// The accent colour, from Settings.
     case accentColour
+    /// The account's downloads, from Settings.
+    case downloads
 }
 
 /// Pushes a route onto the current tab's navigation stack, for buttons that are not navigation links.
@@ -154,6 +156,8 @@ private struct RouteDestination: View {
             SkipSegmentsView()
         case .accentColour:
             AccentColourView()
+        case .downloads:
+            DownloadsView()
         }
     }
 }
