@@ -57,6 +57,8 @@ let moviesView = "f137a2dd21bbc1b99aa5c0f6bf02a805"
         #expect(request.queryValues("fields") == ["PrimaryImageAspectRatio", "Overview"])
         #expect(request.queryValues("mediaTypes") == ["Video"])
         #expect(request.query("enableUserData") == "true")
+        // The one header form Jellyfin 12 accepts with legacy authorization off, its default (docs/COMPATIBILITY.md).
+        #expect(request.authorization?.hasPrefix("MediaBrowser ") == true)
         #expect(request.authorization?.contains("Token=token-1") == true)
     }
 

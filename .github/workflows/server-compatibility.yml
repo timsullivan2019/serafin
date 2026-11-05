@@ -1,0 +1,77 @@
+name: Server compatibility
+
+# Every night, a fresh Jellyfin from each image below gets the requests Serafin makes, in the forms Serafin makes
+# them, and its API description is checked against the endpoints Serafin calls and the values its SDK can decode.
+# `unstable` is tomorrow's Jellyfin and `latest` today's, so a breaking server change shows up here before users
+# upgrade; the pinned versions are the oldest Serafin supports. See docs/COMPATIBILITY.md.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/server_check.py
+      - .github/workflows/server-compatibility.yml
+
+concurrency:
+  group: server-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Jellyfin ${{ matrix.jellyfin }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        jellyfin: [unstable, latest, "10.11.11", "10.10.7"]
+    env:
+      IMAGE: jellyfin/jellyfin:${{ matrix.jellyfin }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Make a test video with subtitles
+        # Generated with the image's own ffmpeg, so nothing is downloaded and there is no licence to track.
+        run: |
+          folder="$RUNNER_TEMP/media/Movies/Test Pattern (2024)"
+          mkdir -p "$folder"
+          docker pull -q "$IMAGE"
+          docker run --rm --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg -v "$RUNNER_TEMP/media:/media" "$IMAGE" \
+            -hide_banner -loglevel error \
+            -f lavfi -i testsrc2=size=1280x720:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 60 \
+            -c:v libx264 -preset veryfast -b:v 4M -maxrate 4M -bufsize 8M -pix_fmt yuv420p \
+            -c:a aac -b:a 128k -ac 2 -movflags +faststart \
+            "/media/Movies/Test Pattern (2024)/Test Pattern (2024).mp4"
+          cat > "$folder/Test Pattern (2024).en.srt" <<'EOF'
+          1
+          00:00:01,000 --> 00:00:04,000
+          First subtitle
+
+          2
+          00:00:05,000 --> 00:00:08,000
+          Second subtitle
+          EOF
+
+      - name: Start Jellyfin
+        run: |
+          docker run -d --name jellyfin -p 127.0.0.1:8096:8096 -v "$RUNNER_TEMP/media:/media:ro" "$IMAGE"
+          for attempt in $(seq 1 90); do
+            curl -sf -o /dev/null http://127.0.0.1:8096/System/Info/Public && exit 0
+            sleep 2
+          done
+          echo "::error::Jellyfin didn't start."
+          exit 1
+
+      - name: Check
+        # The script fetches the SDK revision Package.resolved pins, to compare the server with.
+        run: python3 scripts/server_check.py http://127.0.0.1:8096 --setup --strict --sdk "$RUNNER_TEMP/sdk"
+
+      - name: Jellyfin's log
+        if: failure()
+        run: docker logs jellyfin 2>&1 | tail -n 300

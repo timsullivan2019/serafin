@@ -1,0 +1,5 @@
+# What the stacks keep beside these files when run from a checkout: the films, and each Jellyfin's state.
+media/
+config/
+cache/
+unstable/

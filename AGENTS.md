@@ -38,6 +38,7 @@ swift test --package-path Packages/SerafinKit          # package tests on the ho
 swift format --in-place --recursive App AppTests Packages
 python3 scripts/licences.py                             # after any change to the packages, for the Licences screen
 python3 scripts/accents.py                              # after changing an accent colour's hue, for Settings' choices
+python3 scripts/server_check.py http://127.0.0.1:8096 --setup   # a fresh Jellyfin container; see docs/COMPATIBILITY.md
 xcrun simctl list devices available                     # if the iPhone 17 simulator is not present
 ```
 
@@ -64,8 +65,10 @@ Packages/SerafinKit/
   Tests/SerafinFeaturesTests/   screen logic and the mapping from server items to cards
 docs/PLAN.md         the phased work plan
 docs/SECURITY.md     threat model (written in Phase 3)
+docs/COMPATIBILITY.md   the Jellyfin versions Serafin is checked against, and how to check the next one
+scripts/             licences.py, accents.py, and server_check.py, which the nightly compatibility job runs
 docs/*.html  docs/privacy/  docs/support/   getserafin.app, which GitHub Pages serves from docs/ (`_config.yml` keeps the .md files off it)
-.github/workflows/ci.yml
+.github/workflows/ci.yml  .github/workflows/server-compatibility.yml
 ```
 
 ## Architecture

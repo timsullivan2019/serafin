@@ -5,6 +5,9 @@ import JellyfinAPI
 public struct PublicServerInfo: Equatable, Sendable {
     /// The oldest Jellyfin release Serafin supports.
     public static let minimumVersion = "10.10.0"
+    /// The newest Jellyfin release Serafin has been checked against, with `scripts/server_check.py` and by hand.
+    /// `docs/COMPATIBILITY.md` lists what was checked on which versions.
+    public static let newestTestedVersion = "12.4"
 
     /// The server's own ID.
     public let id: String

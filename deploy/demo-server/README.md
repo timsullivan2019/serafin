@@ -63,16 +63,16 @@ After a fetch, run a library scan from the dashboard (Libraries, Scan All Librar
 - Dashboard, Networking: published server URL `https://demo.getserafin.app`, known proxy `caddy`.
 - Dashboard, Playback: hardware acceleration None.
 - Quick Connect enabled.
+- Legacy authorization off, Jellyfin's default from 12.0: `EnableLegacyAuthorization` is `false` in `config/config/system.xml`. Serafin uses none of the legacy forms (see `docs/COMPATIBILITY.md`).
 
 ### Users
 
 | User | For | Permissions |
 | --- | --- | --- |
 | `admin` | the owner only | administrator |
-| `reviewer` | App Review | Movies and Shows only. No server management, no deletion, no remote control, no downloading. Playback and transcoded playback allowed. |
-| `screenshots` | App Store screenshots | the same as `reviewer` |
+| `reviewer` | App Review and the App Store screenshots | Movies and Shows only. No server management, no deletion, no remote control. Downloading, playback and transcoded playback allowed. |
 
-Screenshots for the App Store are taken only with the `screenshots` account on this server. Guideline 5.2.1 rejects screenshots that show third-party copyrighted content, and every title here is a Blender open film.
+Screenshots for the App Store are taken only with the `reviewer` account on this server. Guideline 5.2.1 rejects screenshots that show third-party copyrighted content, and every title here is a Blender open film.
 
 ## Checking it works
 
@@ -81,6 +81,28 @@ Screenshots for the App Store are taken only with the `screenshots` account on t
 3. On an iPhone on cellular, not Wi-Fi, sign in to Serafin as `reviewer` and play Big Buck Bunny. The player's info shows Direct play.
 
 This was last done on 9 October 2026.
+
+## The next Jellyfin
+
+`docker-compose.unstable.yml` runs Jellyfin's nightly `unstable` image, which becomes the next major version, so Serafin can be tried against it before it ships. It has its own config and cache in `unstable/`, reads the films read-only, listens on port 8097 and is never behind Caddy. It doesn't change the demo server's Jellyfin, its image or its config.
+
+Run it on a computer at home, not on the demo server. The server's 1 GB of memory doesn't fit a second Jellyfin scanning a library, and its firewall opens only 80 and 443. From this folder in a checkout of the repository, with `SERAFIN_MEDIA` set to the full path of the `media` folder `fetch-media.sh` made:
+
+```sh
+SERAFIN_MEDIA=/path/to/media docker compose -f docker-compose.unstable.yml up -d
+```
+
+Docker Compose finds `media/` and `unstable/` beside the compose file, not in the folder it's run from, so `SERAFIN_MEDIA` can be left out only when the films are in `deploy/demo-server/media`.
+
+Then, at `http://localhost:8097`:
+
+1. Finish the setup wizard with the Movies (`/media/Movies`) and Shows (`/media/Shows`) libraries. In each library's settings, turn on "Enable trickplay image extraction" and "Extract trickplay images during the library scan", then scan.
+2. In Dashboard, Users, add a user who isn't an administrator, with media downloading allowed, like `reviewer`.
+3. Quick Connect is on and legacy authorization is off from the start, so the server accepts only the forms Serafin sends.
+
+On the iPhone, connect Serafin to `http://<the computer's local address>:8097`, accept the plain-HTTP warning, and check each of these: sign in with the password and sign out, then sign in with Quick Connect, approving the code at Quick Connect in the web app's user settings; Home, Library and Search with posters; play a film, and the player's info says Direct play; lower Settings, Quality on Wi-Fi until a film's info says Transcoding on server; drag the scrubber for trickplay thumbnails; download a film and play it in Airplane Mode; sign out.
+
+`docker compose -f docker-compose.unstable.yml pull`, then the same `up -d` command, with `SERAFIN_MEDIA`, moves it to the newest nightly. `down` stops it, `unstable/` keeps its setup for next time, and deleting `unstable/` starts it from scratch. The nightly `Server compatibility` workflow runs the same requests against a throwaway copy of this image, along with the latest release and the oldest versions Serafin supports, so this instance is for trying the app by hand.
 
 ## App Review notes
 
@@ -97,8 +119,6 @@ To sign in:
 1. Open Serafin. On the Welcome to Serafin screen, enter https://demo.getserafin.app as the Server Address and tap Connect.
 2. Enter the username and password above and tap Sign In.
 3. Open any title, for example Big Buck Bunny, and tap Play.
-
-A second account, screenshots (password <screenshots password>), has the same access and was used for the App Store screenshots.
 
 Serafin collects no data and contains no third-party SDKs, analytics or advertising. The only network connection it makes is to the server the user signs in to.
 ```

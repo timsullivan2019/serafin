@@ -1,0 +1,21 @@
+# The next Jellyfin, for trying Serafin against it before it ships: Jellyfin's nightly unstable image, with the demo
+# films read-only and its own config, cache and port. It's never behind Caddy, and it doesn't touch the demo server's
+# Jellyfin or its config. Run it on a computer at home, not on the demo server (see README.md), from this folder, with
+# SERAFIN_MEDIA set to the full path of the `media` folder fetch-media.sh made:
+#
+#   SERAFIN_MEDIA=/path/to/media docker compose -f docker-compose.unstable.yml up -d
+#
+# then open http://localhost:8097. Docker Compose finds ./media and ./unstable beside this file, wherever it's run
+# from, so SERAFIN_MEDIA can be left out only when the films are in ./media here.
+# `docker compose -f docker-compose.unstable.yml pull`, then the same `up -d`, moves it to the newest nightly.
+services:
+  jellyfin-unstable:
+    image: jellyfin/jellyfin:unstable
+    container_name: jellyfin-unstable
+    restart: "no"
+    ports:
+      - "8097:8096"
+    volumes:
+      - ./unstable/config:/config
+      - ./unstable/cache:/cache
+      - ${SERAFIN_MEDIA:-./media}:/media:ro
