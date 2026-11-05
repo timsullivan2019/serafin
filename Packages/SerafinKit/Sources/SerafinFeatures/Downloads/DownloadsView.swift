@@ -361,8 +361,9 @@ struct DownloadRow: View {
             comment: "A download's status once its file has arrived, while Serafin makes it ready to play offline.")
     }
 
-    /// `bytes` as a size, such as "4.2 GB".
-    static func size(_ bytes: Int64) -> String {
+    /// `bytes` as a size, such as "4.2 GB". It's nonisolated so that `MediaVersions`, which isn't tied to the main
+    /// actor, can give a version's size the same way.
+    nonisolated static func size(_ bytes: Int64) -> String {
         bytes.formatted(.byteCount(style: .file))
     }
 
