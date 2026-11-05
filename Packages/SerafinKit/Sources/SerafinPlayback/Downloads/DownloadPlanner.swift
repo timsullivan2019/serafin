@@ -102,7 +102,8 @@ public struct DownloadPlanner: Sendable {
     /// request names.
     ///
     /// - Parameters:
-    ///   - mediaSourceID: The version to download, or nil for the server's first.
+    ///   - mediaSourceID: The version to download, or nil for the one ``VersionRanking`` prefers, which also
+    ///     downloads when the server no longer has the version named.
     ///   - maxBitrate: The most bits per second the download may take, from the download quality, or nil for no cap.
     ///   - permissions: What the server's policy lets the account have converted.
     /// - Throws: A ``PlaybackError`` when the server refuses, or SerafinCore's `SerafinError` when it can't be reached
@@ -113,7 +114,12 @@ public struct DownloadPlanner: Sendable {
         maxBitrate: Int? = nil,
         permissions: ConversionPermissions = .all
     ) async throws -> DownloadPlan {
-        let first = try await version(of: itemID, mediaSourceID: mediaSourceID, maxBitrate: maxBitrate)
+        var first = try await version(of: itemID, mediaSourceID: mediaSourceID, maxBitrate: maxBitrate)
+        if first == nil, mediaSourceID != nil {
+            // The version asked for has gone from the server, as after its file was renamed, so the preferred one
+            // downloads instead.
+            first = try await version(of: itemID, mediaSourceID: nil, maxBitrate: maxBitrate)
+        }
         if let first, Self.directPlays(first) {
             return .original(try await original(first, itemID: itemID))
         }
@@ -160,8 +166,8 @@ public struct DownloadPlanner: Sendable {
     // MARK: - Asking the server
 
     /// The version of `itemID` the server's answer is about, as it would download for the account with subtitles
-    /// `subtitleStreamIndex`, -1 for none, or nil for the account's: the one asked for, or else the first. Nil when
-    /// the server has none to offer.
+    /// `subtitleStreamIndex`, -1 for none, or nil for the account's: the one asked for, or else the one
+    /// ``VersionRanking`` prefers. Nil when the server has none to offer.
     private func version(
         of itemID: String,
         mediaSourceID: String?,
@@ -195,7 +201,20 @@ public struct DownloadPlanner: Sendable {
             throw PlaybackError(code)
         }
         let sources = response.mediaSources ?? []
-        return sources.first { $0.id == mediaSourceID } ?? sources.first
+        if let named = mediaSourceID.flatMap({ id in sources.first { $0.id == id } }) {
+            return named
+        }
+        let offers = sources.map { VersionOffer(source: $0, delivery: Self.delivery(of: $0)) }
+        return VersionRanking.preferred(among: offers)?.source
+    }
+
+    /// How the server would send `source` for downloading, as its answer says: the original file when the player opens
+    /// it as it is, otherwise the MP4 the server makes, which copies or converts, or nil when it offers neither.
+    static func delivery(of source: MediaSourceInfo) -> VersionOffer.Delivery? {
+        if directPlays(source) {
+            return .original
+        }
+        return PlaybackNegotiator.delivery(of: source, options: PlaybackOptions(allowsDirectPlay: false))
     }
 
     // MARK: - Originals

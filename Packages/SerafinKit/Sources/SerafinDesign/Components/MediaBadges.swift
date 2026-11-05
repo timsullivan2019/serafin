@@ -4,17 +4,22 @@ import SwiftUI
 /// uppercase labels in thin outlined capsules, with no fill, in the order they're given.
 public struct MediaBadgeRow: View {
     private let badges: [String]
+    private let isLeading: Bool
 
     /// Creates a row of badges.
     ///
-    /// - Parameter badges: The badges' labels, in order: resolution, range, audio, then accessibility.
-    public init(badges: [String]) {
+    /// - Parameters:
+    ///   - badges: The badges' labels, in order: resolution, range, audio, then accessibility.
+    ///   - isLeading: Whether the lines start at the leading edge, as in a list, rather than being centred, as under
+    ///     the hero's text.
+    public init(badges: [String], isLeading: Bool = false) {
         self.badges = badges
+        self.isLeading = isLeading
     }
 
     public var body: some View {
         // Wraps onto more lines at large text sizes rather than squeezing.
-        FlowingBadges(spacing: Spacing.xSmall) {
+        FlowingBadges(spacing: Spacing.xSmall, isLeading: isLeading) {
             ForEach(badges, id: \.self) { badge in
                 MediaBadge(badge)
             }
@@ -50,9 +55,11 @@ public struct MediaBadge: View {
     }
 }
 
-/// Lays badges out in lines, starting a new line when the next badge wouldn't fit, centred like the hero's text.
+/// Lays badges out in lines, starting a new line when the next badge wouldn't fit, centred like the hero's text or
+/// from the leading edge.
 private struct FlowingBadges: Layout {
     let spacing: CGFloat
+    let isLeading: Bool
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let lines = lines(for: subviews, width: proposal.width ?? .infinity)
@@ -64,7 +71,7 @@ private struct FlowingBadges: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for line in lines(for: subviews, width: bounds.width) {
-            var x = bounds.midX - line.width / 2
+            var x = isLeading ? bounds.minX : bounds.midX - line.width / 2
             for index in line.indices {
                 let size = subviews[index].sizeThatFits(.unspecified)
                 subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))

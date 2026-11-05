@@ -299,12 +299,16 @@ struct PlayerView: View {
                 )
                 TrackPicker(
                     delivery: PlaybackDelivery(plan.method),
+                    versions: MediaVersions.choices(for: engine.versions),
+                    selectedVersion: plan.mediaSourceID,
+                    pendingVersion: engine.pendingVersion,
                     audio: choices.audio,
                     selectedAudio: choices.selectedAudio,
                     subtitles: choices.subtitles,
                     generatedSubtitles: choices.generatedSubtitles,
                     selectedSubtitles: choices.selectedSubtitles,
                     pendingSubtitles: choices.pendingSubtitles,
+                    selectVersion: { versionID in playback.selectVersion(versionID) },
                     selectAudio: { index in Task { await engine.selectAudio(index) } },
                     selectSubtitles: { pick in Task { await engine.selectSubtitles(TrackChoices.selection(pick)) } }
                 )

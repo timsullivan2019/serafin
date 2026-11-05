@@ -65,6 +65,11 @@ public enum PlaybackState: Equatable, Sendable {
     /// The item's chapters, as the server lists them or as they were saved with a downloaded copy, for the scrubber.
     /// Empty until playback has started, and when it has none.
     public private(set) var chapters: [ChapterInfo] = []
+    /// The item's versions as the server lists them, such as a 4K file and a 1080p one, for the player to offer once
+    /// playback has started. Empty for a downloaded copy, which plays the one version it saved.
+    public private(set) var versions: [MediaSourceInfo] = []
+    /// A version picked in the sheet that's on its way from the server, or nil.
+    public private(set) var pendingVersion: String?
     /// Whether playback is held up waiting for data.
     public private(set) var isWaiting = false
     /// The subtitles showing, which the player's sheet checks. Settings decide them as each video starts, from the
@@ -126,6 +131,8 @@ public enum PlaybackState: Equatable, Sendable {
     /// nil when the item plays the server's playlists as they are. See ``SubtitlePlaylists``.
     @ObservationIgnored private var retimedItem: AVPlayerItem?
     private var options = PlaybackOptions()
+    /// The item as found for the scrubber, with every version's thumbnails, so another version's show once it plays.
+    @ObservationIgnored private var scrubbingDetails: BaseItemDto?
     private var reporter: (any PlaybackReporter)?
     private var timeObserver: Any?
     private var itemObservations: [NSKeyValueObservation] = []
@@ -296,6 +303,9 @@ public enum PlaybackState: Equatable, Sendable {
         segments = []
         trickplay = nil
         chapters = []
+        versions = []
+        pendingVersion = nil
+        scrubbingDetails = nil
         failure = nil
         elapsed = options.startPosition
         duration = item.runTimeTicks.map(Ticks.duration) ?? .zero
@@ -364,6 +374,8 @@ public enum PlaybackState: Equatable, Sendable {
             guard load == generation else { return }
             trickplay = copy?.trickplay ?? Self.serverTrickplay(in: known, mediaSourceID: plan.mediaSourceID)
             chapters = copy?.chapters ?? known.chapters ?? []
+            scrubbingDetails = known
+            versions = copy == nil ? known.mediaSources ?? [] : []
         } catch is CancellationError {
             if load == generation {
                 state = .idle
@@ -426,6 +438,9 @@ public enum PlaybackState: Equatable, Sendable {
         segments = []
         trickplay = nil
         chapters = []
+        versions = []
+        pendingVersion = nil
+        scrubbingDetails = nil
         state = .idle
         await PlaybackAudioSession.deactivate()
     }
@@ -823,6 +838,91 @@ public enum PlaybackState: Equatable, Sendable {
         await renegotiate(options, subtitles: selection)
     }
 
+    /// Plays the version `mediaSourceID` of what's playing, such as its 1080p file in place of its 4K one, from where
+    /// playback is. The old version plays until the new one is ready.
+    ///
+    /// Audio picked in the player carries on in the same language where the version has it, and otherwise the
+    /// version's own default plays, as the server picks it for the account. The subtitles showing carry on where the
+    /// version has them in the same language and of the same kind; otherwise Settings decide them. A downloaded copy
+    /// plays the one version it saved.
+    public func selectVersion(_ mediaSourceID: String) async {
+        guard let plan, !plan.isDownloaded, let version = versions.first(where: { $0.id == mediaSourceID }) else {
+            return
+        }
+        guard mediaSourceID != plan.mediaSourceID else {
+            // Picking the version playing again lets go of another still on its way.
+            if pendingVersion != nil {
+                cancelStreamRequest()
+            }
+            return
+        }
+        let audio = Self.matchingAudio(in: version, for: plan)
+        let subtitles = Self.matchingSubtitles(
+            in: version, for: pendingSubtitleSelection ?? subtitleSelection, from: plan, rules: subtitleRules,
+            audioIndex: audio)
+        var options = self.options
+        options.mediaSourceID = mediaSourceID
+        options.audioStreamIndex = audio
+        options.subtitleStreamIndex = subtitles.serverIndex
+        options.allowsDirectPlay = Self.allowsDirectPlay(
+            showing: subtitles.serverIndex, among: Self.streams(.subtitle, of: version))
+        Self.logger.debug("Picked another version, asking the server for its stream")
+        await renegotiate(options, subtitles: subtitles, version: mediaSourceID)
+    }
+
+    /// Every version of `itemID`, with how the server would send each to this device under `maxBitrate`, for showing
+    /// which plays before playback starts, as ``VersionRanking`` chooses when none is named.
+    ///
+    /// - Throws: A ``PlaybackError`` when the server refuses, or SerafinCore's `SerafinError` when it can't be reached
+    ///   or no longer accepts the sign-in.
+    public func versionOffers(of itemID: String, maxBitrate: Int?) async throws -> [VersionOffer] {
+        try await negotiator.offers(for: itemID, options: PlaybackOptions(maxBitrate: maxBitrate))
+    }
+
+    /// The audio to play in `version` in place of what plays in `plan`: nil, for the version's own default, unless
+    /// another track than the default was picked. Then a track in the same language, of the same format and with as
+    /// many channels if there is one, or nil when the version has none in that language.
+    nonisolated static func matchingAudio(in version: MediaSourceInfo, for plan: PlaybackPlan) -> Int? {
+        let playingIndex = plan.audioStreamIndex ?? plan.mediaSource.defaultAudioStreamIndex
+        guard playingIndex != plan.mediaSource.defaultAudioStreamIndex,
+            let playing = plan.streams(.audio).first(where: { $0.index == playingIndex }),
+            let language = SubtitleRules.language(playing.language)
+        else { return nil }
+        let candidates = streams(.audio, of: version).filter { SubtitleRules.language($0.language) == language }
+        let match =
+            candidates.first { $0.codec == playing.codec && $0.channels == playing.channels }
+            ?? candidates.first { $0.channels == playing.channels } ?? candidates.first
+        return match?.index
+    }
+
+    /// The subtitles to show in `version` in place of `selection` in `plan`: none and the device's generated ones as
+    /// they are, and a subtitle in the same language and of the same kind where the version has one. Otherwise what
+    /// Settings' `rules` pick among the version's subtitles for its audio `audioIndex`, or its default audio when
+    /// that's nil, or none without rules.
+    nonisolated static func matchingSubtitles(
+        in version: MediaSourceInfo,
+        for selection: SubtitleSelection,
+        from plan: PlaybackPlan,
+        rules: SubtitleRules?,
+        audioIndex: Int?
+    ) -> SubtitleSelection {
+        guard case .stream = selection else { return selection }
+        let subtitles = streams(.subtitle, of: version)
+        if let choice = choice(for: selection, in: plan), let index = streamIndex(for: choice, among: subtitles),
+            index >= 0
+        {
+            return .stream(index)
+        }
+        let audio = audioIndex ?? version.defaultAudioStreamIndex
+        let audioLanguage = streams(.audio, of: version).first { $0.index == audio }?.language
+        return rules?.selection(among: subtitles, audioLanguage: audioLanguage) ?? .off
+    }
+
+    /// The streams of one kind in `version`, such as its audio tracks.
+    nonisolated static func streams(_ type: MediaStreamType, of version: MediaSourceInfo) -> [MediaStream] {
+        (version.mediaStreams ?? []).filter { $0.type == type }
+    }
+
     /// Whether showing `selection` takes a new stream from the server rather than a switch in the loaded one: when
     /// subtitles are burned into the picture now, or the ones wanted aren't in the stream as text.
     nonisolated static func needsNewStream(toShow selection: SubtitleSelection, in plan: PlaybackPlan) -> Bool {
@@ -836,9 +936,13 @@ public enum PlaybackState: Equatable, Sendable {
     /// Whether a stream showing `streamIndex`, or -1 for none, may be the original file: only with no subtitles or a
     /// text track inside an MP4. Anything else needs the server's HLS stream.
     nonisolated static func allowsDirectPlay(showing streamIndex: Int, in plan: PlaybackPlan) -> Bool {
-        guard streamIndex >= 0, let stream = plan.streams(.subtitle).first(where: { $0.index == streamIndex }) else {
-            return true
-        }
+        allowsDirectPlay(showing: streamIndex, among: plan.streams(.subtitle))
+    }
+
+    /// Whether a stream showing `streamIndex` among `subtitles`, or -1 for none, may be the original file, as
+    /// ``allowsDirectPlay(showing:in:)`` decides.
+    nonisolated static func allowsDirectPlay(showing streamIndex: Int, among subtitles: [MediaStream]) -> Bool {
+        guard streamIndex >= 0, let stream = subtitles.first(where: { $0.index == streamIndex }) else { return true }
         return stream.isExternal != true && stream.codec == "mov_text"
     }
 
@@ -895,11 +999,16 @@ public enum PlaybackState: Equatable, Sendable {
     /// The server's subtitle index for `choice` in `plan`: -1 for none, as for off and generated subtitles, otherwise a
     /// subtitle in the same language, the same kind if there is one, or nil when there's none in that language.
     nonisolated static func streamIndex(for choice: SubtitleChoice, in plan: PlaybackPlan) -> Int? {
+        streamIndex(for: choice, among: plan.streams(.subtitle))
+    }
+
+    /// The index of the subtitle among `subtitles` for `choice`, as ``streamIndex(for:in:)`` finds it.
+    nonisolated static func streamIndex(for choice: SubtitleChoice, among subtitles: [MediaStream]) -> Int? {
         switch choice {
         case .off, .generated:
             return -1
         case .language(let language, let isForced, let isHearingImpaired):
-            let sameLanguage = plan.streams(.subtitle).filter { $0.language == language }
+            let sameLanguage = subtitles.filter { $0.language == language }
             let match =
                 sameLanguage.first {
                     ($0.isForced == true) == isForced && ($0.isHearingImpaired == true) == isHearingImpaired
@@ -959,6 +1068,7 @@ public enum PlaybackState: Equatable, Sendable {
         self.plan = plan.with(subtitle: shown.serverIndex)
         subtitleSelection = shown
         pendingSubtitleSelection = nil
+        pendingVersion = nil
         let start = start ?? currentPosition()
         pendingStart = start > .zero ? start : nil
         playsWhenReady = playing
@@ -1065,6 +1175,7 @@ public enum PlaybackState: Equatable, Sendable {
     private func cancelStreamRequest() {
         streamRequest += 1
         pendingSubtitleSelection = nil
+        pendingVersion = nil
         if state == .loading, player.currentItem?.status == .readyToPlay {
             statusChanged()
         }
@@ -1104,9 +1215,10 @@ public enum PlaybackState: Equatable, Sendable {
         private static let isAirPlaying = false
     #endif
 
-    /// Asks the server again with new options for the version playing, then picks up where playback is, showing
-    /// `subtitles` in the new stream.
-    private func renegotiate(_ newOptions: PlaybackOptions, subtitles: SubtitleSelection) async {
+    /// Asks the server again with new options for the version playing, or for `version` when one is given, then
+    /// picks up where playback is, showing `subtitles` in the new stream.
+    private func renegotiate(_ newOptions: PlaybackOptions, subtitles: SubtitleSelection, version: String? = nil) async
+    {
         guard let item, let itemID = item.id else { return }
         // A downloaded copy has no server to ask, so it plays on with the tracks it has.
         guard plan?.isDownloaded != true else {
@@ -1115,9 +1227,14 @@ public enum PlaybackState: Equatable, Sendable {
         }
         streamRequest += 1
         let request = streamRequest
-        let options = plan.map { Self.optionsAskingAgain(newOptions, for: $0) } ?? newOptions
+        var options = plan.map { Self.optionsAskingAgain(newOptions, for: $0) } ?? newOptions
+        if let version {
+            options.mediaSourceID = version
+        }
         self.options = options
-        pendingSubtitleSelection = subtitles == subtitleSelection ? nil : subtitles
+        // Another version's subtitles are streams of its own, so the sheet shows the version on its way instead.
+        pendingSubtitleSelection = version != nil || subtitles == subtitleSelection ? nil : subtitles
+        pendingVersion = version
         let wasPlaying = player.timeControlStatus == .playing
         state = .loading
         do {
@@ -1132,11 +1249,18 @@ public enum PlaybackState: Equatable, Sendable {
                     plan, subtitles: subtitles, startingAt: nil, playing: wasPlaying, request: request),
                 request == streamRequest, let installed = self.plan
             else { return }
+            if version != nil {
+                // Each version has thumbnails of its own.
+                trickplay = scrubbingDetails.flatMap {
+                    Self.serverTrickplay(in: $0, mediaSourceID: installed.mediaSourceID)
+                }
+            }
             await reporter?.replace(with: installed, at: start, isPaused: !wasPlaying)
         } catch is CancellationError {
         } catch {
             guard request == streamRequest else { return }
             pendingSubtitleSelection = nil
+            pendingVersion = nil
             fail(error)
         }
     }

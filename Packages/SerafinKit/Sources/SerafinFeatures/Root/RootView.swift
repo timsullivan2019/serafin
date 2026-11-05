@@ -28,7 +28,7 @@ public struct RootView: View {
                     let media = LiveMediaSource(library: library, downloads: session.downloads)
                     MainTabs(
                         engine: session.player, media: media, artwork: session.artwork, downloads: session.downloads,
-                        serverID: account.server.id
+                        account: account.key
                     )
                     .environment(\.media, media)
                     .environment(\.artwork, session.artwork)
@@ -158,13 +158,13 @@ struct MainTabs: View {
     ///   - media: The library, which playback refreshes when it stops.
     ///   - artwork: Loads the artwork the Lock Screen shows.
     ///   - downloads: The account's downloads, whose copies play instead of streams.
-    ///   - serverID: The account's server, whose streaming caps apply.
+    ///   - account: The signed-in account, whose server's streaming caps and whose version picks apply.
     init(
         engine: PlayerEngine? = nil,
         media: any MediaSource = SampleMediaSource(),
         artwork: Artwork? = nil,
         downloads: DownloadCenter? = nil,
-        serverID: String? = nil
+        account: SessionKey? = nil
     ) {
         self.engine = engine
         self.media = media
@@ -174,7 +174,7 @@ struct MainTabs: View {
         _playback = State(
             initialValue: PlaybackCoordinator(
                 engine: engine, media: media, actions: actions, artwork: artwork, downloads: downloads,
-                serverID: serverID)
+                serverID: account?.serverID, account: account)
         )
     }
 

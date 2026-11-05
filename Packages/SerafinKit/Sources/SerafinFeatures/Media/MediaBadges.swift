@@ -8,10 +8,21 @@ enum MediaBadges {
     /// The badges for `item`'s first version, or none when the server lists no streams.
     static func badges(for item: BaseItemDto) -> [String] {
         let source = item.mediaSources?.first
-        let streams = source?.mediaStreams ?? item.mediaStreams ?? []
+        return badges(
+            of: source?.mediaStreams ?? item.mediaStreams ?? [], defaultAudio: source?.defaultAudioStreamIndex)
+    }
+
+    /// The badges for one version of a movie or an episode, such as its 4K file, or none when the server lists no
+    /// streams.
+    static func badges(for version: MediaSourceInfo) -> [String] {
+        badges(of: version.mediaStreams ?? [], defaultAudio: version.defaultAudioStreamIndex)
+    }
+
+    /// The badges for a version's `streams`, whose audio `defaultAudio` plays unless another is picked.
+    private static func badges(of streams: [MediaStream], defaultAudio: Int?) -> [String] {
         let video = streams.first { $0.type == .video }
         let audio =
-            streams.first { $0.type == .audio && $0.index == source?.defaultAudioStreamIndex }
+            streams.first { $0.type == .audio && $0.index == defaultAudio }
             ?? streams.first { $0.type == .audio }
         let subtitles = streams.filter { $0.type == .subtitle }
         return [resolution(of: video), range(of: video)].compactMap { $0 } + audioBadges(of: audio)

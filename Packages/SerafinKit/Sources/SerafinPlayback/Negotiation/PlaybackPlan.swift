@@ -75,7 +75,8 @@ public struct PlaybackOptions: Sendable, Equatable {
     public var audioStreamIndex: Int?
     /// The subtitle stream to show, or nil for the server's default. Pass -1 to turn subtitles off.
     public var subtitleStreamIndex: Int?
-    /// The version to play, or nil for the server's first.
+    /// The version to play, or nil for the one ``VersionRanking`` prefers, which also plays when the server no longer
+    /// has the version named.
     public var mediaSourceID: String?
     /// Whether the original file may be played as it is. Turned off when a subtitle can only be shown through HLS.
     public var allowsDirectPlay: Bool

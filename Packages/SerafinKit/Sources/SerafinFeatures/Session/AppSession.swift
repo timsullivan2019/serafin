@@ -104,12 +104,13 @@ import os
         try await changing { try await accounts.add(connected) }
     }
 
-    /// Signs everyone out of `server` and forgets it, with its streaming caps, its users' recent searches and the
-    /// name last used to sign in to it.
+    /// Signs everyone out of `server` and forgets it, with its streaming caps, its users' recent searches and version
+    /// picks, and the name last used to sign in to it.
     public func remove(_ server: Server) async throws {
         try await changing { try await accounts.remove(serverID: server.id) }
         PlaybackQuality.forget(server: server.id, in: .standard)
         RecentSearches.forget(server: server.id)
+        VersionMemory.forget(server: server.id)
         LastUsername.forget(server: server.id)
     }
 
@@ -237,10 +238,12 @@ import os
         _ = try await changing { try await accounts.switchTo(key) }
     }
 
-    /// Signs a user out on this device and ends their session on the server, and forgets their recent searches.
+    /// Signs a user out on this device and ends their session on the server, and forgets their recent searches and
+    /// the versions they picked.
     public func signOut(_ key: SessionKey) async throws {
         try await changing { try await accounts.signOut(key) }
         RecentSearches.forget(key)
+        VersionMemory.forget(key)
     }
 
     // MARK: - Storage

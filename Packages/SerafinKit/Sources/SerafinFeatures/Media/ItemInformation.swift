@@ -3,14 +3,19 @@ import JellyfinAPI
 import SerafinDesign
 
 /// The facts at the foot of a detail screen, in three columns: when it came out and how long it runs, its languages,
-/// and the format of its video and audio.
+/// and the format of its video and audio. An item with more than one version, such as a 4K file and a 1080p one, has
+/// no format column, since its version list gives each version's format.
 enum ItemInformation {
     /// The columns for `item`, whose card is `card`. Rows with nothing to say are left out, and columns without any
     /// rows are dropped by the view.
-    static func columns(for item: BaseItemDto, card: MediaCard, locale: Locale = .current)
-        -> [InformationColumns.Column]
-    {
-        let streams = item.mediaSources?.first?.mediaStreams ?? item.mediaStreams ?? []
+    ///
+    /// - Parameter version: The version whose languages show, as the one Play starts, or nil for the first.
+    static func columns(
+        for item: BaseItemDto, card: MediaCard, version: MediaSourceInfo? = nil, locale: Locale = .current
+    ) -> [InformationColumns.Column] {
+        let source = version ?? item.mediaSources?.first
+        let streams = source?.mediaStreams ?? item.mediaStreams ?? []
+        let hasVersions = (item.mediaSources?.count ?? 0) > 1
         let columns = [
             InformationColumns.Column(
                 title: String(localized: "Information", bundle: .module, comment: "Detail screen column heading."),
@@ -26,7 +31,7 @@ enum ItemInformation {
             ),
             InformationColumns.Column(
                 title: String(localized: "Format", bundle: .module, comment: "Detail screen column heading."),
-                rows: format(of: streams, defaultAudio: item.mediaSources?.first?.defaultAudioStreamIndex)
+                rows: hasVersions ? [] : format(of: streams, defaultAudio: source?.defaultAudioStreamIndex)
             ),
         ]
         return columns.map { column in

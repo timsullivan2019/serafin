@@ -167,12 +167,15 @@ import os
     ///
     /// It downloads at the download quality, as the original file when the player opens it, and otherwise as the copy
     /// the server makes, when the server's policy lets the account have it converted.
-    func download(_ item: MediaItem) async {
+    ///
+    /// - Parameter version: The version to download, as picked in the download menu, or nil for the version a failed
+    ///   download was of, or else the one ``VersionRanking`` prefers.
+    func download(_ item: MediaItem, version: String? = nil) async {
         guard starting.insert(item.id).inserted else { return }
         defer { starting.remove(item.id) }
         do {
             let permissions = try await library.conversionPermissions()
-            switch try await start(item, permissions: permissions) {
+            switch try await start(item, version: version, permissions: permissions) {
             case .started(let record):
                 await saveArtwork(of: item, for: record)
                 await saveScrubbing(of: item, for: record)
@@ -273,10 +276,17 @@ import os
 
     /// Asks the server how `item` downloads at the download quality, and starts it.
     ///
+    /// - Parameter version: The version to download, or nil for the version a failed download of `item` was of, so
+    ///   trying again downloads the version picked, or else the one ``VersionRanking`` prefers.
     /// - Throws: When the server can't be asked, or the download can't start.
-    private func start(_ item: MediaItem, permissions: ConversionPermissions) async throws -> Start {
+    private func start(_ item: MediaItem, version: String? = nil, permissions: ConversionPermissions) async throws
+        -> Start
+    {
         let maxBitrate = Self.quality(in: defaults).bitsPerSecond
-        switch try await planner.plan(for: item.id, maxBitrate: maxBitrate, permissions: permissions) {
+        let version = version ?? records.first { $0.itemID == item.id }?.mediaSourceID
+        switch try await planner.plan(
+            for: item.id, mediaSourceID: version, maxBitrate: maxBitrate, permissions: permissions)
+        {
         case .original(let planned), .converted(let planned):
             let request = Downloads.Request(
                 itemID: item.id,
@@ -330,6 +340,11 @@ import os
     func checkPermissionIfUnknown() async {
         guard !knowsPermission else { return }
         await checkPermission()
+    }
+
+    /// The version of `itemID` its finished download saved, such as its 1080p file, or nil when it isn't downloaded.
+    func downloadedVersion(of itemID: String) -> String? {
+        records.first { $0.itemID == itemID && $0.state == .finished }?.mediaSourceID
     }
 
     /// The finished download of `itemID` with its file on the device, ready to play, or nil when there's none. Its

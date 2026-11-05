@@ -27,17 +27,22 @@ public enum SubtitlePick: Hashable, Sendable {
     case generated
 }
 
-/// The audio and subtitle picker the player opens in a sheet: the audio tracks, then the subtitles with Off first and
-/// the device's generated subtitles last, where it offers them. What's showing is checked, and a pick still on its
-/// way shows a spinner. Under its title it says how the video reaches the player, such as "Direct play".
+/// The audio and subtitle picker the player opens in a sheet: the versions first, when there's more than one, then the
+/// audio tracks, then the subtitles with Off first and the device's generated subtitles last, where it offers them.
+/// What's playing and showing is checked, and a pick still on its way shows a spinner. Under its title it says how the
+/// video reaches the player, such as "Direct play".
 public struct TrackPicker: View {
     private let delivery: PlaybackDelivery?
+    private let versions: [VersionChoice]
+    private let selectedVersion: String?
+    private let pendingVersion: String?
     private let audio: [TrackChoice]
     private let selectedAudio: Int?
     private let subtitles: [TrackChoice]
     private let generatedSubtitles: TrackChoice?
     private let selectedSubtitles: SubtitlePick
     private let pendingSubtitles: SubtitlePick?
+    private let selectVersion: (String) -> Void
     private let selectAudio: (Int) -> Void
     private let selectSubtitles: (SubtitlePick) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -46,6 +51,9 @@ public struct TrackPicker: View {
     ///
     /// - Parameters:
     ///   - delivery: How the video reaches the player, shown under the title, or nil while that isn't known.
+    ///   - versions: The versions of what's playing, listed when there's more than one.
+    ///   - selectedVersion: The ``VersionChoice/id`` of the version playing.
+    ///   - pendingVersion: A version picked that's still on its way, or nil.
     ///   - audio: The audio tracks.
     ///   - selectedAudio: The ``TrackChoice/id`` of the audio playing.
     ///   - subtitles: The subtitle tracks.
@@ -53,26 +61,35 @@ public struct TrackPicker: View {
     ///     Their ``TrackChoice/id`` isn't used.
     ///   - selectedSubtitles: The subtitles showing.
     ///   - pendingSubtitles: Subtitles picked that are still on their way, or nil.
+    ///   - selectVersion: Called with the ``VersionChoice/id`` of the version picked.
     ///   - selectAudio: Called with the ``TrackChoice/id`` of the audio picked.
     ///   - selectSubtitles: Called with the subtitles picked.
     public init(
         delivery: PlaybackDelivery? = nil,
+        versions: [VersionChoice] = [],
+        selectedVersion: String? = nil,
+        pendingVersion: String? = nil,
         audio: [TrackChoice],
         selectedAudio: Int?,
         subtitles: [TrackChoice],
         generatedSubtitles: TrackChoice? = nil,
         selectedSubtitles: SubtitlePick,
         pendingSubtitles: SubtitlePick? = nil,
+        selectVersion: @escaping (String) -> Void = { _ in },
         selectAudio: @escaping (Int) -> Void,
         selectSubtitles: @escaping (SubtitlePick) -> Void
     ) {
         self.delivery = delivery
+        self.versions = versions
+        self.selectedVersion = selectedVersion
+        self.pendingVersion = pendingVersion
         self.audio = audio
         self.selectedAudio = selectedAudio
         self.subtitles = subtitles
         self.generatedSubtitles = generatedSubtitles
         self.selectedSubtitles = selectedSubtitles
         self.pendingSubtitles = pendingSubtitles
+        self.selectVersion = selectVersion
         self.selectAudio = selectAudio
         self.selectSubtitles = selectSubtitles
     }
@@ -109,6 +126,20 @@ public struct TrackPicker: View {
 
     private var list: some View {
         List {
+            if versions.count > 1 {
+                Section(String(localized: "Version", bundle: .module, comment: "Heading of a video's versions.")) {
+                    ForEach(versions) { version in
+                        TrackRow(
+                            title: version.title,
+                            detail: version.detail,
+                            isSelected: version.id == selectedVersion,
+                            isPending: version.id == pendingVersion && version.id != selectedVersion
+                        ) {
+                            selectVersion(version.id)
+                        }
+                    }
+                }
+            }
             if !audio.isEmpty {
                 Section(String(localized: "Audio", bundle: .module, comment: "Heading of the audio tracks.")) {
                     ForEach(audio) { track in
@@ -202,6 +233,7 @@ private struct TrackRow: View {
 
 #if DEBUG
     private struct TrackPickerSample: View {
+        @State private var version = "restoration"
         @State private var audio = 1
         @State private var subtitles = SubtitlePick.track(4)
 
@@ -211,6 +243,15 @@ private struct TrackRow: View {
                 .sheet(isPresented: .constant(true)) {
                     TrackPicker(
                         delivery: .repackaged,
+                        versions: [
+                            VersionChoice(
+                                id: "restoration", title: "4K Restoration", badges: ["4K", "Dolby Vision"],
+                                size: "58.2 GB"),
+                            VersionChoice(
+                                id: "broadcast", title: "1080p · H.264 · AAC", badges: ["HD"], size: "8.4 GB"),
+                        ],
+                        selectedVersion: version,
+                        pendingVersion: "broadcast",
                         audio: [
                             TrackChoice(id: 1, title: "English", detail: "AAC · Stereo"),
                             TrackChoice(id: 2, title: "English", detail: "Dolby Digital Plus · 5.1"),
@@ -226,6 +267,7 @@ private struct TrackRow: View {
                             id: 0, title: "Generated", detail: "English · Created from the audio"),
                         selectedSubtitles: subtitles,
                         pendingSubtitles: .track(5),
+                        selectVersion: { version = $0 },
                         selectAudio: { audio = $0 },
                         selectSubtitles: { subtitles = $0 }
                     )
